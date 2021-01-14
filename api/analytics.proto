@@ -1,0 +1,121 @@
+syntax = "proto3";
+
+package api;
+
+option go_package = "kudzutechnologies/analytics/api";
+
+/**
+ * A bulk of analytics data to be sent to the erver
+ */
+message AnalyticsMetrics {
+  repeated AnalyticsUplink uplinks = 1;
+  repeated AnalyticsDownlink downlinks = 2;
+  repeated AnalyticsStat stats = 3;
+}
+
+/**
+ * Uplink Analytics Message
+ * (Sent from a mote)
+ */
+message AnalyticsUplink {
+  uint64 rxWallTime = 1;
+  uint64 rxGpsTime = 2;
+  uint64 rxFinishedTime = 3;
+  fixed32 frequency = 4;
+  uint32 channel = 5;  
+  uint32 rfChain = 6;  
+  CRCStatus crc = 7;
+  Modulation modulation = 8;
+  LoRaCodingRate codingRate = 9;
+  oneof dataRate {
+    LoRaDataRate dataRateLoRa = 10;
+    uint32 dataRateFSK = 11;
+  }
+  fixed32 rssi = 12;
+  fixed32 lsnr = 13;
+  uint32 size = 14;
+  bytes fhdr = 15;
+}
+
+/**
+ * Downlink Analytics Message
+ * (Received from the server)
+ */
+ message AnalyticsDownlink {
+  uint64 txTime = 1;
+  uint64 txGpsTime = 2;
+  fixed32 fskFreqDev = 3;
+  fixed32 frequency = 4;
+  uint32 channel = 5;
+  uint32 rfChain = 6;
+  fixed32 power = 7;
+  Modulation modulation = 8;
+  LoRaCodingRate codingRate = 9;
+  oneof dataRate {
+    LoRaDataRate dataRateLoRa = 10;
+    uint32 dataRateFSK = 11;
+  }
+  bool invertPolarity = 12;
+  bool immediately = 13;
+  uint32 rfPreamble = 14;
+  uint32 size = 15;
+  bytes fhdr = 16;
+  bool noCrc = 17;
+}
+
+/**
+ * Analytics Status Message
+ * (Sent from the gateway)
+ */
+ message AnalyticsStat {
+  uint64 txTime = 1;
+  fixed32 latitude = 2;
+  fixed32 longitude = 3;
+  fixed32 alti = 4;
+  uint32 rxPackets = 5;
+  uint32 rxWithValidPhyCRC = 6;
+  uint32 rxForwarded = 7;
+  fixed32 rxAckr = 8;
+  uint32 txReceived = 9;
+  uint32 txEmitted = 10;
+}
+
+enum CRCStatus {
+  MISSING = 0;
+  OK = 1;
+  FAIL = 2;
+}
+
+enum Modulation {
+  LORA = 0;
+  FSK = 1;
+}
+
+enum LoRaCodingRate {
+  CR_OTHER = 0;
+  CR_4_5 = 1;
+  CR_4_6 = 2;
+  CR_4_7 = 3;
+  CR_4_8 = 4;
+}
+
+enum LoRaSF {
+  SF_UNKNOWN = 0;
+  SF12 = 1;
+  SF11 = 2;
+  SF10 = 3;
+  SF9 = 4;
+  SF8 = 5;
+  SF7 = 6;
+}
+
+enum LoRaBW {
+  BW_UNKNOWN = 0;
+  BW_125k = 1;
+  BW_500k = 2;
+}
+
+message LoRaDataRate {
+  LoRaSF spreadingFactor = 1;
+  LoRaBW bandwidth = 2;
+}

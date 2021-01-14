@@ -1,0 +1,21 @@
+syntax = "proto3";
+package api;
+
+option go_package = "kudzutechnologies/analytics/api";
+
+import "analytics.proto";
+
+service AnalyticsServer {
+  // Pushes analytics data to the server
+  rpc PushMetrics (AnalyticsMetrics) returns (ServiceResponse);
+}
+
+message ServiceResponse {
+  ServiceStats status = 1;
+  string statusMessage = 2;
+}
+
+enum ServiceStats {
+  STATUS_UNKNOWN = 0;
+  STATUS_OK = 200;
+}
