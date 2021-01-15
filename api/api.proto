@@ -11,8 +11,9 @@ service AnalyticsServer {
 }
 
 message PushMetricsRequest {
-  string clientId = 1;
-  AnalyticsMetrics metrics = 2;
+  string networkId = 1;
+  string gatewayId = 2;
+  AnalyticsMetrics metrics = 3;
 }
 
 message ServiceResponse {
