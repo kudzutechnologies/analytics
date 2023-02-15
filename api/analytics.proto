@@ -18,9 +18,9 @@ message AnalyticsMetrics {
  * (Sent from a mote)
  */
 message AnalyticsUplink {
-  uint64 rxWallTime = 1;
-  uint64 rxGpsTime = 2;
-  uint64 rxFinishedTime = 3;
+  int64 rxWallTime = 1;
+  int64 rxGpsTime = 2;
+  int64 rxFinishedTime = 3;
   fixed32 frequency = 4;
   uint32 channel = 5;  
   uint32 rfChain = 6;  
@@ -42,8 +42,8 @@ message AnalyticsUplink {
  * (Received from the server)
  */
  message AnalyticsDownlink {
-  uint64 txTime = 1;
-  uint64 txGpsTime = 2;
+  int64 txTime = 1;
+  int64 txGpsTime = 2;
   fixed32 fskFreqDev = 3;
   fixed32 frequency = 4;
   uint32 channel = 5;
@@ -68,7 +68,7 @@ message AnalyticsUplink {
  * (Sent from the gateway)
  */
  message AnalyticsStat {
-  uint64 txTime = 1;
+  int64 txTime = 1;
   fixed32 latitude = 2;
   fixed32 longitude = 3;
   fixed32 alti = 4;
