@@ -48,7 +48,7 @@ message AnalyticsDownlink {
   int64 txGpsTime = 2;
   float fskFreqDev = 3;
   float frequency = 4;
-  uint32 channel = 5;
+  uint32 channel = 5; // Not included in UDP semtech
   uint32 rfChain = 6;
   float power = 7;
   Modulation modulation = 8;
@@ -98,8 +98,9 @@ enum CRCStatus {
 }
 
 enum Modulation {
-  LORA = 0;
-  FSK = 1;
+  UNKNOWN = 0;
+  LORA = 1;
+  FSK = 2;
 }
 
 enum LoRaCodingRate {
