@@ -92,11 +92,20 @@ enum Modulation {
 }
 
 enum LoRaCodingRate {
-  CR_OTHER = 0;
-  CR_4_5 = 1;
-  CR_4_6 = 2;
-  CR_4_7 = 3;
-  CR_4_8 = 4;
+  CR_OFF = 0;
+  CR_UNKNOWN = 1;
+  CR_4_5 = 2;
+  CR_4_6 = 3;
+  CR_4_7 = 4;
+  CR_4_8 = 5;
+  CR_4_9 = 6;
+  CR_4_10 = 7;
+  CR_4_11 = 8;
+  CR_4_12 = 9;
+  CR_4_13 = 10;
+  CR_4_14 = 11;
+  CR_4_15 = 12;
+  CR_4_16 = 13;
 }
 
 enum LoRaSF {
