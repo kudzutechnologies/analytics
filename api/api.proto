@@ -23,4 +23,6 @@ message ServiceResponse {
 enum ServiceStats {
   STATUS_UNKNOWN = 0;
   STATUS_OK = 200;
+  STATUS_FORBIDDEN = 403;
+  STATUS_NOT_ACCEPTABLE = 406;
 }
