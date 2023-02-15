@@ -14,8 +14,8 @@ func main() {
 
 	// Open a client session,
 	client := client.CreateAnalyticsClient(client.AnalyticsClientConfig{
-		ClientId:  "17629e8de7e2e464",
-		ClientKey: "5d72af3891b8c452cea09a76dde7739b",
+		ClientId:  "63eb768c6e38edf35cf5bd1b",
+		ClientKey: "a6f39cdf2f613fd85e8c7665076de1c63ab8b61b35fce490",
 	})
 
 	// Connect to server
@@ -43,6 +43,9 @@ func main() {
 		dwn.Fhdr = []byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06}
 		analytics.Downlinks = append(analytics.Downlinks, &dwn)
 	}
+
+	// Identify the gateway you are uploading the details for
+	analytics.GatewayId = "63ab72c094323ef9d802f32e"
 
 	// Push metrics
 	for {

@@ -16,6 +16,7 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/metadata"
 )
 
 //go:embed cert/kudzu-root-ca-2023.pem
@@ -50,11 +51,12 @@ type AnalyticsClientConfig struct {
 
 // the RPC client
 type Client struct {
-	client      api.AnalyticsServerClient
-	config      AnalyticsClientConfig
-	conn        *grpc.ClientConn
-	reqTimeout  time.Duration
-	connTimeout time.Duration
+	client       api.AnalyticsServerClient
+	config       AnalyticsClientConfig
+	conn         *grpc.ClientConn
+	reqTimeout   time.Duration
+	connTimeout  time.Duration
+	sessionToken string
 }
 
 func loadTLSCredentials(cc *AnalyticsClientConfig) (credentials.TransportCredentials, error) {
@@ -79,24 +81,6 @@ func loadTLSCredentials(cc *AnalyticsClientConfig) (credentials.TransportCredent
 		RootCAs: certPool,
 	}
 	return credentials.NewTLS(config), nil
-}
-
-func responseToError(cc *api.APIResponse, reason string) error {
-	if cc.Status == api.APIResponseStatus_STATUS_OK {
-		return nil
-	}
-
-	message := "Unknown error"
-	switch cc.Status {
-	case api.APIResponseStatus_STATUS_FORBIDDEN:
-		message = "Operation forbidden"
-	}
-
-	if cc.StatusMessage != nil {
-		return fmt.Errorf("%s: %s", reason, *cc.StatusMessage)
-	}
-
-	return fmt.Errorf("%s: %s", reason, message)
 }
 
 // Create an instance of the analytics client
@@ -166,9 +150,8 @@ func (c *Client) Connect() error {
 		return fmt.Errorf("Invalid client ID")
 	}
 
-	helloResp, err := client.Hello(ctx, &api.APIRequestHello{
-		Version:  1,
-		ClientId: clientId,
+	helloResp, err := client.Hello(ctx, &api.ReqHello{
+		Version: 1,
 	})
 	if err != nil {
 		return fmt.Errorf("Could not handshake with server: %w", err)
@@ -180,17 +163,18 @@ func (c *Client) Connect() error {
 		return fmt.Errorf("Invalid client key")
 	}
 	b := append(append(helloResp.Challenge, '|'), clientKey...)
-	loginResp, err := client.Login(ctx, &api.APIRequestLogin{
-		Hash: sha256.New().Sum(b),
+	loginResp, err := client.Login(ctx, &api.ReqLogin{
+		ClientId: clientId,
+		Hash:     sha256.New().Sum(b),
 	})
-
-	if loginResp.Status != api.APIResponseStatus_STATUS_OK {
-		return responseToError(loginResp, "Login failed")
+	if err != nil {
+		return fmt.Errorf("Could not login: %w", err)
 	}
 
-	// Store the new client
+	// Store the new client parameters
 	c.client = client
 	c.conn = conn
+	c.sessionToken = loginResp.AccessToken
 	return nil
 }
 
@@ -236,26 +220,30 @@ func (c *Client) withReconnect(fn func() error) error {
 	}
 }
 
+func (c *Client) createContext() (context.Context, context.CancelFunc) {
+	var cancel context.CancelFunc = func() {}
+	ctx := context.Background()
+	if c.reqTimeout != 0 {
+		ctx, cancel = context.WithTimeout(context.Background(), c.reqTimeout)
+	}
+
+	md := metadata.Pairs("token", c.sessionToken)
+	return metadata.NewOutgoingContext(ctx, md), cancel
+}
+
 // Pushes analyics metrics to the service
 func (c *Client) PushMetrics(metrics *api.AnalyticsMetrics) error {
 	if c.conn == nil {
 		return NotConnectedError
 	}
 
-	var cancel context.CancelFunc
-	ctx := context.Background()
-	if c.reqTimeout != 0 {
-		ctx, cancel = context.WithTimeout(context.Background(), c.reqTimeout)
-		defer cancel()
-	}
+	ctx, cancel := c.createContext()
+	defer cancel()
 
 	return c.withReconnect(func() error {
-		resp, err := c.client.PushMetrics(ctx, metrics)
+		_, err := c.client.PushMetrics(ctx, metrics)
 		if err != nil {
 			return err
-		}
-		if resp.Status != api.APIResponseStatus_STATUS_OK {
-			return responseToError(resp, "Pushing failed")
 		}
 
 		return nil

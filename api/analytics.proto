@@ -8,6 +8,8 @@ option go_package = "kudzutechnologies/analytics/api";
  */
 message AnalyticsMetrics {
   string gatewayId = 1;
+  bytes gatewayEui = 5;
+
   repeated AnalyticsUplink uplinks = 2;
   repeated AnalyticsDownlink downlinks = 3;
   repeated AnalyticsStat stats = 4;
@@ -61,6 +63,7 @@ message AnalyticsDownlink {
   uint32 size = 15;
   bytes fhdr = 16;
   bool noCrc = 17;
+  int64 rxWallTime = 18;
 }
 
 /**
@@ -78,6 +81,14 @@ message AnalyticsStat {
   float rxAckr = 8;
   uint32 txReceived = 9;
   uint32 txEmitted = 10;
+
+  // When set to `true` the values are gauges, meaning that
+  // they replace any previous value. Otherwise they are
+  // counters, which means they are added on top of the previous
+  // values.
+  bool isGauge = 11;
+  // Gateway temperature
+  optional float gwTemp = 12;
 }
 
 enum CRCStatus {

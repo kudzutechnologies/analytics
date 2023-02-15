@@ -25,65 +25,17 @@ const (
 // of the legacy proto package is being used.
 const _ = proto.ProtoPackageIsVersion4
 
-type APIResponseStatus int32
-
-const (
-	APIResponseStatus_STATUS_UNKNOWN   APIResponseStatus = 0
-	APIResponseStatus_STATUS_OK        APIResponseStatus = 200
-	APIResponseStatus_STATUS_FORBIDDEN APIResponseStatus = 403
-)
-
-// Enum value maps for APIResponseStatus.
-var (
-	APIResponseStatus_name = map[int32]string{
-		0:   "STATUS_UNKNOWN",
-		200: "STATUS_OK",
-		403: "STATUS_FORBIDDEN",
-	}
-	APIResponseStatus_value = map[string]int32{
-		"STATUS_UNKNOWN":   0,
-		"STATUS_OK":        200,
-		"STATUS_FORBIDDEN": 403,
-	}
-)
-
-func (x APIResponseStatus) Enum() *APIResponseStatus {
-	p := new(APIResponseStatus)
-	*p = x
-	return p
-}
-
-func (x APIResponseStatus) String() string {
-	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
-}
-
-func (APIResponseStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_api_proto_enumTypes[0].Descriptor()
-}
-
-func (APIResponseStatus) Type() protoreflect.EnumType {
-	return &file_api_proto_enumTypes[0]
-}
-
-func (x APIResponseStatus) Number() protoreflect.EnumNumber {
-	return protoreflect.EnumNumber(x)
-}
-
-// Deprecated: Use APIResponseStatus.Descriptor instead.
-func (APIResponseStatus) EnumDescriptor() ([]byte, []int) {
-	return file_api_proto_rawDescGZIP(), []int{0}
-}
-
-type APIRequestLogin struct {
+type ReqLogin struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Hash []byte `protobuf:"bytes,1,opt,name=hash,proto3" json:"hash,omitempty"`
+	ClientId []byte `protobuf:"bytes,1,opt,name=clientId,proto3" json:"clientId,omitempty"`
+	Hash     []byte `protobuf:"bytes,2,opt,name=hash,proto3" json:"hash,omitempty"`
 }
 
-func (x *APIRequestLogin) Reset() {
-	*x = APIRequestLogin{}
+func (x *ReqLogin) Reset() {
+	*x = ReqLogin{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_api_proto_msgTypes[0]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -91,13 +43,13 @@ func (x *APIRequestLogin) Reset() {
 	}
 }
 
-func (x *APIRequestLogin) String() string {
+func (x *ReqLogin) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*APIRequestLogin) ProtoMessage() {}
+func (*ReqLogin) ProtoMessage() {}
 
-func (x *APIRequestLogin) ProtoReflect() protoreflect.Message {
+func (x *ReqLogin) ProtoReflect() protoreflect.Message {
 	mi := &file_api_proto_msgTypes[0]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -109,29 +61,35 @@ func (x *APIRequestLogin) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use APIRequestLogin.ProtoReflect.Descriptor instead.
-func (*APIRequestLogin) Descriptor() ([]byte, []int) {
+// Deprecated: Use ReqLogin.ProtoReflect.Descriptor instead.
+func (*ReqLogin) Descriptor() ([]byte, []int) {
 	return file_api_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *APIRequestLogin) GetHash() []byte {
+func (x *ReqLogin) GetClientId() []byte {
+	if x != nil {
+		return x.ClientId
+	}
+	return nil
+}
+
+func (x *ReqLogin) GetHash() []byte {
 	if x != nil {
 		return x.Hash
 	}
 	return nil
 }
 
-type APIRequestHello struct {
+type RespLogin struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Version  int32  `protobuf:"varint,1,opt,name=version,proto3" json:"version,omitempty"`
-	ClientId []byte `protobuf:"bytes,2,opt,name=clientId,proto3" json:"clientId,omitempty"`
+	AccessToken string `protobuf:"bytes,2,opt,name=accessToken,proto3" json:"accessToken,omitempty"`
 }
 
-func (x *APIRequestHello) Reset() {
-	*x = APIRequestHello{}
+func (x *RespLogin) Reset() {
+	*x = RespLogin{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_api_proto_msgTypes[1]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -139,13 +97,13 @@ func (x *APIRequestHello) Reset() {
 	}
 }
 
-func (x *APIRequestHello) String() string {
+func (x *RespLogin) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*APIRequestHello) ProtoMessage() {}
+func (*RespLogin) ProtoMessage() {}
 
-func (x *APIRequestHello) ProtoReflect() protoreflect.Message {
+func (x *RespLogin) ProtoReflect() protoreflect.Message {
 	mi := &file_api_proto_msgTypes[1]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -157,36 +115,28 @@ func (x *APIRequestHello) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use APIRequestHello.ProtoReflect.Descriptor instead.
-func (*APIRequestHello) Descriptor() ([]byte, []int) {
+// Deprecated: Use RespLogin.ProtoReflect.Descriptor instead.
+func (*RespLogin) Descriptor() ([]byte, []int) {
 	return file_api_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *APIRequestHello) GetVersion() int32 {
+func (x *RespLogin) GetAccessToken() string {
 	if x != nil {
-		return x.Version
+		return x.AccessToken
 	}
-	return 0
+	return ""
 }
 
-func (x *APIRequestHello) GetClientId() []byte {
-	if x != nil {
-		return x.ClientId
-	}
-	return nil
-}
-
-type APIResponseHello struct {
+type ReqHello struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Revision  int32  `protobuf:"varint,1,opt,name=revision,proto3" json:"revision,omitempty"`
-	Challenge []byte `protobuf:"bytes,2,opt,name=challenge,proto3" json:"challenge,omitempty"`
+	Version int32 `protobuf:"varint,1,opt,name=version,proto3" json:"version,omitempty"`
 }
 
-func (x *APIResponseHello) Reset() {
-	*x = APIResponseHello{}
+func (x *ReqHello) Reset() {
+	*x = ReqHello{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_api_proto_msgTypes[2]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -194,13 +144,13 @@ func (x *APIResponseHello) Reset() {
 	}
 }
 
-func (x *APIResponseHello) String() string {
+func (x *ReqHello) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*APIResponseHello) ProtoMessage() {}
+func (*ReqHello) ProtoMessage() {}
 
-func (x *APIResponseHello) ProtoReflect() protoreflect.Message {
+func (x *ReqHello) ProtoReflect() protoreflect.Message {
 	mi := &file_api_proto_msgTypes[2]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -212,36 +162,29 @@ func (x *APIResponseHello) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use APIResponseHello.ProtoReflect.Descriptor instead.
-func (*APIResponseHello) Descriptor() ([]byte, []int) {
+// Deprecated: Use ReqHello.ProtoReflect.Descriptor instead.
+func (*ReqHello) Descriptor() ([]byte, []int) {
 	return file_api_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *APIResponseHello) GetRevision() int32 {
+func (x *ReqHello) GetVersion() int32 {
 	if x != nil {
-		return x.Revision
+		return x.Version
 	}
 	return 0
 }
 
-func (x *APIResponseHello) GetChallenge() []byte {
-	if x != nil {
-		return x.Challenge
-	}
-	return nil
-}
-
-type APIResponse struct {
+type RespHello struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Status        APIResponseStatus `protobuf:"varint,1,opt,name=status,proto3,enum=api.APIResponseStatus" json:"status,omitempty"`
-	StatusMessage *string           `protobuf:"bytes,2,opt,name=statusMessage,proto3,oneof" json:"statusMessage,omitempty"`
+	Revision  int32  `protobuf:"varint,1,opt,name=revision,proto3" json:"revision,omitempty"`
+	Challenge []byte `protobuf:"bytes,2,opt,name=challenge,proto3" json:"challenge,omitempty"`
 }
 
-func (x *APIResponse) Reset() {
-	*x = APIResponse{}
+func (x *RespHello) Reset() {
+	*x = RespHello{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_api_proto_msgTypes[3]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -249,13 +192,13 @@ func (x *APIResponse) Reset() {
 	}
 }
 
-func (x *APIResponse) String() string {
+func (x *RespHello) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*APIResponse) ProtoMessage() {}
+func (*RespHello) ProtoMessage() {}
 
-func (x *APIResponse) ProtoReflect() protoreflect.Message {
+func (x *RespHello) ProtoReflect() protoreflect.Message {
 	mi := &file_api_proto_msgTypes[3]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -267,23 +210,61 @@ func (x *APIResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use APIResponse.ProtoReflect.Descriptor instead.
-func (*APIResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use RespHello.ProtoReflect.Descriptor instead.
+func (*RespHello) Descriptor() ([]byte, []int) {
 	return file_api_proto_rawDescGZIP(), []int{3}
 }
 
-func (x *APIResponse) GetStatus() APIResponseStatus {
+func (x *RespHello) GetRevision() int32 {
 	if x != nil {
-		return x.Status
+		return x.Revision
 	}
-	return APIResponseStatus_STATUS_UNKNOWN
+	return 0
 }
 
-func (x *APIResponse) GetStatusMessage() string {
-	if x != nil && x.StatusMessage != nil {
-		return *x.StatusMessage
+func (x *RespHello) GetChallenge() []byte {
+	if x != nil {
+		return x.Challenge
 	}
-	return ""
+	return nil
+}
+
+type RespPush struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+}
+
+func (x *RespPush) Reset() {
+	*x = RespPush{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_api_proto_msgTypes[4]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *RespPush) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RespPush) ProtoMessage() {}
+
+func (x *RespPush) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_msgTypes[4]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RespPush.ProtoReflect.Descriptor instead.
+func (*RespPush) Descriptor() ([]byte, []int) {
+	return file_api_proto_rawDescGZIP(), []int{4}
 }
 
 var File_api_proto protoreflect.FileDescriptor
@@ -291,42 +272,30 @@ var File_api_proto protoreflect.FileDescriptor
 var file_api_proto_rawDesc = []byte{
 	0x0a, 0x09, 0x61, 0x70, 0x69, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x12, 0x03, 0x61, 0x70, 0x69,
 	0x1a, 0x0f, 0x61, 0x6e, 0x61, 0x6c, 0x79, 0x74, 0x69, 0x63, 0x73, 0x2e, 0x70, 0x72, 0x6f, 0x74,
-	0x6f, 0x22, 0x25, 0x0a, 0x0f, 0x41, 0x50, 0x49, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x4c,
-	0x6f, 0x67, 0x69, 0x6e, 0x12, 0x12, 0x0a, 0x04, 0x68, 0x61, 0x73, 0x68, 0x18, 0x01, 0x20, 0x01,
-	0x28, 0x0c, 0x52, 0x04, 0x68, 0x61, 0x73, 0x68, 0x22, 0x47, 0x0a, 0x0f, 0x41, 0x50, 0x49, 0x52,
-	0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x48, 0x65, 0x6c, 0x6c, 0x6f, 0x12, 0x18, 0x0a, 0x07, 0x76,
-	0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, 0x18, 0x01, 0x20, 0x01, 0x28, 0x05, 0x52, 0x07, 0x76, 0x65,
-	0x72, 0x73, 0x69, 0x6f, 0x6e, 0x12, 0x1a, 0x0a, 0x08, 0x63, 0x6c, 0x69, 0x65, 0x6e, 0x74, 0x49,
-	0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x08, 0x63, 0x6c, 0x69, 0x65, 0x6e, 0x74, 0x49,
-	0x64, 0x22, 0x4c, 0x0a, 0x10, 0x41, 0x50, 0x49, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
-	0x48, 0x65, 0x6c, 0x6c, 0x6f, 0x12, 0x1a, 0x0a, 0x08, 0x72, 0x65, 0x76, 0x69, 0x73, 0x69, 0x6f,
-	0x6e, 0x18, 0x01, 0x20, 0x01, 0x28, 0x05, 0x52, 0x08, 0x72, 0x65, 0x76, 0x69, 0x73, 0x69, 0x6f,
-	0x6e, 0x12, 0x1c, 0x0a, 0x09, 0x63, 0x68, 0x61, 0x6c, 0x6c, 0x65, 0x6e, 0x67, 0x65, 0x18, 0x02,
-	0x20, 0x01, 0x28, 0x0c, 0x52, 0x09, 0x63, 0x68, 0x61, 0x6c, 0x6c, 0x65, 0x6e, 0x67, 0x65, 0x22,
-	0x7a, 0x0a, 0x0b, 0x41, 0x50, 0x49, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x2e,
-	0x0a, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0e, 0x32, 0x16,
-	0x2e, 0x61, 0x70, 0x69, 0x2e, 0x41, 0x50, 0x49, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
-	0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x52, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x12, 0x29,
-	0x0a, 0x0d, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x4d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x18,
-	0x02, 0x20, 0x01, 0x28, 0x09, 0x48, 0x00, 0x52, 0x0d, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x4d,
-	0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x88, 0x01, 0x01, 0x42, 0x10, 0x0a, 0x0e, 0x5f, 0x73, 0x74,
-	0x61, 0x74, 0x75, 0x73, 0x4d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x2a, 0x4e, 0x0a, 0x11, 0x41,
-	0x50, 0x49, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73,
-	0x12, 0x12, 0x0a, 0x0e, 0x53, 0x54, 0x41, 0x54, 0x55, 0x53, 0x5f, 0x55, 0x4e, 0x4b, 0x4e, 0x4f,
-	0x57, 0x4e, 0x10, 0x00, 0x12, 0x0e, 0x0a, 0x09, 0x53, 0x54, 0x41, 0x54, 0x55, 0x53, 0x5f, 0x4f,
-	0x4b, 0x10, 0xc8, 0x01, 0x12, 0x15, 0x0a, 0x10, 0x53, 0x54, 0x41, 0x54, 0x55, 0x53, 0x5f, 0x46,
-	0x4f, 0x52, 0x42, 0x49, 0x44, 0x44, 0x45, 0x4e, 0x10, 0x93, 0x03, 0x32, 0xb0, 0x01, 0x0a, 0x0f,
-	0x41, 0x6e, 0x61, 0x6c, 0x79, 0x74, 0x69, 0x63, 0x73, 0x53, 0x65, 0x72, 0x76, 0x65, 0x72, 0x12,
-	0x34, 0x0a, 0x05, 0x48, 0x65, 0x6c, 0x6c, 0x6f, 0x12, 0x14, 0x2e, 0x61, 0x70, 0x69, 0x2e, 0x41,
-	0x50, 0x49, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x48, 0x65, 0x6c, 0x6c, 0x6f, 0x1a, 0x15,
-	0x2e, 0x61, 0x70, 0x69, 0x2e, 0x41, 0x50, 0x49, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
-	0x48, 0x65, 0x6c, 0x6c, 0x6f, 0x12, 0x2f, 0x0a, 0x05, 0x4c, 0x6f, 0x67, 0x69, 0x6e, 0x12, 0x14,
-	0x2e, 0x61, 0x70, 0x69, 0x2e, 0x41, 0x50, 0x49, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x4c,
-	0x6f, 0x67, 0x69, 0x6e, 0x1a, 0x10, 0x2e, 0x61, 0x70, 0x69, 0x2e, 0x41, 0x50, 0x49, 0x52, 0x65,
-	0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x36, 0x0a, 0x0b, 0x50, 0x75, 0x73, 0x68, 0x4d, 0x65,
-	0x74, 0x72, 0x69, 0x63, 0x73, 0x12, 0x15, 0x2e, 0x61, 0x70, 0x69, 0x2e, 0x41, 0x6e, 0x61, 0x6c,
-	0x79, 0x74, 0x69, 0x63, 0x73, 0x4d, 0x65, 0x74, 0x72, 0x69, 0x63, 0x73, 0x1a, 0x10, 0x2e, 0x61,
-	0x70, 0x69, 0x2e, 0x41, 0x50, 0x49, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x42, 0x21,
+	0x6f, 0x22, 0x3a, 0x0a, 0x08, 0x52, 0x65, 0x71, 0x4c, 0x6f, 0x67, 0x69, 0x6e, 0x12, 0x1a, 0x0a,
+	0x08, 0x63, 0x6c, 0x69, 0x65, 0x6e, 0x74, 0x49, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0c, 0x52,
+	0x08, 0x63, 0x6c, 0x69, 0x65, 0x6e, 0x74, 0x49, 0x64, 0x12, 0x12, 0x0a, 0x04, 0x68, 0x61, 0x73,
+	0x68, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x04, 0x68, 0x61, 0x73, 0x68, 0x22, 0x2d, 0x0a,
+	0x09, 0x52, 0x65, 0x73, 0x70, 0x4c, 0x6f, 0x67, 0x69, 0x6e, 0x12, 0x20, 0x0a, 0x0b, 0x61, 0x63,
+	0x63, 0x65, 0x73, 0x73, 0x54, 0x6f, 0x6b, 0x65, 0x6e, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52,
+	0x0b, 0x61, 0x63, 0x63, 0x65, 0x73, 0x73, 0x54, 0x6f, 0x6b, 0x65, 0x6e, 0x22, 0x24, 0x0a, 0x08,
+	0x52, 0x65, 0x71, 0x48, 0x65, 0x6c, 0x6c, 0x6f, 0x12, 0x18, 0x0a, 0x07, 0x76, 0x65, 0x72, 0x73,
+	0x69, 0x6f, 0x6e, 0x18, 0x01, 0x20, 0x01, 0x28, 0x05, 0x52, 0x07, 0x76, 0x65, 0x72, 0x73, 0x69,
+	0x6f, 0x6e, 0x22, 0x45, 0x0a, 0x09, 0x52, 0x65, 0x73, 0x70, 0x48, 0x65, 0x6c, 0x6c, 0x6f, 0x12,
+	0x1a, 0x0a, 0x08, 0x72, 0x65, 0x76, 0x69, 0x73, 0x69, 0x6f, 0x6e, 0x18, 0x01, 0x20, 0x01, 0x28,
+	0x05, 0x52, 0x08, 0x72, 0x65, 0x76, 0x69, 0x73, 0x69, 0x6f, 0x6e, 0x12, 0x1c, 0x0a, 0x09, 0x63,
+	0x68, 0x61, 0x6c, 0x6c, 0x65, 0x6e, 0x67, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x09,
+	0x63, 0x68, 0x61, 0x6c, 0x6c, 0x65, 0x6e, 0x67, 0x65, 0x22, 0x0a, 0x0a, 0x08, 0x52, 0x65, 0x73,
+	0x70, 0x50, 0x75, 0x73, 0x68, 0x32, 0x96, 0x01, 0x0a, 0x0f, 0x41, 0x6e, 0x61, 0x6c, 0x79, 0x74,
+	0x69, 0x63, 0x73, 0x53, 0x65, 0x72, 0x76, 0x65, 0x72, 0x12, 0x26, 0x0a, 0x05, 0x48, 0x65, 0x6c,
+	0x6c, 0x6f, 0x12, 0x0d, 0x2e, 0x61, 0x70, 0x69, 0x2e, 0x52, 0x65, 0x71, 0x48, 0x65, 0x6c, 0x6c,
+	0x6f, 0x1a, 0x0e, 0x2e, 0x61, 0x70, 0x69, 0x2e, 0x52, 0x65, 0x73, 0x70, 0x48, 0x65, 0x6c, 0x6c,
+	0x6f, 0x12, 0x26, 0x0a, 0x05, 0x4c, 0x6f, 0x67, 0x69, 0x6e, 0x12, 0x0d, 0x2e, 0x61, 0x70, 0x69,
+	0x2e, 0x52, 0x65, 0x71, 0x4c, 0x6f, 0x67, 0x69, 0x6e, 0x1a, 0x0e, 0x2e, 0x61, 0x70, 0x69, 0x2e,
+	0x52, 0x65, 0x73, 0x70, 0x4c, 0x6f, 0x67, 0x69, 0x6e, 0x12, 0x33, 0x0a, 0x0b, 0x50, 0x75, 0x73,
+	0x68, 0x4d, 0x65, 0x74, 0x72, 0x69, 0x63, 0x73, 0x12, 0x15, 0x2e, 0x61, 0x70, 0x69, 0x2e, 0x41,
+	0x6e, 0x61, 0x6c, 0x79, 0x74, 0x69, 0x63, 0x73, 0x4d, 0x65, 0x74, 0x72, 0x69, 0x63, 0x73, 0x1a,
+	0x0d, 0x2e, 0x61, 0x70, 0x69, 0x2e, 0x52, 0x65, 0x73, 0x70, 0x50, 0x75, 0x73, 0x68, 0x42, 0x21,
 	0x5a, 0x1f, 0x6b, 0x75, 0x64, 0x7a, 0x75, 0x74, 0x65, 0x63, 0x68, 0x6e, 0x6f, 0x6c, 0x6f, 0x67,
 	0x69, 0x65, 0x73, 0x2f, 0x61, 0x6e, 0x61, 0x6c, 0x79, 0x74, 0x69, 0x63, 0x73, 0x2f, 0x61, 0x70,
 	0x69, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
@@ -344,29 +313,27 @@ func file_api_proto_rawDescGZIP() []byte {
 	return file_api_proto_rawDescData
 }
 
-var file_api_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_api_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_api_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_api_proto_goTypes = []interface{}{
-	(APIResponseStatus)(0),   // 0: api.APIResponseStatus
-	(*APIRequestLogin)(nil),  // 1: api.APIRequestLogin
-	(*APIRequestHello)(nil),  // 2: api.APIRequestHello
-	(*APIResponseHello)(nil), // 3: api.APIResponseHello
-	(*APIResponse)(nil),      // 4: api.APIResponse
+	(*ReqLogin)(nil),         // 0: api.ReqLogin
+	(*RespLogin)(nil),        // 1: api.RespLogin
+	(*ReqHello)(nil),         // 2: api.ReqHello
+	(*RespHello)(nil),        // 3: api.RespHello
+	(*RespPush)(nil),         // 4: api.RespPush
 	(*AnalyticsMetrics)(nil), // 5: api.AnalyticsMetrics
 }
 var file_api_proto_depIdxs = []int32{
-	0, // 0: api.APIResponse.status:type_name -> api.APIResponseStatus
-	2, // 1: api.AnalyticsServer.Hello:input_type -> api.APIRequestHello
-	1, // 2: api.AnalyticsServer.Login:input_type -> api.APIRequestLogin
-	5, // 3: api.AnalyticsServer.PushMetrics:input_type -> api.AnalyticsMetrics
-	3, // 4: api.AnalyticsServer.Hello:output_type -> api.APIResponseHello
-	4, // 5: api.AnalyticsServer.Login:output_type -> api.APIResponse
-	4, // 6: api.AnalyticsServer.PushMetrics:output_type -> api.APIResponse
-	4, // [4:7] is the sub-list for method output_type
-	1, // [1:4] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	2, // 0: api.AnalyticsServer.Hello:input_type -> api.ReqHello
+	0, // 1: api.AnalyticsServer.Login:input_type -> api.ReqLogin
+	5, // 2: api.AnalyticsServer.PushMetrics:input_type -> api.AnalyticsMetrics
+	3, // 3: api.AnalyticsServer.Hello:output_type -> api.RespHello
+	1, // 4: api.AnalyticsServer.Login:output_type -> api.RespLogin
+	4, // 5: api.AnalyticsServer.PushMetrics:output_type -> api.RespPush
+	3, // [3:6] is the sub-list for method output_type
+	0, // [0:3] is the sub-list for method input_type
+	0, // [0:0] is the sub-list for extension type_name
+	0, // [0:0] is the sub-list for extension extendee
+	0, // [0:0] is the sub-list for field type_name
 }
 
 func init() { file_api_proto_init() }
@@ -377,7 +344,7 @@ func file_api_proto_init() {
 	file_analytics_proto_init()
 	if !protoimpl.UnsafeEnabled {
 		file_api_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*APIRequestLogin); i {
+			switch v := v.(*ReqLogin); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -389,7 +356,7 @@ func file_api_proto_init() {
 			}
 		}
 		file_api_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*APIRequestHello); i {
+			switch v := v.(*RespLogin); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -401,7 +368,7 @@ func file_api_proto_init() {
 			}
 		}
 		file_api_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*APIResponseHello); i {
+			switch v := v.(*ReqHello); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -413,7 +380,19 @@ func file_api_proto_init() {
 			}
 		}
 		file_api_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*APIResponse); i {
+			switch v := v.(*RespHello); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_api_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*RespPush); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -425,20 +404,18 @@ func file_api_proto_init() {
 			}
 		}
 	}
-	file_api_proto_msgTypes[3].OneofWrappers = []interface{}{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_api_proto_rawDesc,
-			NumEnums:      1,
-			NumMessages:   4,
+			NumEnums:      0,
+			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
 		GoTypes:           file_api_proto_goTypes,
 		DependencyIndexes: file_api_proto_depIdxs,
-		EnumInfos:         file_api_proto_enumTypes,
 		MessageInfos:      file_api_proto_msgTypes,
 	}.Build()
 	File_api_proto = out.File

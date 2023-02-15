@@ -7,31 +7,43 @@ option go_package = "kudzutechnologies/analytics/api";
 
 service AnalyticsServer {
   // Logs in to the remote service
-  rpc Hello(APIRequestHello) returns (APIResponseHello);
-  rpc Login(APIRequestLogin) returns (APIResponse);
+  rpc Hello(ReqHello) returns (RespHello);
+  rpc Login(ReqLogin) returns (RespLogin);
   // Pushes analytics data to the server
-  rpc PushMetrics(AnalyticsMetrics) returns (APIResponse);
+  rpc PushMetrics(AnalyticsMetrics) returns (RespPush);
 }
 
-message APIRequestLogin { bytes hash = 1; }
+//////////////////////////////////////////////////////////////////////
+// Handshake
+//////////////////////////////////////////////////////////////////////
 
-message APIRequestHello {
-  int32 version = 1;
-  bytes clientId = 2;
-}
+// Sends the current client version
+message ReqHello { int32 version = 1; }
 
-message APIResponseHello {
+// Receives the server version & a challenge code
+message RespHello {
   int32 revision = 1;
   bytes challenge = 2;
 }
 
-message APIResponse {
-  APIResponseStatus status = 1;
-  optional string statusMessage = 2;
+//////////////////////////////////////////////////////////////////////
+// Identification
+//////////////////////////////////////////////////////////////////////
+
+// Identifies using the given client ID and a hash computed
+// using the challenge received from the handshake and the
+// well-known client key
+message ReqLogin {
+  bytes clientId = 1;
+  bytes hash = 2;
 }
 
-enum APIResponseStatus {
-  STATUS_UNKNOWN = 0;
-  STATUS_OK = 200;
-  STATUS_FORBIDDEN = 403;
-}
+// Receives the access token that can be used for pushing metrics
+message RespLogin { string accessToken = 2; }
+
+//////////////////////////////////////////////////////////////////////
+// Analytics Endpoints
+//////////////////////////////////////////////////////////////////////
+
+// Pushes metrics to the analytics endpoint
+message RespPush {}

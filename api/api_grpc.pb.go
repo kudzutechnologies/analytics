@@ -18,10 +18,10 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type AnalyticsServerClient interface {
 	// Logs in to the remote service
-	Hello(ctx context.Context, in *APIRequestHello, opts ...grpc.CallOption) (*APIResponseHello, error)
-	Login(ctx context.Context, in *APIRequestLogin, opts ...grpc.CallOption) (*APIResponse, error)
+	Hello(ctx context.Context, in *ReqHello, opts ...grpc.CallOption) (*RespHello, error)
+	Login(ctx context.Context, in *ReqLogin, opts ...grpc.CallOption) (*RespLogin, error)
 	// Pushes analytics data to the server
-	PushMetrics(ctx context.Context, in *AnalyticsMetrics, opts ...grpc.CallOption) (*APIResponse, error)
+	PushMetrics(ctx context.Context, in *AnalyticsMetrics, opts ...grpc.CallOption) (*RespPush, error)
 }
 
 type analyticsServerClient struct {
@@ -32,8 +32,8 @@ func NewAnalyticsServerClient(cc grpc.ClientConnInterface) AnalyticsServerClient
 	return &analyticsServerClient{cc}
 }
 
-func (c *analyticsServerClient) Hello(ctx context.Context, in *APIRequestHello, opts ...grpc.CallOption) (*APIResponseHello, error) {
-	out := new(APIResponseHello)
+func (c *analyticsServerClient) Hello(ctx context.Context, in *ReqHello, opts ...grpc.CallOption) (*RespHello, error) {
+	out := new(RespHello)
 	err := c.cc.Invoke(ctx, "/api.AnalyticsServer/Hello", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -41,8 +41,8 @@ func (c *analyticsServerClient) Hello(ctx context.Context, in *APIRequestHello, 
 	return out, nil
 }
 
-func (c *analyticsServerClient) Login(ctx context.Context, in *APIRequestLogin, opts ...grpc.CallOption) (*APIResponse, error) {
-	out := new(APIResponse)
+func (c *analyticsServerClient) Login(ctx context.Context, in *ReqLogin, opts ...grpc.CallOption) (*RespLogin, error) {
+	out := new(RespLogin)
 	err := c.cc.Invoke(ctx, "/api.AnalyticsServer/Login", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -50,8 +50,8 @@ func (c *analyticsServerClient) Login(ctx context.Context, in *APIRequestLogin, 
 	return out, nil
 }
 
-func (c *analyticsServerClient) PushMetrics(ctx context.Context, in *AnalyticsMetrics, opts ...grpc.CallOption) (*APIResponse, error) {
-	out := new(APIResponse)
+func (c *analyticsServerClient) PushMetrics(ctx context.Context, in *AnalyticsMetrics, opts ...grpc.CallOption) (*RespPush, error) {
+	out := new(RespPush)
 	err := c.cc.Invoke(ctx, "/api.AnalyticsServer/PushMetrics", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -64,10 +64,10 @@ func (c *analyticsServerClient) PushMetrics(ctx context.Context, in *AnalyticsMe
 // for forward compatibility
 type AnalyticsServerServer interface {
 	// Logs in to the remote service
-	Hello(context.Context, *APIRequestHello) (*APIResponseHello, error)
-	Login(context.Context, *APIRequestLogin) (*APIResponse, error)
+	Hello(context.Context, *ReqHello) (*RespHello, error)
+	Login(context.Context, *ReqLogin) (*RespLogin, error)
 	// Pushes analytics data to the server
-	PushMetrics(context.Context, *AnalyticsMetrics) (*APIResponse, error)
+	PushMetrics(context.Context, *AnalyticsMetrics) (*RespPush, error)
 	mustEmbedUnimplementedAnalyticsServerServer()
 }
 
@@ -75,13 +75,13 @@ type AnalyticsServerServer interface {
 type UnimplementedAnalyticsServerServer struct {
 }
 
-func (UnimplementedAnalyticsServerServer) Hello(context.Context, *APIRequestHello) (*APIResponseHello, error) {
+func (UnimplementedAnalyticsServerServer) Hello(context.Context, *ReqHello) (*RespHello, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Hello not implemented")
 }
-func (UnimplementedAnalyticsServerServer) Login(context.Context, *APIRequestLogin) (*APIResponse, error) {
+func (UnimplementedAnalyticsServerServer) Login(context.Context, *ReqLogin) (*RespLogin, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Login not implemented")
 }
-func (UnimplementedAnalyticsServerServer) PushMetrics(context.Context, *AnalyticsMetrics) (*APIResponse, error) {
+func (UnimplementedAnalyticsServerServer) PushMetrics(context.Context, *AnalyticsMetrics) (*RespPush, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PushMetrics not implemented")
 }
 func (UnimplementedAnalyticsServerServer) mustEmbedUnimplementedAnalyticsServerServer() {}
@@ -98,7 +98,7 @@ func RegisterAnalyticsServerServer(s grpc.ServiceRegistrar, srv AnalyticsServerS
 }
 
 func _AnalyticsServer_Hello_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(APIRequestHello)
+	in := new(ReqHello)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -110,13 +110,13 @@ func _AnalyticsServer_Hello_Handler(srv interface{}, ctx context.Context, dec fu
 		FullMethod: "/api.AnalyticsServer/Hello",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AnalyticsServerServer).Hello(ctx, req.(*APIRequestHello))
+		return srv.(AnalyticsServerServer).Hello(ctx, req.(*ReqHello))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 func _AnalyticsServer_Login_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(APIRequestLogin)
+	in := new(ReqLogin)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -128,7 +128,7 @@ func _AnalyticsServer_Login_Handler(srv interface{}, ctx context.Context, dec fu
 		FullMethod: "/api.AnalyticsServer/Login",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AnalyticsServerServer).Login(ctx, req.(*APIRequestLogin))
+		return srv.(AnalyticsServerServer).Login(ctx, req.(*ReqLogin))
 	}
 	return interceptor(ctx, in, info, handler)
 }
