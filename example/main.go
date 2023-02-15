@@ -1,39 +1,32 @@
 package main
 
 import (
-	"context"
 	"log"
 	"time"
 
 	pb "github.com/kudzutechnologies/analytics/api"
+	"github.com/kudzutechnologies/analytics/client"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 )
 
-const (
-	address     = "localhost:50051"
-	defaultName = "world"
-)
-
 func main() {
-	// Set up a connection to the server.
-	conn, err := grpc.Dial(address, grpc.WithInsecure(), grpc.WithBlock())
+
+	// Open a client session,
+	client := client.CreateAnalyticsClient(client.AnalyticsClientConfig{
+		ClientId:  "17629e8de7e2e464",
+		ClientKey: "5d72af3891b8c452cea09a76dde7739b",
+	})
+
+	// Connect to server
+	log.Printf("Connecting to server")
+	err := client.Connect()
 	if err != nil {
-		log.Fatalf("did not connect: %v", err)
+		log.Fatalf("Could not connect: %s", err.Error())
 	}
-	defer conn.Close()
-	c := pb.NewAnalyticsServerClient(conn)
-
-	// Contact the API gateway
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	log.Printf("Connected")
-
-	// Open a client session to the gateway,
-	netId := "1abc012293129a"
-	sess, _ := pb.CreateBasicServiceClientSession(netId)
 
 	// Compose a bulk of metrics to push
+	log.Printf("Pushing metrics")
 	var analytics pb.AnalyticsMetrics
 	for i := 0; i < 10; i += 1 {
 		// Compose an uplink frame
@@ -52,14 +45,17 @@ func main() {
 	}
 
 	// Push metrics
-	req, _ := sess.CreatePushMetricsRequest(&analytics)
-	r, err := c.PushMetrics(ctx, req)
-	if err != nil {
-		if grpc.Code(err) == codes.DeadlineExceeded {
-			log.Printf("Disconnected")
+	for {
+		err = client.PushMetrics(&analytics)
+		if err != nil {
+			if grpc.Code(err) == codes.DeadlineExceeded {
+				log.Printf("Disconnected")
+			}
+			log.Fatalf("could not push metrics: %v", err)
 		}
-		log.Fatalf("could not push metrics: %v", err)
+
+		log.Printf("Data pushed")
+		time.Sleep(1 * time.Second)
 	}
 
-	log.Printf("Server responded with: %s", r.GetStatusMessage())
 }

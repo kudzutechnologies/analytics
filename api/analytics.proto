@@ -1,5 +1,4 @@
 syntax = "proto3";
-
 package api;
 
 option go_package = "kudzutechnologies/analytics/api";
@@ -23,8 +22,8 @@ message AnalyticsUplink {
   int64 rxGpsTime = 2;
   int64 rxFinishedTime = 3;
   float frequency = 4;
-  uint32 channel = 5;  
-  uint32 rfChain = 6;  
+  uint32 channel = 5;
+  uint32 rfChain = 6;
   CRCStatus crc = 7;
   Modulation modulation = 8;
   LoRaCodingRate codingRate = 9;
@@ -42,7 +41,7 @@ message AnalyticsUplink {
  * Downlink Analytics Message
  * (Received from the server)
  */
- message AnalyticsDownlink {
+message AnalyticsDownlink {
   int64 txTime = 1;
   int64 txGpsTime = 2;
   float fskFreqDev = 3;
@@ -68,7 +67,7 @@ message AnalyticsUplink {
  * Analytics Status Message
  * (Sent from the gateway)
  */
- message AnalyticsStat {
+message AnalyticsStat {
   int64 gwTime = 1;
   float gwLatitude = 2;
   float gwLongitude = 3;

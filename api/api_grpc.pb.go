@@ -17,8 +17,11 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type AnalyticsServerClient interface {
+	// Logs in to the remote service
+	Hello(ctx context.Context, in *APIRequestHello, opts ...grpc.CallOption) (*APIResponseHello, error)
+	Login(ctx context.Context, in *APIRequestLogin, opts ...grpc.CallOption) (*APIResponse, error)
 	// Pushes analytics data to the server
-	PushMetrics(ctx context.Context, in *PushMetricsRequest, opts ...grpc.CallOption) (*ServiceResponse, error)
+	PushMetrics(ctx context.Context, in *AnalyticsMetrics, opts ...grpc.CallOption) (*APIResponse, error)
 }
 
 type analyticsServerClient struct {
@@ -29,8 +32,26 @@ func NewAnalyticsServerClient(cc grpc.ClientConnInterface) AnalyticsServerClient
 	return &analyticsServerClient{cc}
 }
 
-func (c *analyticsServerClient) PushMetrics(ctx context.Context, in *PushMetricsRequest, opts ...grpc.CallOption) (*ServiceResponse, error) {
-	out := new(ServiceResponse)
+func (c *analyticsServerClient) Hello(ctx context.Context, in *APIRequestHello, opts ...grpc.CallOption) (*APIResponseHello, error) {
+	out := new(APIResponseHello)
+	err := c.cc.Invoke(ctx, "/api.AnalyticsServer/Hello", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *analyticsServerClient) Login(ctx context.Context, in *APIRequestLogin, opts ...grpc.CallOption) (*APIResponse, error) {
+	out := new(APIResponse)
+	err := c.cc.Invoke(ctx, "/api.AnalyticsServer/Login", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *analyticsServerClient) PushMetrics(ctx context.Context, in *AnalyticsMetrics, opts ...grpc.CallOption) (*APIResponse, error) {
+	out := new(APIResponse)
 	err := c.cc.Invoke(ctx, "/api.AnalyticsServer/PushMetrics", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -42,8 +63,11 @@ func (c *analyticsServerClient) PushMetrics(ctx context.Context, in *PushMetrics
 // All implementations must embed UnimplementedAnalyticsServerServer
 // for forward compatibility
 type AnalyticsServerServer interface {
+	// Logs in to the remote service
+	Hello(context.Context, *APIRequestHello) (*APIResponseHello, error)
+	Login(context.Context, *APIRequestLogin) (*APIResponse, error)
 	// Pushes analytics data to the server
-	PushMetrics(context.Context, *PushMetricsRequest) (*ServiceResponse, error)
+	PushMetrics(context.Context, *AnalyticsMetrics) (*APIResponse, error)
 	mustEmbedUnimplementedAnalyticsServerServer()
 }
 
@@ -51,7 +75,13 @@ type AnalyticsServerServer interface {
 type UnimplementedAnalyticsServerServer struct {
 }
 
-func (UnimplementedAnalyticsServerServer) PushMetrics(context.Context, *PushMetricsRequest) (*ServiceResponse, error) {
+func (UnimplementedAnalyticsServerServer) Hello(context.Context, *APIRequestHello) (*APIResponseHello, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Hello not implemented")
+}
+func (UnimplementedAnalyticsServerServer) Login(context.Context, *APIRequestLogin) (*APIResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Login not implemented")
+}
+func (UnimplementedAnalyticsServerServer) PushMetrics(context.Context, *AnalyticsMetrics) (*APIResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PushMetrics not implemented")
 }
 func (UnimplementedAnalyticsServerServer) mustEmbedUnimplementedAnalyticsServerServer() {}
@@ -67,8 +97,44 @@ func RegisterAnalyticsServerServer(s grpc.ServiceRegistrar, srv AnalyticsServerS
 	s.RegisterService(&_AnalyticsServer_serviceDesc, srv)
 }
 
+func _AnalyticsServer_Hello_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(APIRequestHello)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AnalyticsServerServer).Hello(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/api.AnalyticsServer/Hello",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AnalyticsServerServer).Hello(ctx, req.(*APIRequestHello))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AnalyticsServer_Login_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(APIRequestLogin)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AnalyticsServerServer).Login(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/api.AnalyticsServer/Login",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AnalyticsServerServer).Login(ctx, req.(*APIRequestLogin))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AnalyticsServer_PushMetrics_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PushMetricsRequest)
+	in := new(AnalyticsMetrics)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -80,7 +146,7 @@ func _AnalyticsServer_PushMetrics_Handler(srv interface{}, ctx context.Context, 
 		FullMethod: "/api.AnalyticsServer/PushMetrics",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AnalyticsServerServer).PushMetrics(ctx, req.(*PushMetricsRequest))
+		return srv.(AnalyticsServerServer).PushMetrics(ctx, req.(*AnalyticsMetrics))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -89,6 +155,14 @@ var _AnalyticsServer_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "api.AnalyticsServer",
 	HandlerType: (*AnalyticsServerServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "Hello",
+			Handler:    _AnalyticsServer_Hello_Handler,
+		},
+		{
+			MethodName: "Login",
+			Handler:    _AnalyticsServer_Login_Handler,
+		},
 		{
 			MethodName: "PushMetrics",
 			Handler:    _AnalyticsServer_PushMetrics_Handler,
