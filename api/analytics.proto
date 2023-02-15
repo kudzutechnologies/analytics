@@ -68,10 +68,10 @@ message AnalyticsUplink {
  * (Sent from the gateway)
  */
  message AnalyticsStat {
-  int64 txTime = 1;
-  float latitude = 2;
-  float longitude = 3;
-  float alti = 4;
+  int64 gwTime = 1;
+  float gwLatitude = 2;
+  float gwLongitude = 3;
+  float gwAltitude = 4;
   uint32 rxPackets = 5;
   uint32 rxWithValidPhyCRC = 6;
   uint32 rxForwarded = 7;
