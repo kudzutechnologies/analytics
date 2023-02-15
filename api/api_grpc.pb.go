@@ -18,7 +18,7 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type AnalyticsServerClient interface {
 	// Pushes analytics data to the server
-	PushMetrics(ctx context.Context, in *AnalyticsMetrics, opts ...grpc.CallOption) (*ServiceResponse, error)
+	PushMetrics(ctx context.Context, in *PushMetricsRequest, opts ...grpc.CallOption) (*ServiceResponse, error)
 }
 
 type analyticsServerClient struct {
@@ -29,7 +29,7 @@ func NewAnalyticsServerClient(cc grpc.ClientConnInterface) AnalyticsServerClient
 	return &analyticsServerClient{cc}
 }
 
-func (c *analyticsServerClient) PushMetrics(ctx context.Context, in *AnalyticsMetrics, opts ...grpc.CallOption) (*ServiceResponse, error) {
+func (c *analyticsServerClient) PushMetrics(ctx context.Context, in *PushMetricsRequest, opts ...grpc.CallOption) (*ServiceResponse, error) {
 	out := new(ServiceResponse)
 	err := c.cc.Invoke(ctx, "/api.AnalyticsServer/PushMetrics", in, out, opts...)
 	if err != nil {
@@ -43,7 +43,7 @@ func (c *analyticsServerClient) PushMetrics(ctx context.Context, in *AnalyticsMe
 // for forward compatibility
 type AnalyticsServerServer interface {
 	// Pushes analytics data to the server
-	PushMetrics(context.Context, *AnalyticsMetrics) (*ServiceResponse, error)
+	PushMetrics(context.Context, *PushMetricsRequest) (*ServiceResponse, error)
 	mustEmbedUnimplementedAnalyticsServerServer()
 }
 
@@ -51,7 +51,7 @@ type AnalyticsServerServer interface {
 type UnimplementedAnalyticsServerServer struct {
 }
 
-func (UnimplementedAnalyticsServerServer) PushMetrics(context.Context, *AnalyticsMetrics) (*ServiceResponse, error) {
+func (UnimplementedAnalyticsServerServer) PushMetrics(context.Context, *PushMetricsRequest) (*ServiceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PushMetrics not implemented")
 }
 func (UnimplementedAnalyticsServerServer) mustEmbedUnimplementedAnalyticsServerServer() {}
@@ -68,7 +68,7 @@ func RegisterAnalyticsServerServer(s grpc.ServiceRegistrar, srv AnalyticsServerS
 }
 
 func _AnalyticsServer_PushMetrics_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(AnalyticsMetrics)
+	in := new(PushMetricsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -80,7 +80,7 @@ func _AnalyticsServer_PushMetrics_Handler(srv interface{}, ctx context.Context, 
 		FullMethod: "/api.AnalyticsServer/PushMetrics",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AnalyticsServerServer).PushMetrics(ctx, req.(*AnalyticsMetrics))
+		return srv.(AnalyticsServerServer).PushMetrics(ctx, req.(*PushMetricsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }

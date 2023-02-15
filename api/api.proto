@@ -7,7 +7,12 @@ import "analytics.proto";
 
 service AnalyticsServer {
   // Pushes analytics data to the server
-  rpc PushMetrics (AnalyticsMetrics) returns (ServiceResponse);
+  rpc PushMetrics (PushMetricsRequest) returns (ServiceResponse);
+}
+
+message PushMetricsRequest {
+  string clientId = 1;
+  AnalyticsMetrics metrics = 2;
 }
 
 message ServiceResponse {
