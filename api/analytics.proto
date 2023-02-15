@@ -8,9 +8,10 @@ option go_package = "kudzutechnologies/analytics/api";
  * A bulk of analytics data to be sent to the erver
  */
 message AnalyticsMetrics {
-  repeated AnalyticsUplink uplinks = 1;
-  repeated AnalyticsDownlink downlinks = 2;
-  repeated AnalyticsStat stats = 3;
+  string gatewayId = 1;
+  repeated AnalyticsUplink uplinks = 2;
+  repeated AnalyticsDownlink downlinks = 3;
+  repeated AnalyticsStat stats = 4;
 }
 
 /**

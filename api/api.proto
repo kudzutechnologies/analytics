@@ -3,22 +3,26 @@ package api;
 
 option go_package = "kudzutechnologies/analytics/api";
 
-import "analytics.proto";
-
 service AnalyticsServer {
   // Pushes analytics data to the server
   rpc PushMetrics (PushMetricsRequest) returns (ServiceResponse);
 }
 
 message PushMetricsRequest {
-  string networkId = 1;
-  string gatewayId = 2;
-  AnalyticsMetrics metrics = 3;
+  bytes netId = 1;
+  bytes data = 2;
+  ServiceRequestType requestType = 3;
 }
 
 message ServiceResponse {
   ServiceStats status = 1;
   string statusMessage = 2;
+  bytes data = 3;
+}
+
+enum ServiceRequestType {
+  REQUEST_BASIC = 0;
+  REQUEST_ENCRYPTED = 1;
 }
 
 enum ServiceStats {
