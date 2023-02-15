@@ -37,6 +37,7 @@ message AnalyticsUplink {
   float lsnr = 13;
   uint32 size = 14;
   bytes fhdr = 15;
+  bytes uniqueId = 16;
 }
 
 /**
@@ -64,6 +65,7 @@ message AnalyticsDownlink {
   bytes fhdr = 16;
   bool noCrc = 17;
   int64 rxWallTime = 18;
+  bytes uniqueId = 19;
 }
 
 /**
