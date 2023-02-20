@@ -135,6 +135,7 @@ enum LoRaSF {
 enum LoRaBW {
   BW_UNKNOWN = 0;
   BW_125k = 1;
+  BW_250k = 3;
   BW_500k = 2;
 }
 

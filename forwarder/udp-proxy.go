@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/base64"
 	"fmt"
 	"net"
+	"os"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -14,6 +16,7 @@ type UDPProxy struct {
 	remote   *net.UDPConn
 	running  bool
 	listener UDPProxyListener
+	dumpfile *os.File
 }
 
 type UDPProxyListener interface {
@@ -33,7 +36,29 @@ func CreateUDPProxy(config ForwarderConfig) (*UDPProxy, error) {
 		return nil, err
 	}
 
+	if config.DebugDump != "" {
+		inst.dumpfile, err = os.OpenFile(config.DebugDump, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+		if err != nil {
+			log.Warnf("Could not open %s: %s", config.DebugDump, err.Error())
+		} else {
+			log.Infof("Writing all traffic to %s", config.DebugDump)
+		}
+	}
+
 	return inst, err
+}
+
+func (p *UDPProxy) writeDump(dir string, data []byte) {
+	if p.dumpfile == nil {
+		return
+	}
+
+	text := fmt.Sprintf("%s:%s\n", dir, base64.StdEncoding.EncodeToString(data))
+	if _, err := p.dumpfile.WriteString(text); err != nil {
+		log.Warnf("Error writing to dump file: %s", err.Error())
+	} else {
+		p.dumpfile.Sync()
+	}
 }
 
 func (p *UDPProxy) SetListener(listener UDPProxyListener) {
@@ -58,7 +83,7 @@ func (p *UDPProxy) bindLocal() error {
 			p.config.LocalAddress, err)
 	}
 
-	log.Infof("Listening for connctions on %s", p.config.LocalAddress)
+	log.Infof("Listening for connections on %s", p.config.LocalAddress)
 	p.local = c
 
 	// Start local thread
@@ -87,6 +112,8 @@ func (p *UDPProxy) localThread() {
 		p.replyTo = addr
 
 		if n > 0 {
+			p.writeDump(">", b[0:n])
+
 			// If the remote side is disconnected, try to connect
 			if p.remote == nil {
 				err := p.connectRemote()
@@ -96,7 +123,7 @@ func (p *UDPProxy) localThread() {
 			}
 
 			// Forward data to remote
-			log.Debugf("Writing %d bytes to %s", n, p.remote.RemoteAddr().String())
+			log.Debugf("Writing %d bytes to remote", n)
 			_, err := p.remote.Write(b[0:n])
 			if err != nil {
 				log.Warnf("Could not write to remote: %s", err.Error())
@@ -131,7 +158,18 @@ func (p *UDPProxy) connectRemote() error {
 			p.config.RemoteAddress, err)
 	}
 
-	c, err := net.DialUDP("udp", nil, s)
+	// If specified, we also need to configure the local bind port
+	var bindEp *net.UDPAddr = nil
+	if p.config.RemoteLocalAddress != "" {
+		bindEp, err = net.ResolveUDPAddr("udp4", p.config.RemoteLocalAddress)
+		if err != nil {
+			return fmt.Errorf("Invalid address '%s' given: %w",
+				p.config.RemoteAddress, err)
+		}
+		log.Debugf("Binding on %s for remote traffic", p.config.RemoteAddress)
+	}
+
+	c, err := net.DialUDP("udp", bindEp, s)
 	if err != nil {
 		return fmt.Errorf("Could not connect to %s: %w",
 			p.config.RemoteAddress, err)
@@ -149,7 +187,7 @@ func (p *UDPProxy) remoteThread() {
 	log.Debugf("Starting remote thread")
 	for {
 		b := make([]byte, p.config.BufferSize)
-		log.Debugf("Reading up to %d bytes from %s", p.config.BufferSize, p.remote.RemoteAddr().String())
+		log.Debugf("Reading up to %d bytes from remote", p.config.BufferSize)
 		n, addr, err := p.remote.ReadFromUDP(b)
 		log.Debugf("Received %d bytes from %s", n, addr.String())
 
@@ -163,6 +201,8 @@ func (p *UDPProxy) remoteThread() {
 		}
 
 		if n > 0 {
+			p.writeDump("<", b[0:n])
+
 			if p.local != nil {
 				// Forward data to local
 				log.Debugf("Writing %d bytes to %s", n, p.replyTo.String())

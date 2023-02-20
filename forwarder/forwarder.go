@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"net"
 	"strconv"
@@ -66,7 +67,9 @@ func (f *AnalyticsForwarder) main() {
 
 	// Periodically flush data waiting in the egress queue
 	for {
-		time.Sleep(30 * time.Second)
+		log.Debugf("Sleeping for %d sec", f.config.FlushInterval)
+		time.Sleep(time.Second * time.Duration(f.config.FlushInterval))
+		log.Debugf("Queue size=%d, isSending=%v", f.queueSize(), f.isSending)
 		if !f.isSending && f.hasData() {
 			f.flushData()
 		}
@@ -74,20 +77,25 @@ func (f *AnalyticsForwarder) main() {
 }
 
 func (f *AnalyticsForwarder) hasData() bool {
-	return len(f.uplinkFrame.Uplinks) > 0 ||
-		len(f.uplinkFrame.Downlinks) > 0 ||
-		len(f.uplinkFrame.Stats) > 0
+	return f.queueSize() > 0
+}
+
+func (f *AnalyticsForwarder) queueSize() int {
+	return len(f.uplinkFrame.Uplinks) +
+		len(f.uplinkFrame.Downlinks) +
+		len(f.uplinkFrame.Stats)
 }
 
 func (f *AnalyticsForwarder) flushData() {
 	f.isSending = true
+	log.Debugf("Flushing %d frames", f.queueSize())
 
 	// Swap frames to let the current buffer to keep being filled
 	sendFrame := f.uplinkFrame
 	f.uplinkFrame = &api.AnalyticsMetrics{}
 
 	// Flush data
-	sendFrame.GatewayId = f.config.ClientId
+	sendFrame.GatewayId = f.config.GatewayId
 	err := f.client.PushMetrics(sendFrame)
 	if err != nil {
 		log.Warnf("Unable to push metrics: %s", err.Error())
@@ -97,6 +105,7 @@ func (f *AnalyticsForwarder) flushData() {
 }
 
 func (f *AnalyticsForwarder) HandleUplink(data []byte, addr *net.UDPAddr) {
+	log.Debugf("Handling uplink frame from %s: %s", addr.IP.String(), hex.EncodeToString(data))
 	frame, err := DecodeMessage(data, len(data), addr, time.Now(), []string{})
 	if err != nil {
 		log.Warnf("Could not handle uplink: %s", err.Error())
@@ -105,21 +114,28 @@ func (f *AnalyticsForwarder) HandleUplink(data []byte, addr *net.UDPAddr) {
 
 		// Convert uplinks
 		rx, err := frame.GetAllRxPkt()
-		if err == nil {
+		if err == nil && rx != nil {
 			for _, r := range rx {
-				f.uplinkFrame.Uplinks = append(f.uplinkFrame.Uplinks, f.convertRxPkt(&r))
+				pkt := f.convertRxPkt(&r)
+				log.Debugf("Got uplink: %+v", pkt)
+				f.uplinkFrame.Uplinks = append(f.uplinkFrame.Uplinks, pkt)
 			}
 		}
 
 		// Convert stat
 		stat, err := frame.GetStatMsg()
-		if err == nil {
-			f.uplinkFrame.Stats = append(f.uplinkFrame.Stats, f.convertStatPkt(stat))
+		if err == nil && stat != nil {
+			pkt := f.convertStatPkt(stat)
+			log.Debugf("Got stat: %+v", pkt)
+			f.uplinkFrame.Stats = append(f.uplinkFrame.Stats, pkt)
 		}
 	}
+
+	log.Debugf("Queue size=%d", f.queueSize())
 }
 
 func (f *AnalyticsForwarder) HandleDownlink(data []byte, addr *net.UDPAddr) {
+	log.Debugf("Handling downlink frame from %s: %s", addr.IP.String(), hex.EncodeToString(data))
 	frame, err := DecodeMessage(data, len(data), addr, time.Now(), []string{})
 	if err != nil {
 		log.Warnf("Could not handle downlink: %s", err.Error())
@@ -128,10 +144,13 @@ func (f *AnalyticsForwarder) HandleDownlink(data []byte, addr *net.UDPAddr) {
 
 		// Convert downlinks
 		tx, err := frame.GetTxPacket()
-		if err == nil {
+		if err == nil && tx != nil {
+			log.Debugf("Got downlink: %+v", tx)
 			f.uplinkFrame.Downlinks = append(f.uplinkFrame.Downlinks, f.convertTxPkt(tx))
 		}
 	}
+
+	log.Debugf("Queue size=%d", f.queueSize())
 }
 
 ////////////////////////////////////////////////////////////////////////////////////
@@ -216,6 +235,8 @@ func parseBW(bw string) api.LoRaBW {
 	switch bw {
 	case "125":
 		return api.LoRaBW_BW_125k
+	case "250":
+		return api.LoRaBW_BW_250k
 	case "500":
 		return api.LoRaBW_BW_500k
 	}

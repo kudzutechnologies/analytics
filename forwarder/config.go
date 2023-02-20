@@ -10,6 +10,7 @@ type ForwarderConfig struct {
 	BufferSize          int
 	LocalAddress        string
 	RemoteAddress       string
+	RemoteLocalAddress  string
 	ConnectTimeout      int
 	RequestTimeout      int
 	MaxReconnectBackoff int
@@ -19,6 +20,8 @@ type ForwarderConfig struct {
 	Endpoint            string
 	GatewayId           string
 	GaugeStat           bool
+	DebugDump           string
+	LogLevel            string
 }
 
 func ParseConfigFromEnv() ForwarderConfig {
@@ -26,9 +29,10 @@ func ParseConfigFromEnv() ForwarderConfig {
 
 	// UDP forwarder config
 	flag.IntVar(&config.QueueSize, "queue-size", 100, "how many items to keep in the queue")
-	flag.IntVar(&config.BufferSize, "buffer-size", 1024, "how much memory to allocate for the UDP packets")
+	flag.IntVar(&config.BufferSize, "buffer-size", 1500, "how much memory to allocate for the UDP packets")
 	flag.StringVar(&config.LocalAddress, "local", "127.0.0.1:1700", "the local endpoint to listen for UDP packet forwarder")
 	flag.StringVar(&config.RemoteAddress, "remote", "", "the remote endpoint where to forward the received data")
+	flag.StringVar(&config.RemoteLocalAddress, "remote-bind", "", "the local endpoint to use when sending data to remote")
 
 	// Analytics client config
 	flag.StringVar(&config.ClientId, "client-id", "", "the client ID to use for connecting to Kudzu Analytics")
@@ -43,6 +47,9 @@ func ParseConfigFromEnv() ForwarderConfig {
 	flag.StringVar(&config.GatewayId, "gateway", "", "the ID of the gateway the forwarder is pushing data for")
 	flag.BoolVar(&config.GaugeStat, "gauge-stat", false, "the statistics are gauge values")
 
+	flag.StringVar(&config.DebugDump, "debug-dump", "", "the filename where to write the traffic for debugging")
+	flag.StringVar(&config.LogLevel, "log-level", "info", "selects the verbosity of logging, can be 'error', 'warn', 'info', 'debug'")
+
 	flag.Parse()
 
 	if config.RemoteAddress == "" {
@@ -56,6 +63,20 @@ func ParseConfigFromEnv() ForwarderConfig {
 	}
 	if config.GatewayId == "" {
 		log.Fatalf("You must specify a gateway ID (--gateway=)")
+	}
+
+	// Apply log level
+	switch config.LogLevel {
+	case "debug":
+		log.SetLevel(log.DebugLevel)
+	case "info":
+		log.SetLevel(log.InfoLevel)
+	case "error":
+		log.SetLevel(log.ErrorLevel)
+	case "warn":
+		log.SetLevel(log.WarnLevel)
+	default:
+		log.Fatalf("Unknown log level: %s", config.LogLevel)
 	}
 
 	return config
