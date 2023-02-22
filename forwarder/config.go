@@ -8,9 +8,12 @@ import (
 type ForwarderConfig struct {
 	QueueSize           int
 	BufferSize          int
-	LocalAddress        string
-	RemoteAddress       string
-	RemoteLocalAddress  string
+	ListenHost          string
+	ListenPortUp        int
+	ListenPortDown      int
+	ConnectHost         string
+	ConnectPortUp       int
+	ConnectPortDown     int
 	ConnectTimeout      int
 	RequestTimeout      int
 	MaxReconnectBackoff int
@@ -30,9 +33,12 @@ func ParseConfigFromEnv() ForwarderConfig {
 	// UDP forwarder config
 	flag.IntVar(&config.QueueSize, "queue-size", 100, "how many items to keep in the queue")
 	flag.IntVar(&config.BufferSize, "buffer-size", 1500, "how much memory to allocate for the UDP packets")
-	flag.StringVar(&config.LocalAddress, "local", "127.0.0.1:1700", "the local endpoint to listen for UDP packet forwarder")
-	flag.StringVar(&config.RemoteAddress, "remote", "", "the remote endpoint where to forward the received data")
-	flag.StringVar(&config.RemoteLocalAddress, "remote-bind", "", "the local endpoint to use when sending data to remote")
+	flag.StringVar(&config.ListenHost, "listen-host", "127.0.0.1", "the hostname where to listen (UDP forwarder connects here)")
+	flag.IntVar(&config.ListenPortUp, "listen-port-up", 1800, "the (local) port where to receive uplink datagrams from the UDP forwarder")
+	flag.IntVar(&config.ListenPortDown, "listen-port-down", 1801, "the UDP forwarder port where to send downlink datagrams to")
+	flag.StringVar(&config.ConnectHost, "connect-host", "", "the hostname where to connect to (the LoRa Server)")
+	flag.IntVar(&config.ConnectPortUp, "connect-port-up", 1700, "the server port where to send uplink datagrams to")
+	flag.IntVar(&config.ConnectPortDown, "connect-port-down", 1700, "the (local) port where to receive downlink datagrams from")
 
 	// Analytics client config
 	flag.StringVar(&config.ClientId, "client-id", "", "the client ID to use for connecting to Kudzu Analytics")
@@ -52,8 +58,8 @@ func ParseConfigFromEnv() ForwarderConfig {
 
 	flag.Parse()
 
-	if config.RemoteAddress == "" {
-		log.Fatalf("You must specify a remote endpoint (--remote)")
+	if config.ConnectHost == "" {
+		log.Fatalf("You must specify a LoRa server to connect to (--connect-host)")
 	}
 	if config.ClientId == "" {
 		log.Fatalf("You must specify a client ID (--client-id=)")

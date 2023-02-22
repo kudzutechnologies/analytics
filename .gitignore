@@ -2,3 +2,6 @@
 example/example
 forwarder/forwarder
 forwarder/kudzu-forwarder-*
+.DS_Store
+*.log
+*.dmp

@@ -236,7 +236,7 @@ func (m *SemtechUDPMessage) Length() int {
 }
 
 ////////////////////////////////////////////////////////////////////////////////////
-//
+// High-level structure parsing
 ////////////////////////////////////////////////////////////////////////////////////
 
 type CodingRate struct {
@@ -301,4 +301,30 @@ func (pkt *SemtechUDPRxPkt) GetCodingRate() (CodingRate, error) {
 	}
 
 	return codr, nil
+}
+
+////////////////////////////////////////////////////////////////////////////////////
+// Helpers
+////////////////////////////////////////////////////////////////////////////////////
+
+func SemtechUDPIsDownlink(b []byte) bool {
+	if b[0] == PROTOCOL_VERSION {
+		switch b[3] {
+		case PUSH_DATA:
+			return false
+		case PUSH_ACK:
+			return false
+
+		case PULL_DATA:
+			return true
+		case PULL_RESP:
+			return true
+		case PULL_ACK:
+			return true
+		case TX_ACK:
+			return true
+		}
+	}
+
+	return false
 }
