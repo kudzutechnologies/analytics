@@ -223,11 +223,6 @@ func (p *SocketPair) dnThread() {
 		}
 
 		if n > 0 {
-			// Keep track of the address to reply to
-			if p.dnReplyTo == nil {
-				p.dnReplyTo = addr
-			}
-
 			// If we have handlers, call-out now
 			if p.handlers != nil {
 				data := b[0:n]
@@ -238,11 +233,14 @@ func (p *SocketPair) dnThread() {
 					dn := p.handlers.IsDnPacket(data)
 					if dn {
 						p.handlers.HandleDnRx(data, addr)
+						p.dnReplyTo = addr
 					} else {
 						p.handlers.HandleUpRx(data, addr)
+						p.upReplyTo = addr
 					}
 				} else {
 					p.handlers.HandleDnRx(data, addr)
+					p.dnReplyTo = addr
 				}
 			}
 		}
@@ -257,23 +255,19 @@ func (p *SocketPair) WriteDn(data []byte) error {
 		err error
 	)
 	if p.dn != nil {
-		if p.dnReplyTo == nil {
-			log.Warnf("[%s:%s] No remote end connected to reply to", p.config.Name, p.ud())
-			return nil
-		}
-
-		log.Debugf("[%s:%s] Writing %d bytes to %s", p.config.Name, p.ud(), len(data), p.dnReplyTo.String())
 		if p.listening {
+			log.Debugf("[%s:dn] Writing %d bytes to %s", p.config.Name, len(data), p.dnReplyTo.String())
 			n, err = p.dn.WriteToUDP(data, p.dnReplyTo)
 		} else {
+			log.Debugf("[%s:dn] Writing %d bytes to %s", p.config.Name, len(data), p.dnEp.String())
 			n, err = p.dn.Write(data)
 		}
 		if err != nil {
-			log.Warnf("[%s:%s] Error writing data: %s", p.config.Name, p.ud(), err.Error())
+			log.Warnf("[%s:dn] Error writing data: %s", p.config.Name, err.Error())
 			return err
 		}
 		if n != len(data) {
-			log.Warnf("[%s:%s] Could not write entire buffer: %d remains", p.config.Name, p.ud(), len(data)-n)
+			log.Warnf("[%s:dn] Could not write entire buffer: %d remains", p.config.Name, len(data)-n)
 			return IncompleteDataError
 		}
 		return nil
@@ -321,17 +315,19 @@ func (p *SocketPair) WriteUp(data []byte) error {
 		err error
 	)
 
-	// If both sockets are the same, use downlink
+	// Check if sockets are same
+	sock := p.up
 	if p.same {
-		return p.WriteDn(data)
+		sock = p.dn
 	}
 
-	if p.up != nil {
-		log.Debugf("[%s:up] Writing %d bytes to %s", p.config.Name, len(data), p.upEp.String())
+	if sock != nil {
 		if p.listening {
-			n, err = p.up.WriteToUDP(data, p.upReplyTo)
+			log.Debugf("[%s:up] Writing %d bytes to %s", p.config.Name, len(data), p.upReplyTo.String())
+			n, err = sock.WriteToUDP(data, p.upReplyTo)
 		} else {
-			n, err = p.up.Write(data)
+			log.Debugf("[%s:up] Writing %d bytes to %s", p.config.Name, len(data), p.upEp.String())
+			n, err = sock.Write(data)
 		}
 		if err != nil {
 			log.Warnf("[%s:up] Error writing data: %s", p.config.Name, err.Error())
