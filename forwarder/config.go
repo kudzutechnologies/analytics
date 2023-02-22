@@ -10,7 +10,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const MajorVersion = "0.1"
+const MajorVersion = "0.1.5"
 
 type ForwarderConfig struct {
 	QueueSize           int
