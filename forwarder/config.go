@@ -1,9 +1,16 @@
 package main
 
 import (
+	"fmt"
+	"os"
+	"runtime/debug"
+
 	"github.com/namsral/flag"
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 )
+
+const MajorVersion = "0.1"
 
 type ForwarderConfig struct {
 	QueueSize           int
@@ -27,8 +34,20 @@ type ForwarderConfig struct {
 	LogLevel            string
 }
 
+func Version() string {
+	if info, ok := debug.ReadBuildInfo(); ok {
+		for _, setting := range info.Settings {
+			if setting.Key == "vcs.revision" {
+				return setting.Value
+			}
+		}
+	}
+	return "unknown"
+}
+
 func ParseConfigFromEnv() ForwarderConfig {
 	var config ForwarderConfig
+	flag.String(flag.DefaultConfigFlagname, "", "path to the configuration file")
 
 	// UDP forwarder config
 	flag.IntVar(&config.QueueSize, "queue-size", 100, "how many items to keep in the queue")
@@ -56,7 +75,19 @@ func ParseConfigFromEnv() ForwarderConfig {
 	flag.StringVar(&config.DebugDump, "debug-dump", "", "the filename where to write the traffic for debugging")
 	flag.StringVar(&config.LogLevel, "log-level", "info", "selects the verbosity of logging, can be 'error', 'warn', 'info', 'debug'")
 
+	// Local flags
+	var version bool
+	var logFile string
+	flag.BoolVar(&version, "version", false, "show the package version and exit")
+	flag.StringVar(&logFile, "log-file", "", "writes the program output to the specified logfile")
+
 	flag.Parse()
+
+	// Check if only version is requested
+	if version {
+		fmt.Printf("Kudzu Analytics UDP Packet Forwarder v%s (Git %s)\n", MajorVersion, Version())
+		os.Exit(0)
+	}
 
 	if config.ConnectHost == "" {
 		log.Fatalf("You must specify a LoRa server to connect to (--connect-host)")
@@ -84,6 +115,13 @@ func ParseConfigFromEnv() ForwarderConfig {
 	default:
 		log.Fatalf("Unknown log level: %s", config.LogLevel)
 	}
+
+	// If we have a logfile specified, redirect output now
+	f, err := os.OpenFile(logFile, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0755)
+	if err != nil {
+		log.Fatalf("Could not open logfile %s for writing: %s", logFile, err.Error())
+	}
+	logrus.SetOutput(f)
 
 	return config
 }
