@@ -266,11 +266,9 @@ func (f *AnalyticsForwarder) convertRxPkt(in *SemtechUDPRxPkt) *api.AnalyticsUpl
 		out.RxWallTime = tm.UnixMicro()
 	}
 
-	out.Channel = uint32(in.Channel)
 	out.RxFinishedTime = in.Tmst
 	out.RxGpsTime = in.Tmms
 	out.Frequency = in.Frequency
-	out.Channel = uint32(in.Channel)
 	out.RfChain = uint32(in.RfChain)
 	out.CodingRate = parseCodingRate(in.CodingRate)
 	out.Crc = parseCrcStat(in.Stat)
@@ -290,8 +288,37 @@ func (f *AnalyticsForwarder) convertRxPkt(in *SemtechUDPRxPkt) *api.AnalyticsUpl
 		}
 	}
 
-	out.Rssi = in.Rssi
-	out.Lsnr = in.Lsnr
+	if len(in.RSig) > 0 {
+		for _, ant := range in.RSig {
+			oAnt := &api.AnalyticsUplinkAntenna{
+				Antenna: int32(ant.Ant),
+				IfChan:  int32(ant.Chan),
+				RSSIC:   int32(ant.RSSIC),
+				LSNR:    float32(ant.LSNR),
+				ETime:   ant.ETime,
+				FTime:   ant.FTime,
+				Foff:    ant.FOff,
+			}
+
+			if ant.RSSIS != nil {
+				var value int32 = int32(*ant.RSSIS)
+				oAnt.RSSIS = &value
+			}
+			if ant.RSSISD != nil {
+				var value int32 = int32(*ant.RSSISD)
+				oAnt.RSSISD = &value
+			}
+
+			out.Ant = append(out.Ant, oAnt)
+		}
+	} else {
+		out.Ant = append(out.Ant, &api.AnalyticsUplinkAntenna{
+			Antenna: 0,
+			IfChan:  int32(in.Channel),
+			RSSIC:   int32(in.Rssi),
+			LSNR:    in.Lsnr,
+		})
+	}
 	out.Size = uint32(in.Size)
 
 	data, err := base64.StdEncoding.DecodeString(in.Data)

@@ -10,7 +10,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const MajorVersion = "0.1.5"
+const MajorVersion = "0.1.7"
 
 type ForwarderConfig struct {
 	QueueSize           int
@@ -117,11 +117,13 @@ func ParseConfigFromEnv() ForwarderConfig {
 	}
 
 	// If we have a logfile specified, redirect output now
-	f, err := os.OpenFile(logFile, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0755)
-	if err != nil {
-		log.Fatalf("Could not open logfile %s for writing: %s", logFile, err.Error())
+	if logFile != "" {
+		f, err := os.OpenFile(logFile, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0755)
+		if err != nil {
+			log.Fatalf("Could not open logfile %s for writing: %s", logFile, err.Error())
+		}
+		logrus.SetOutput(f)
 	}
-	logrus.SetOutput(f)
 
 	return config
 }

@@ -74,6 +74,20 @@ type SemtechUDPTxPkt struct {
 	Data       string  `json:"data,omitempty"`
 }
 
+// RSig contains the metadata associated with the received signal
+// (Reference from https://github.com/TheThingsArchive/gateway-connector-bridge/blob/master/backend/pktfwd/structs.go)
+type SemtechUDPRxPktRsig struct {
+	Ant    uint8   `json:"ant"`              // Antenna number on which signal has been received
+	Chan   uint8   `json:"chan"`             // Concentrator "IF" channel used for RX (unsigned integer)
+	RSSIC  int16   `json:"rssic"`            // RSSI in dBm of the channel (signed integer, 1 dB precision)
+	RSSIS  *int16  `json:"rssis,omitempty"`  // RSSI in dBm of the signal (signed integer, 1 DB precision) (Optional)
+	RSSISD *uint16 `json:"rssisd,omitempty"` // Standard deviation of RSSI during preamble (unsigned integer) (Optional)
+	LSNR   float64 `json:"lsnr"`             // Lora SNR ratio in dB (signed float, 0.1 dB precision)
+	ETime  []byte  `json:"etime,omitempty"`  // Encrypted timestamp, ns precision [0..999999999] (Optional)
+	FTime  *int64  `json:"ftime,omitempty"`  // Fine timestamp, ns precision [0..999999999] (Optional)
+	FOff   *int32  `json:"foff,omitempty"`   // Frequency offset in Hz [-125kHz..+125Khz] (Optional)
+}
+
 type SemtechUDPRxPkt struct {
 	Time       string  `json:"time,omitempty"`
 	Tmms       int64   `json:"tmms,omitempty"`
@@ -89,6 +103,9 @@ type SemtechUDPRxPkt struct {
 	Lsnr       float32 `json:"lsnr,omitempty"`
 	Size       int     `json:"size,omitempty"`
 	Data       string  `json:"data,omitempty"`
+
+	// Extra fields from kerlink, for per-antenna details
+	RSig []SemtechUDPRxPktRsig `json:"rsig,omitempty"`
 
 	// Additional Meta-Data exposed from more elaborate
 	// internal modules

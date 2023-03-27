@@ -15,6 +15,27 @@ message AnalyticsMetrics {
   repeated AnalyticsStat stats = 4;
 }
 
+message AnalyticsUplinkAntenna {
+  // Antenna number on which signal has been received
+  int32 Antenna = 1;
+  // Concentrator "IF" channel used for RX (unsigned integer)
+  int32 IfChan = 2;
+  // RSSI in dBm of the channel (signed integer, 1 dB precision)
+  int32 RSSIC = 3;
+  // RSSI in dBm of the signal (signed integer, 1 DB  precision) (Optional)
+  optional int32 RSSIS = 4;
+  // Standard deviation of RSSI during preamble  (unsigned integer) (Optional)
+  optional int32 RSSISD = 5;
+  // Lora SNR ratio in dB (signed float, 0.1 dB precision)
+  float LSNR = 6;
+  // Encrypted timestamp, ns precision [0..999999999] (Optional)
+  optional bytes ETime = 7;
+  // Fine timestamp, ns precision [0..999999999] (Optional)
+  optional int64 FTime = 8;
+  // Frequency offset in Hz [-125kHz..+125Khz] (Optional)
+  optional int32 Foff = 9;
+}
+
 /**
  * Uplink Analytics Message
  * (Sent from a mote)
@@ -24,7 +45,7 @@ message AnalyticsUplink {
   int64 rxGpsTime = 2;
   int64 rxFinishedTime = 3;
   float frequency = 4;
-  uint32 channel = 5;
+  // uint32 channel = 5; (removed)
   uint32 rfChain = 6;
   CRCStatus crc = 7;
   Modulation modulation = 8;
@@ -33,11 +54,12 @@ message AnalyticsUplink {
     LoRaDataRate dataRateLoRa = 10;
     uint32 dataRateFSK = 11;
   }
-  float rssi = 12;
-  float lsnr = 13;
+  // float rssi = 12; (removed)
+  // float lsnr = 13; (removed)
   uint32 size = 14;
   bytes fhdr = 15;
   bytes uniqueId = 16;
+  repeated AnalyticsUplinkAntenna ant = 17;
 }
 
 /**

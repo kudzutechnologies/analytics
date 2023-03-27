@@ -19,6 +19,11 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+// Revision:
+// v1 - First public release of the client
+// v2 - Added support for multiple antennas
+const ClientVersion = 2
+
 //go:embed cert/kudzu-root-ca-2023.pem
 var defaultRootCertificate []byte
 
@@ -151,7 +156,7 @@ func (c *Client) Connect() error {
 	}
 
 	helloResp, err := client.Hello(ctx, &api.ReqHello{
-		Version: 1,
+		Version: ClientVersion,
 	})
 	if err != nil {
 		return fmt.Errorf("Could not handshake with server: %w", err)
