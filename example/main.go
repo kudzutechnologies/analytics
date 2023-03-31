@@ -31,7 +31,12 @@ func main() {
 	for i := 0; i < 10; i += 1 {
 		// Compose an uplink frame
 		var up pb.AnalyticsUplink
-		up.Channel = 1
+		up.Ant = []*pb.AnalyticsUplinkAntenna{{
+			Antenna: 0,
+			IfChan:  1,
+			RSSIC:   10,
+			LSNR:    11.32,
+		}}
 		up.Frequency = 868.000
 		up.Fhdr = []byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06}
 		analytics.Uplinks = append(analytics.Uplinks, &up)
