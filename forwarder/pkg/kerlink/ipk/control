@@ -1,0 +1,8 @@
+Package: kudzu-forwarder
+Version: 0.1.8
+Architecture: klkgw
+Maintainer: Kudzu Technologies <info@kudzu.gr>
+Priority: optional
+Section: analytics
+Source: Kudzu Analytics
+Description: Collects network analytics meta-data out of LoRaWAN traffic

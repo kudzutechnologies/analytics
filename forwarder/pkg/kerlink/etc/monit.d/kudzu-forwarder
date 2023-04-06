@@ -1,0 +1,4 @@
+CHECK PROCESS kudzu-forwarder PIDFILE /var/run/kudzu/kudzu-forwarder.pid
+	start program = "/etc/init.d/kudzu-forwarder start"
+	stop program = "/etc/init.d/kudzu-forwarder stop"
+	onreboot nostart

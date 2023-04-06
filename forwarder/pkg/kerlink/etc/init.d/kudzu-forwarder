@@ -1,0 +1,113 @@
+#!/bin/sh -e
+
+### BEGIN INIT INFO
+# Provides:        kudzu-forwarder
+# Required-Start:  $remote_fs $syslog
+# Required-Stop:   $remote_fs $syslog
+# Default-Start:   5
+# Default-Stop:    0 6
+# Short-Description: Kudzu Analytics Forwarder
+### END INIT INFO
+
+BINARY="/usr/bin/kudzu-forwarder"
+PIDFILE="/var/run/kudzu/kudzu-forwarder.pid"
+
+[ -f /etc/default/kudzu-forwarder ] && . /etc/default/kudzu-forwarder
+
+alive() { [ "${1}" ] && kill -0 ${1} 2> /dev/null ; }
+pid() { [ -f ${PIDFILE} ] && cat ${PIDFILE} || pidof kudzu-forwarder ; }
+
+iptables_accept()
+{
+	if [ -n "${1}" ]
+	then
+		local RULE="OUTPUT -t filter -p udp --dport ${1} -j ACCEPT"
+		iptables -C ${RULE} 2> /dev/null || iptables -I ${RULE}
+
+		local RULE="INPUT -t filter -p udp --sport ${1} -j ACCEPT"
+		iptables -C ${RULE} 2> /dev/null || iptables -I ${RULE}
+	fi
+
+	local RULE="OUTPUT -t filter -p tcp --dport 50051 -j ACCEPT"
+	iptables -C ${RULE} 2> /dev/nulll || iptables -I ${RULE}
+
+	local RULE="INPUT -t filter -p tcp --sport 50051 -j ACCEPT"
+	iptables -C ${RULE} 2> /dev/null || iptables -I ${RULE}
+}
+
+config_var_read()
+{
+	awk -F'=' "/^${1}/{print \$2}" ${CONFIGURATION_FILE}
+}
+
+start()
+{
+	# Tell sysupgrade to keep kudzu-forwarder configuration files during upgrade
+	mkdir -p "/etc/sysupgrade.d"
+	echo "/etc/default/kudzu-forwarder" > "/etc/sysupgrade.d/kudzu-forwarder.conf"
+	echo "${CONFIGURATION_FILE}" >> "/etc/sysupgrade.d/kudzu-forwarder.conf"
+	# Do not start kudzu-forwarder if disabled
+	if [ "x${DISABLE_KUDZU_FORWARDER}" = "xyes" ]; then
+		echo "kudzu-forwarder disabled by configuration"
+		exit 0
+	fi
+
+	# Create the version file.
+	${BINARY} --version > /tmp/kudzu-forwarder_version
+
+	# Create data folders
+	mkdir -p "/var/run/kudzu"
+
+	# Find the running pid and return if already alive.
+	if alive $(pid) ; then return 0; fi
+
+	# Enable firewall rules
+	iptables_accept $(config_var_read "connect-port-up")
+	iptables_accept $(config_var_read "connect-port-down")
+
+	# Start the LoRa forwarder.
+	${BINARY} -config ${CONFIGURATION_FILE} --log-file=${LOG_FILE} ${EXTRA_ARGS}&
+	echo $! > ${PIDFILE}
+
+	# Start monitoring.
+	monit monitor kudzu-forwarder
+}
+
+stop()
+{
+	# Stop monitoring.
+	monit unmonitor kudzu-forwarder
+
+	# Stop the LoRa forwarder.
+	local PID=$(pid)
+	if alive ${PID}
+	then
+		kill -TERM ${PID} && sleep 1
+		if alive ${PID}
+		then
+			kill -KILL ${PID} && sleep 1
+		fi
+	fi
+
+	# Check if the process has exited.
+	! alive ${PID}
+}
+
+case "${1}" in
+	start)
+		echo "Starting kudzu-forwarder"
+		start
+		;;
+	stop)
+		echo "Stopping kudzu-forwarder"
+		stop
+		;;
+	restart | force-reload)
+		echo "Restarting kudzu-forwarder"
+		stop && start
+		;;
+	*)
+		echo >&2 "Usage: ${0##*/} { start | stop | restart | force-reload }"
+		exit 1
+		;;
+esac

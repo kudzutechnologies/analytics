@@ -1,0 +1,13 @@
+# Configuration file for kudzu forwarder.
+
+# Disable lorawd (default value: yes)
+DISABLE_KUDZU_FORWARDER="yes"
+
+# The configuration file.
+CONFIGURATION_FILE="/etc/kudzu-forwarder.conf"
+
+# The log file
+LOG_FILE="/var/log/kudzu-forwarder.log"
+
+# The extra arguments.
+EXTRA_ARGS=""
