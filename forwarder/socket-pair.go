@@ -25,6 +25,7 @@ type SocketPairConfig struct {
 	BufferSize        int
 	RetryConnect      bool
 	ReconnectInterval int
+	ConnectInterface  string
 }
 
 type SocketPair struct {
@@ -34,6 +35,7 @@ type SocketPair struct {
 	up           *net.UDPConn
 	upEp         *net.UDPAddr
 	upReplyTo    *net.UDPAddr
+	conIface     *net.UDPAddr
 	config       SocketPairConfig
 	open         bool
 	reconnecting bool
@@ -52,12 +54,17 @@ func CreateSocketPair(config SocketPairConfig) (*SocketPair, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Could not parse address %s: %w", config.UpEndpoint, err)
 	}
+	conIface, err := net.ResolveUDPAddr("udp4", fmt.Sprintf("%s:0", config.ConnectInterface))
+	if err != nil {
+		return nil, fmt.Errorf("Could not parse connect address %s: %w", config.DnEndpoint, err)
+	}
 
 	return &SocketPair{
-		dnEp:   dnAddr,
-		upEp:   upAddr,
-		config: config,
-		same:   config.DnEndpoint == config.UpEndpoint,
+		dnEp:     dnAddr,
+		upEp:     upAddr,
+		conIface: conIface,
+		config:   config,
+		same:     config.DnEndpoint == config.UpEndpoint,
 	}, nil
 }
 
@@ -102,18 +109,31 @@ func (p *SocketPair) Connect() error {
 		return nil
 	}
 
+	// First use connect to test link feasibility
 	var err error
 	p.dnReplyTo = p.dnEp
-	p.dn, err = net.DialUDP("udp4", nil, p.dnEp)
+	p.dn, err = net.DialUDP("udp4", p.conIface, p.dnEp)
 	if err != nil {
 		return fmt.Errorf("Could not listen on %s: %w", p.dnEp.String(), err)
 	}
 
+	// Then use listen to receive packets
+	p.dn.Close()
+	p.dn, err = net.ListenUDP("udp4", p.conIface)
+	if err != nil {
+		return fmt.Errorf("Could not create receiving socket for %s: %w", p.dnEp.String(), err)
+	}
+
 	if !p.same {
 		p.upReplyTo = p.upEp
-		p.up, err = net.DialUDP("udp4", nil, p.upEp)
+		p.up, err = net.DialUDP("udp4", p.conIface, p.upEp)
 		if err != nil {
 			return fmt.Errorf("Could not connect to %s: %w", p.upEp.String(), err)
+		}
+		p.up.Close()
+		p.up, err = net.ListenUDP("udp4", p.conIface)
+		if err != nil {
+			return fmt.Errorf("Could not create receiving socket for %s: %w", p.upEp.String(), err)
 		}
 	}
 
@@ -260,7 +280,7 @@ func (p *SocketPair) WriteDn(data []byte) error {
 			n, err = p.dn.WriteToUDP(data, p.dnReplyTo)
 		} else {
 			log.Debugf("[%s:dn] Writing %d bytes to %s", p.config.Name, len(data), p.dnEp.String())
-			n, err = p.dn.Write(data)
+			n, err = p.dn.WriteToUDP(data, p.dnEp)
 		}
 		if err != nil {
 			log.Warnf("[%s:dn] Error writing data: %s", p.config.Name, err.Error())
@@ -317,8 +337,10 @@ func (p *SocketPair) WriteUp(data []byte) error {
 
 	// Check if sockets are same
 	sock := p.up
+	sockEp := p.upEp
 	if p.same {
 		sock = p.dn
+		sockEp = p.dnEp
 	}
 
 	if sock != nil {
@@ -326,8 +348,8 @@ func (p *SocketPair) WriteUp(data []byte) error {
 			log.Debugf("[%s:up] Writing %d bytes to %s", p.config.Name, len(data), p.upReplyTo.String())
 			n, err = sock.WriteToUDP(data, p.upReplyTo)
 		} else {
-			log.Debugf("[%s:up] Writing %d bytes to %s", p.config.Name, len(data), p.upEp.String())
-			n, err = sock.Write(data)
+			log.Debugf("[%s:up] Writing %d bytes to %s", p.config.Name, len(data), sockEp.String())
+			n, err = sock.WriteToUDP(data, sockEp)
 		}
 		if err != nil {
 			log.Warnf("[%s:up] Error writing data: %s", p.config.Name, err.Error())

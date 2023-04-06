@@ -38,6 +38,7 @@ func CreateUDPProxy(config ForwarderConfig) (*UDPProxy, error) {
 
 	remote, err := CreateSocketPair(SocketPairConfig{
 		Name:              "remote",
+		ConnectInterface:  config.ConnectInterface,
 		UpEndpoint:        fmt.Sprintf("%s:%d", config.ConnectHost, config.ConnectPortUp),
 		DnEndpoint:        fmt.Sprintf("%s:%d", config.ConnectHost, config.ConnectPortDown),
 		BufferSize:        config.BufferSize,

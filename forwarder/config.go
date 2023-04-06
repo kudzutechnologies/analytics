@@ -18,6 +18,7 @@ type ForwarderConfig struct {
 	ListenHost          string
 	ListenPortUp        int
 	ListenPortDown      int
+	ConnectInterface    string
 	ConnectHost         string
 	ConnectPortUp       int
 	ConnectPortDown     int
@@ -58,6 +59,7 @@ func ParseConfigFromEnv() ForwarderConfig {
 	flag.StringVar(&config.ConnectHost, "connect-host", "", "the hostname where to connect to (the LoRa Server)")
 	flag.IntVar(&config.ConnectPortUp, "connect-port-up", 1700, "the server port where to send uplink datagrams to")
 	flag.IntVar(&config.ConnectPortDown, "connect-port-down", 1700, "the (local) port where to receive downlink datagrams from")
+	flag.StringVar(&config.ConnectInterface, "connect-interface", "0.0.0.0", "the interface to bind when connecting to remote host")
 
 	// Analytics client config
 	flag.StringVar(&config.ClientId, "client-id", "", "the client ID to use for connecting to Kudzu Analytics")
