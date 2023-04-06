@@ -252,7 +252,7 @@ func parseDataLoRaRate(dataRate string) *api.LoRaDataRate {
 		log.Warnf("Unparsable data rate '%s'", dataRate)
 	} else {
 		lora.SpreadingFactor = parseSF(dataRate[2:bw])
-		lora.Bandwidth = parseBW(dataRate[2:bw])
+		lora.Bandwidth = parseBW(dataRate[bw+2:])
 	}
 	return &lora
 }
