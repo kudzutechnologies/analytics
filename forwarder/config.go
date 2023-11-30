@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"runtime/debug"
@@ -33,6 +34,7 @@ type ForwarderConfig struct {
 	GaugeStat           bool
 	DebugDump           string
 	LogLevel            string
+	ServerSide          bool
 }
 
 func Version() string {
@@ -73,6 +75,7 @@ func ParseConfigFromEnv() ForwarderConfig {
 	flag.IntVar(&config.FlushInterval, "flush-interval", 30, "how frequently to flush collected metrics to analytics")
 	flag.StringVar(&config.GatewayId, "gateway", "", "the ID of the gateway the forwarder is pushing data for")
 	flag.BoolVar(&config.GaugeStat, "gauge-stat", false, "the statistics are gauge values")
+	flag.BoolVar(&config.ServerSide, "server-side", false, "the forwarder runs on the server-side")
 
 	flag.StringVar(&config.DebugDump, "debug-dump", "", "the filename where to write the traffic for debugging")
 	flag.StringVar(&config.LogLevel, "log-level", "info", "selects the verbosity of logging, can be 'error', 'warn', 'info', 'debug'")
@@ -100,8 +103,8 @@ func ParseConfigFromEnv() ForwarderConfig {
 	if config.ClientKey == "" {
 		log.Fatalf("You must specify a client Key (--client-key=)")
 	}
-	if config.GatewayId == "" {
-		log.Fatalf("You must specify a gateway ID (--gateway=)")
+	if config.GatewayId == "" && !config.ServerSide {
+		log.Fatalf("You must specify a gateway ID (--gateway=) when running on the client-side")
 	}
 
 	// Apply log level
@@ -126,6 +129,10 @@ func ParseConfigFromEnv() ForwarderConfig {
 		}
 		logrus.SetOutput(f)
 	}
+
+	// Dump the default config
+	b, _ := json.Marshal(config)
+	log.Debugf("Debug configuration: %s", string(b))
 
 	return config
 }

@@ -17,6 +17,7 @@ func main() {
 		ConnectTimeout:      int32(config.ConnectTimeout),
 		RequestTimeout:      int32(config.RequestTimeout),
 		MaxReconnectBackoff: int32(config.MaxReconnectBackoff),
+		ServerSide:          &config.ServerSide,
 	})
 
 	// Create the UDP proxy

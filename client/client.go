@@ -52,6 +52,8 @@ type AnalyticsClientConfig struct {
 	MaxReconnectBackoff int32 `json:"max_reconnect_backoff,omitempty"`
 	// Wether or not to automatically re-connect to the server
 	AutoReconnect *bool `json:"reconnect,omitempty"`
+	// Indicates that we are forwarding data from the server-side
+	ServerSide *bool `json:"server_side,omitempty"`
 }
 
 // the RPC client
@@ -168,9 +170,14 @@ func (c *Client) Connect() error {
 		return fmt.Errorf("Invalid client key")
 	}
 	b := append(append(helloResp.Challenge, '|'), clientKey...)
+	serverSide := false
+	if c.config.ServerSide != nil {
+		serverSide = *c.config.ServerSide
+	}
 	loginResp, err := client.Login(ctx, &api.ReqLogin{
-		ClientId: clientId,
-		Hash:     sha256.New().Sum(b),
+		ClientId:   clientId,
+		Hash:       sha256.New().Sum(b),
+		ServerSide: serverSide,
 	})
 	if err != nil {
 		return fmt.Errorf("Could not login: %w", err)

@@ -36,6 +36,7 @@ message RespHello {
 message ReqLogin {
   bytes clientId = 1;
   bytes hash = 2;
+  bool serverSide = 3;
 }
 
 // Receives the access token that can be used for pushing metrics
