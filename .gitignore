@@ -5,3 +5,7 @@ forwarder/kudzu-forwarder-*
 .DS_Store
 *.log
 *.dmp
+
+# Kerlink IPK builder
+*.ipk
+gen_remove_ipk

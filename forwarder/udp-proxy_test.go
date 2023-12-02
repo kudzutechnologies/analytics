@@ -2,340 +2,321 @@ package main
 
 import (
 	"bytes"
-	"fmt"
-	"math/rand"
 	"net"
 	"testing"
 	"time"
+	// log "github.com/sirupsen/logrus"
 )
 
-type WriteFn = func([]byte) error
-
-type TestSockets struct {
-	PacketForwarderPort           int
-	PacketForwarderSock           *net.UDPConn
-	PacketForwarderLastRemoteAddr *net.UDPAddr
-
-	ServerPort           int
-	ServerSock           *net.UDPConn
-	ServerLastRemoteAddr *net.UDPAddr
-
-	t *testing.T
+type BufHandler struct {
+	LastUpLocal  []byte
+	lastUpRemote []byte
+	LastDnLocal  []byte
+	LastDnRemote []byte
 }
 
-func CreateTestSockets(t *testing.T) *TestSockets {
-	sock := &TestSockets{}
-
-	// Create 4 random ports
-	pBase := 30500 + rand.Intn(35000)
-	sock.t = t
-	sock.PacketForwarderPort = pBase
-	sock.ServerPort = pBase + 1
-
-	return sock
+func (b *BufHandler) UpLocalData(data []byte, localEp *net.UDPAddr) {
+	tmp := make([]byte, len(data))
+	copy(tmp, data)
+	b.LastUpLocal = tmp
+}
+func (b *BufHandler) UpRemoteData(data []byte, localEp *net.UDPAddr) {
+	tmp := make([]byte, len(data))
+	copy(tmp, data)
+	b.lastUpRemote = tmp
+}
+func (b *BufHandler) DnLocalData(data []byte, localEp *net.UDPAddr) {
+	tmp := make([]byte, len(data))
+	copy(tmp, data)
+	b.LastDnLocal = tmp
+}
+func (b *BufHandler) DnRemoteData(data []byte, localEp *net.UDPAddr) {
+	tmp := make([]byte, len(data))
+	copy(tmp, data)
+	b.LastDnRemote = tmp
 }
 
-func (s *TestSockets) ForwarderDrain() {
-	err := s.PacketForwarderSock.SetReadDeadline(time.Now().Add(10 * time.Millisecond))
-	if err != nil {
-		s.t.Fatalf("Error setting deadline: %s", err.Error())
-	}
+func TestEventsOfUDPProxy(t *testing.T) {
+	// log.SetLevel(log.DebugLevel)
 
-	buf := make([]byte, 1500)
-	for {
-		n, _, _ := s.PacketForwarderSock.ReadFromUDP(buf)
-		if n == 0 {
-			break
-		}
-	}
+	clientUp := CreateSocket(t)
+	clientDn := CreateSocket(t)
+	serverUp := CreateSocket(t)
+	serverDn := CreateSocket(t)
 
-	err = s.PacketForwarderSock.SetReadDeadline(time.Now().Add(1 * time.Second))
-	if err != nil {
-		s.t.Fatalf("Error setting deadline: %s", err.Error())
-	}
-}
-
-func (s *TestSockets) ForwarderClose() {
-	s.PacketForwarderSock.Close()
-}
-
-func (s *TestSockets) ForwarderConnect() {
-	// Create a server socket
-	aFwd, err := net.ResolveUDPAddr("udp4", fmt.Sprintf("127.0.0.1:%d", s.PacketForwarderPort))
-	if err != nil {
-		s.t.Fatalf("Could not connect forwarder: address error: %s", err.Error())
-	}
-	s.PacketForwarderSock, err = net.DialUDP("udp4", nil, aFwd)
-	if err != nil {
-		s.t.Fatalf("Could not connect forwarder: %s", err.Error())
-	}
-}
-
-func (s *TestSockets) ForwarderSend(buf []byte) {
-	n, err := s.PacketForwarderSock.Write(buf)
-	if n != len(buf) {
-		s.t.Fatalf("Did not write to forwarder: %d != %d", n, len(buf))
-	}
-	if err != nil {
-		s.t.Fatalf("Could write to forwarder: %s", err.Error())
-	}
-}
-
-func (s *TestSockets) ForwarderRecv() []byte {
-	buf := make([]byte, 1500)
-	n, addr, err := s.PacketForwarderSock.ReadFromUDP(buf)
-	if err != nil {
-		s.t.Fatalf("Could read from forwarder: %s", err.Error())
-	}
-	s.PacketForwarderLastRemoteAddr = addr
-	return buf[0:n]
-}
-
-func (s *TestSockets) ServerListen() {
-	// Create a server socket
-	aServ, err := net.ResolveUDPAddr("udp4", fmt.Sprintf("127.0.0.1:%d", s.ServerPort))
-	if err != nil {
-		s.t.Fatalf("Could not listen server: address error: %s", err.Error())
-	}
-	s.ServerSock, err = net.ListenUDP("udp4", aServ)
-	if err != nil {
-		s.t.Fatalf("Could not listen server: %s", err.Error())
-	}
-}
-
-func (s *TestSockets) ServerDrain() {
-	err := s.ServerSock.SetReadDeadline(time.Now().Add(10 * time.Millisecond))
-	if err != nil {
-		s.t.Fatalf("Error setting deadline: %s", err.Error())
-	}
-
-	buf := make([]byte, 1500)
-	for {
-		n, _, _ := s.ServerSock.ReadFromUDP(buf)
-		if n == 0 {
-			break
-		}
-	}
-
-	err = s.ServerSock.SetReadDeadline(time.Now().Add(1 * time.Second))
-	if err != nil {
-		s.t.Fatalf("Error setting deadline: %s", err.Error())
-	}
-}
-
-func (s *TestSockets) ServerClose() {
-	s.ServerSock.Close()
-}
-
-func (s *TestSockets) ServerSend(buf []byte) {
-	n, err := s.ServerSock.WriteToUDP(buf, s.ServerLastRemoteAddr)
-	if n != len(buf) {
-		s.t.Fatalf("Did not write to server: %d != %d", n, len(buf))
-	}
-	if err != nil {
-		s.t.Fatalf("Could write to server: %s", err.Error())
-	}
-}
-
-func (s *TestSockets) ServerRecv() []byte {
-	buf := make([]byte, 1500)
-	n, addr, err := s.ServerSock.ReadFromUDP(buf)
-	if err != nil {
-		s.t.Fatalf("Could read from server: %s", err.Error())
-	}
-	s.ServerLastRemoteAddr = addr
-	return buf[0:n]
-}
-
-func TestPacketForwarding(t *testing.T) {
-	s := CreateTestSockets(t)
-
-	_, err := CreateUDPProxy(ForwarderConfig{
-		LocalAddress:  fmt.Sprintf("127.0.0.1:%d", s.PacketForwarderPort),
-		RemoteAddress: fmt.Sprintf("127.0.0.1:%d", s.ServerPort),
-		BufferSize:    1500,
+	bufs := &BufHandler{}
+	proxy, _ := CreateUDPProxy(&UDPProxyConfig{
+		UpListenAddr:        clientUp.remote,
+		UpConnectAddr:       serverUp.local,
+		UpConnectBindAddr:   nil,
+		DownListenAddr:      clientDn.remote,
+		DownConnectAddr:     serverDn.local,
+		DownConnectBindAddr: nil,
+		BufferSize:          1024,
+		SocketStreams:       16,
+		ReconnectInterval:   1,
+		Events:              bufs,
 	})
-	if err != nil {
-		t.Fatalf("Could not create UDP proxy: %s", err.Error())
+
+	// Local Up
+	bufLocalUp := randBuf(1024)
+	clientUp.Send(bufLocalUp)
+	expectToReceive(t, serverUp, bufLocalUp)
+	if !bytes.Equal(bufLocalUp, bufs.LastUpLocal) {
+		t.Fail()
 	}
 
-	// Connect
-	s.ForwarderConnect()
-	s.ServerListen()
-
-	// Test exchanging a few random packets in one direction
-	rBuf := make([]byte, 1024)
-	for i := 0; i < 100; i++ {
-		rand.Read(rBuf)
-		sz := rand.Intn(1000) + 24
-
-		buf1tx := rBuf[0:sz]
-		s.ForwarderSend(buf1tx)
-		buf1rx := s.ServerRecv()
-		if !bytes.Equal(buf1tx, buf1rx) {
-			t.Fail()
-		}
+	// Remote Up
+	bufRemoteUp := randBuf(1024)
+	serverUp.Reply(bufRemoteUp)
+	expectToReceive(t, clientUp, bufRemoteUp)
+	if !bytes.Equal(bufRemoteUp, bufs.lastUpRemote) {
+		t.Fail()
 	}
 
-	// Test exchanging a few random packets in the other direction
-	for i := 0; i < 100; i++ {
-		rand.Read(rBuf)
-		sz := rand.Intn(1000) + 24
-
-		buf1tx := rBuf[0:sz]
-		s.ServerSend(buf1tx)
-		buf1rx := s.ForwarderRecv()
-		if !bytes.Equal(buf1tx, buf1rx) {
-			t.Fail()
-		}
+	// Local Down
+	bufLocalDn := randBuf(1024)
+	clientDn.Send(bufLocalDn)
+	expectToReceive(t, serverDn, bufLocalDn)
+	if !bytes.Equal(bufLocalDn, bufs.LastDnLocal) {
+		t.Fail()
 	}
 
-	// Mingle traffic
-	for i := 0; i < 100; i++ {
-		rand.Read(rBuf)
-		sz := rand.Intn(1000) + 24
-
-		buf1tx := rBuf[0:sz]
-		s.ServerSend(buf1tx)
-		buf1rx := s.ForwarderRecv()
-		if !bytes.Equal(buf1tx, buf1rx) {
-			t.Fail()
-		}
-
-		s.ForwarderSend(buf1tx)
-		buf1rx = s.ServerRecv()
-		if !bytes.Equal(buf1tx, buf1rx) {
-			t.Fail()
-		}
+	// Remote Down
+	bufRemoteDn := randBuf(1024)
+	serverDn.Reply(bufRemoteDn)
+	expectToReceive(t, clientDn, bufRemoteDn)
+	if !bytes.Equal(bufRemoteDn, bufs.LastDnRemote) {
+		t.Fail()
 	}
 
-	// Random direction at a time
-	for i := 0; i < 100; i++ {
-		rand.Read(rBuf)
-		sz := rand.Intn(1000) + 24
-		buf1tx := rBuf[0:sz]
-
-		dir := rand.Intn(10)
-		if dir < 5 {
-			s.ServerSend(buf1tx)
-			buf1rx := s.ForwarderRecv()
-			if !bytes.Equal(buf1tx, buf1rx) {
-				t.Fail()
-			}
-		} else {
-			s.ForwarderSend(buf1tx)
-			buf1rx := s.ServerRecv()
-			if !bytes.Equal(buf1tx, buf1rx) {
-				t.Fail()
-			}
-		}
-	}
-
+	proxy.Close()
 }
 
-func TestServerReconnect(t *testing.T) {
-	s := CreateTestSockets(t)
+func TestSingleSocketProxy(t *testing.T) {
+	client1 := CreateSocket(t)
+	server := CreateSocket(t)
 
-	_, err := CreateUDPProxy(ForwarderConfig{
-		LocalAddress:  fmt.Sprintf("127.0.0.1:%d", s.PacketForwarderPort),
-		RemoteAddress: fmt.Sprintf("127.0.0.1:%d", s.ServerPort),
-		BufferSize:    1500,
+	proxy, _ := CreateUDPProxy(&UDPProxyConfig{
+		UpListenAddr:        client1.remote,
+		UpConnectAddr:       server.local,
+		UpConnectBindAddr:   nil,
+		DownListenAddr:      nil,
+		DownConnectAddr:     nil,
+		DownConnectBindAddr: nil,
+		BufferSize:          1024,
+		SocketStreams:       16,
+		ReconnectInterval:   1,
+		Events:              nil,
 	})
-	if err != nil {
-		t.Fatalf("Could not create UDP proxy: %s", err.Error())
-	}
 
-	// Connect only forwarder
-	s.ForwarderConnect()
-
-	// Send a few data on a dead end
-	rBuf := make([]byte, 1024)
 	for i := 0; i < 100; i++ {
-		rand.Read(rBuf)
-		sz := rand.Intn(1000) + 24
-
-		buf1tx := rBuf[0:sz]
-		s.ForwarderSend(buf1tx)
+		buf := randBuf(1024)
+		client1.Send(buf)
+		expectToReceive(t, server, buf)
 	}
 
-	// Test a few connect/disconnect cycles
-	for c := 0; c < 50; c++ {
-		// Connect now
-		s.ServerListen()
-		s.ServerDrain()
-
-		// Now receiving should work
-		for i := 0; i < 100; i++ {
-			rand.Read(rBuf)
-			sz := rand.Intn(1000) + 24
-
-			buf1tx := rBuf[0:sz]
-			s.ForwarderSend(buf1tx)
-			buf1rx := s.ServerRecv()
-			if !bytes.Equal(buf1tx, buf1rx) {
-				t.Fatalf("Mismatching Tx and Rx buffers")
-			}
-
-			// Also check other direction
-			rand.Read(rBuf)
-			sz = rand.Intn(1000) + 24
-			s.ServerSend(buf1tx)
-			buf1rx = s.ForwarderRecv()
-			if !bytes.Equal(buf1tx, buf1rx) {
-				t.Fatalf("Mismatching Tx and Rx buffers")
-			}
-		}
-
-		// Disconnect
-		s.ServerClose()
+	for i := 0; i < 100; i++ {
+		buf := randBuf(1024)
+		server.Reply(buf)
+		expectToReceive(t, client1, buf)
 	}
+
+	for i := 0; i < 100; i++ {
+		buf := randBuf(1024)
+		client1.Send(buf)
+		expectToReceive(t, server, buf)
+
+		buf = randBuf(1024)
+		server.Reply(buf)
+		expectToReceive(t, client1, buf)
+	}
+
+	proxy.Close()
 }
 
-func TestClientReconnect(t *testing.T) {
-	s := CreateTestSockets(t)
+func TestMultipleClientsProxy(t *testing.T) {
+	client1 := CreateSocket(t)
+	server := CreateSocket(t)
 
-	_, err := CreateUDPProxy(ForwarderConfig{
-		LocalAddress:  fmt.Sprintf("127.0.0.1:%d", s.PacketForwarderPort),
-		RemoteAddress: fmt.Sprintf("127.0.0.1:%d", s.ServerPort),
-		BufferSize:    1500,
+	proxy, _ := CreateUDPProxy(&UDPProxyConfig{
+		UpListenAddr:        client1.remote,
+		UpConnectAddr:       server.local,
+		UpConnectBindAddr:   nil,
+		DownListenAddr:      nil,
+		DownConnectAddr:     nil,
+		DownConnectBindAddr: nil,
+		BufferSize:          1024,
+		SocketStreams:       100,
+		ReconnectInterval:   1,
+		Events:              nil,
 	})
-	if err != nil {
-		t.Fatalf("Could not create UDP proxy: %s", err.Error())
+
+	// Send data from a few clients
+	var client []*UDPSock
+	var clientAddr []*net.UDPAddr
+	for i := 0; i < 100; i++ {
+		buf := randBuf(1024)
+		c := CreateSocketWithSameRemote(t, client1)
+
+		c.Send(buf)
+		ca := expectToReceive(t, server, buf)
+
+		client = append(client, c)
+		clientAddr = append(clientAddr, ca)
 	}
 
-	// Connect only server
-	rBuf := make([]byte, 1024)
-	s.ServerListen()
-
-	// Test a few connect/disconnect cycles
-	for c := 0; c < 50; c++ {
-		// Connect now
-		s.ForwarderConnect()
-		s.ForwarderDrain()
-
-		// Now receiving should work
-		for i := 0; i < 100; i++ {
-			rand.Read(rBuf)
-			sz := rand.Intn(1000) + 24
-
-			buf1tx := rBuf[0:sz]
-			s.ForwarderSend(buf1tx)
-			buf1rx := s.ServerRecv()
-			if !bytes.Equal(buf1tx, buf1rx) {
-				t.Fatalf("Mismatching Tx and Rx buffers")
-			}
-
-			// Also check other direction
-			rand.Read(rBuf)
-			sz = rand.Intn(1000) + 24
-			s.ServerSend(buf1tx)
-			buf1rx = s.ForwarderRecv()
-			if !bytes.Equal(buf1tx, buf1rx) {
-				t.Fatalf("Mismatching Tx and Rx buffers")
-			}
-		}
-
-		// Disconnect
-		s.ForwarderClose()
+	// Send data back from the server to the clients
+	for i := 0; i < 100; i++ {
+		c := client[i]
+		ca := clientAddr[i]
+		buf := randBuf(1024)
+		server.SendToAddr(ca, buf)
+		expectToReceive(t, c, buf)
 	}
+
+	proxy.Close()
+}
+
+func TestMultipleClientsMultiPortProxy(t *testing.T) {
+	clientUp := CreateSocket(t)
+	clientDn := CreateSocket(t)
+	serverUp := CreateSocket(t)
+	serverDn := CreateSocket(t)
+
+	proxy, _ := CreateUDPProxy(&UDPProxyConfig{
+		UpListenAddr:        clientUp.remote,
+		UpConnectAddr:       serverUp.local,
+		UpConnectBindAddr:   nil,
+		DownListenAddr:      clientDn.remote,
+		DownConnectAddr:     serverDn.local,
+		DownConnectBindAddr: nil,
+		BufferSize:          1024,
+		SocketStreams:       100,
+		ReconnectInterval:   1,
+		Events:              nil,
+	})
+
+	// Send data from a few clients
+	var clientsUp []*UDPSock
+	var clientsUpAddr []*net.UDPAddr
+	var clientsDn []*UDPSock
+	var clientsDnAddr []*net.UDPAddr
+
+	for i := 0; i < 100; i++ {
+		buf := randBuf(1024)
+		c := CreateSocketWithSameRemote(t, clientUp)
+		c.Send(buf)
+		ca := expectToReceive(t, serverUp, buf)
+		clientsUp = append(clientsUp, c)
+		clientsUpAddr = append(clientsUpAddr, ca)
+
+		buf = randBuf(1024)
+		c = CreateSocketWithSameRemote(t, clientDn)
+		c.Send(buf)
+		ca = expectToReceive(t, serverDn, buf)
+		clientsDn = append(clientsDn, c)
+		clientsDnAddr = append(clientsDnAddr, ca)
+	}
+
+	// Send data back from the server to the clients
+	for i := 0; i < 100; i++ {
+		c := clientsUp[i]
+		ca := clientsUpAddr[i]
+		buf := randBuf(1024)
+		serverUp.SendToAddr(ca, buf)
+		expectToReceive(t, c, buf)
+
+		c = clientsDn[i]
+		ca = clientsDnAddr[i]
+		buf = randBuf(1024)
+		serverDn.SendToAddr(ca, buf)
+		expectToReceive(t, c, buf)
+	}
+
+	proxy.Close()
+}
+
+func TestRemoteReconnect(t *testing.T) {
+	client1 := CreateSocket(t)
+	server := CreateSocket(t)
+
+	proxy, _ := CreateUDPProxy(&UDPProxyConfig{
+		UpListenAddr:        client1.remote,
+		UpConnectAddr:       server.local,
+		UpConnectBindAddr:   nil,
+		DownListenAddr:      nil,
+		DownConnectAddr:     nil,
+		DownConnectBindAddr: nil,
+		BufferSize:          1024,
+		SocketStreams:       16,
+		ReconnectInterval:   1,
+		Events:              nil,
+	})
+
+	for i := 0; i < 100; i++ {
+		buf := randBuf(1024)
+		client1.Send(buf)
+		expectToReceive(t, server, buf)
+	}
+
+	server.Restart()
+
+	for i := 0; i < 100; i++ {
+		buf := randBuf(1024)
+		client1.Send(buf)
+		expectToReceive(t, server, buf)
+	}
+
+	for i := 0; i < 100; i++ {
+		buf := randBuf(1024)
+		server.Reply(buf)
+		expectToReceive(t, client1, buf)
+	}
+
+	proxy.Close()
+}
+
+func TestLocalDisconnect(t *testing.T) {
+	client1 := CreateSocket(t)
+	server := CreateSocket(t)
+	// log.SetLevel(log.DebugLevel)
+
+	proxy, _ := CreateUDPProxy(&UDPProxyConfig{
+		UpListenAddr:        client1.remote,
+		UpConnectAddr:       server.local,
+		UpConnectBindAddr:   nil,
+		DownListenAddr:      nil,
+		DownConnectAddr:     nil,
+		DownConnectBindAddr: nil,
+		BufferSize:          1024,
+		SocketStreams:       16,
+		ReconnectInterval:   1,
+		Events:              nil,
+	})
+
+	for i := 0; i < 100; i++ {
+		buf := randBuf(1024)
+		client1.Send(buf)
+		expectToReceive(t, server, buf)
+	}
+
+	proxy.upSock.Close()
+	server.Restart()
+
+	time.Sleep(time.Millisecond * 1100)
+
+	for i := 0; i < 100; i++ {
+		buf := randBuf(1024)
+		client1.Send(buf)
+		expectToReceive(t, server, buf)
+	}
+
+	for i := 0; i < 100; i++ {
+		buf := randBuf(1024)
+		server.Reply(buf)
+		expectToReceive(t, client1, buf)
+	}
+
+	proxy.Close()
 }

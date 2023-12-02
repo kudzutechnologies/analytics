@@ -13,6 +13,7 @@ message AnalyticsMetrics {
   repeated AnalyticsUplink uplinks = 2;
   repeated AnalyticsDownlink downlinks = 3;
   repeated AnalyticsStat stats = 4;
+  optional AnalyticsInternalMetrics metrics = 7;
 }
 
 message AnalyticsUplinkAntenna {
@@ -113,6 +114,26 @@ message AnalyticsStat {
   bool isGauge = 11;
   // Gateway temperature
   optional float gwTemp = 12;
+}
+
+/**
+ * Analytics Internal Metrics
+ * (Collected from the UDP proxy)
+ */
+message AnalyticsInternalMetrics {
+  string gatewayIp = 1;
+
+  uint32 upRxPackets = 2;
+  uint32 upTxPackets = 3;
+  uint32 dnRxPackets = 4;
+  uint32 dnTxPackets = 5;
+
+  uint32 pktPUSH_DATA = 6;
+  uint32 pktPUSH_ACK = 7;
+  uint32 pktPULL_DATA = 8;
+  uint32 pktPULL_ACK = 9;
+  uint32 pktPULL_RESP = 10;
+  uint32 pktTX_ACK = 11;
 }
 
 enum CRCStatus {

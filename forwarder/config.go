@@ -14,27 +14,29 @@ import (
 const MajorVersion = "0.1.8"
 
 type ForwarderConfig struct {
-	QueueSize           int
-	BufferSize          int
-	ListenHost          string
-	ListenPortUp        int
-	ListenPortDown      int
-	ConnectInterface    string
-	ConnectHost         string
-	ConnectPortUp       int
-	ConnectPortDown     int
-	ConnectTimeout      int
-	RequestTimeout      int
-	MaxReconnectBackoff int
-	FlushInterval       int
-	ClientId            string
-	ClientKey           string
-	Endpoint            string
-	GatewayId           string
-	GaugeStat           bool
-	DebugDump           string
-	LogLevel            string
-	ServerSide          bool
+	BufferSize           int
+	ClientId             string
+	ClientKey            string
+	ConnectHost          string
+	ConnectInterface     string
+	ConnectPortDown      int
+	ConnectPortUp        int
+	ConnectRetryInterval int
+	ConnectTimeout       int
+	DebugDump            string
+	Endpoint             string
+	FlushInterval        int
+	GatewayId            string
+	GaugeStat            bool
+	ListenHost           string
+	ListenPortDown       int
+	ListenPortUp         int
+	LogLevel             string
+	MaxReconnectBackoff  int
+	MaxUDPStreams        int
+	QueueSize            int
+	RequestTimeout       int
+	ServerSide           bool
 }
 
 func Version() string {
@@ -62,6 +64,8 @@ func ParseConfigFromEnv() ForwarderConfig {
 	flag.IntVar(&config.ConnectPortUp, "connect-port-up", 1700, "the server port where to send uplink datagrams to")
 	flag.IntVar(&config.ConnectPortDown, "connect-port-down", 1700, "the (local) port where to receive downlink datagrams from")
 	flag.StringVar(&config.ConnectInterface, "connect-interface", "0.0.0.0", "the interface to bind when connecting to remote host")
+	flag.IntVar(&config.MaxUDPStreams, "max-udp-streams", 0, "how many distinct UDP streams to maintain. Only useful on server-side mode")
+	flag.IntVar(&config.ConnectRetryInterval, "connect-retry-interval", 1, "how many seconds to wait before re-connecting to the remote server if the connection is severed")
 
 	// Analytics client config
 	flag.StringVar(&config.ClientId, "client-id", "", "the client ID to use for connecting to Kudzu Analytics")
@@ -72,7 +76,7 @@ func ParseConfigFromEnv() ForwarderConfig {
 	flag.IntVar(&config.MaxReconnectBackoff, "analytics-max-backoff", 0, "the maximum time to wait for reconnecting")
 
 	// Forwarder component config
-	flag.IntVar(&config.FlushInterval, "flush-interval", 30, "how frequently to flush collected metrics to analytics")
+	flag.IntVar(&config.FlushInterval, "flush-interval", 0, "how frequently to flush collected metrics to analytics")
 	flag.StringVar(&config.GatewayId, "gateway", "", "the ID of the gateway the forwarder is pushing data for")
 	flag.BoolVar(&config.GaugeStat, "gauge-stat", false, "the statistics are gauge values")
 	flag.BoolVar(&config.ServerSide, "server-side", false, "the forwarder runs on the server-side")
@@ -105,6 +109,26 @@ func ParseConfigFromEnv() ForwarderConfig {
 	}
 	if config.GatewayId == "" && !config.ServerSide {
 		log.Fatalf("You must specify a gateway ID (--gateway=) when running on the client-side")
+	}
+
+	// Adjust MaxUDPStreams defaults
+	if config.MaxUDPStreams == 0 {
+		if config.ServerSide {
+			// On server-side environments, accept streams from many gaateways
+			config.MaxUDPStreams = 256
+		} else {
+			// In low-resource environments we shouldn't create too many streams
+			config.MaxUDPStreams = 2
+		}
+	}
+
+	// Adjust flush interval defaults
+	if config.FlushInterval == 0 {
+		if config.ServerSide {
+			config.FlushInterval = 5
+		} else {
+			config.FlushInterval = 10
+		}
 	}
 
 	// Apply log level

@@ -345,3 +345,25 @@ func SemtechUDPIsDownlink(b []byte) bool {
 
 	return false
 }
+
+func SemtechUDPIsUplink(b []byte) bool {
+	if b[0] == PROTOCOL_VERSION {
+		switch b[3] {
+		case PUSH_DATA:
+			return true
+		case PUSH_ACK:
+			return true
+
+		case PULL_DATA:
+			return false
+		case PULL_RESP:
+			return false
+		case PULL_ACK:
+			return false
+		case TX_ACK:
+			return false
+		}
+	}
+
+	return false
+}

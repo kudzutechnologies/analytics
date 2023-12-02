@@ -4,32 +4,36 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net"
 	"strconv"
 	"strings"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/kudzutechnologies/analytics/api"
 	"github.com/kudzutechnologies/analytics/client"
 	log "github.com/sirupsen/logrus"
+	"google.golang.org/protobuf/proto"
 )
 
 type AnalyticsForwarder struct {
-	client      *client.Client
-	config      ForwarderConfig
-	proxy       *UDPProxy
-	uplinkFrame *api.AnalyticsMetrics
-	isSending   bool
+	client       *client.Client
+	config       ForwarderConfig
+	proxy        *UDPProxy
+	metricsFrame *lru.Cache[string, *api.AnalyticsMetrics]
+	isSending    bool
 }
 
 func CreateAnalyticsForwarder(config ForwarderConfig, client *client.Client, proxy *UDPProxy) *AnalyticsForwarder {
-	return &AnalyticsForwarder{
-		config:      config,
-		client:      client,
-		proxy:       proxy,
-		uplinkFrame: &api.AnalyticsMetrics{},
-		isSending:   false,
+	inst := &AnalyticsForwarder{
+		config:    config,
+		client:    client,
+		proxy:     proxy,
+		isSending: false,
 	}
+	inst.metricsFrame, _ = lru.NewWithEvict(config.MaxUDPStreams, inst.handleEvict)
+	return inst
 }
 
 func (f *AnalyticsForwarder) StartAndWait() {
@@ -40,6 +44,29 @@ func (f *AnalyticsForwarder) StartAndWait() {
 	// Never return
 	ch := make(chan bool)
 	<-ch
+}
+
+func (f *AnalyticsForwarder) handleEvict(key string, frame *api.AnalyticsMetrics) {
+	f.flushDataFrame(frame)
+}
+
+func (f *AnalyticsForwarder) getMetricsFrame(localEp *net.UDPAddr) *api.AnalyticsMetrics {
+	key := fmt.Sprintf("%s", localEp.IP.String())
+	if found, ok := f.metricsFrame.Get(key); ok {
+		return found
+	}
+
+	found := &api.AnalyticsMetrics{}
+
+	// Include stats only on the server-side
+	if f.config.ServerSide {
+		found.Metrics = &api.AnalyticsInternalMetrics{
+			GatewayIp: localEp.String(),
+		}
+	}
+
+	f.metricsFrame.Add(key, found)
+	return found
 }
 
 func (f *AnalyticsForwarder) connect() {
@@ -63,7 +90,7 @@ func (f *AnalyticsForwarder) main() {
 	log.Info("Connected to kudzu analytics")
 
 	// Start receiving traffic from the UDP proxy
-	f.proxy.SetListener(f)
+	f.proxy.SetEventHandler(f)
 
 	// Periodically flush data waiting in the egress queue
 	for {
@@ -81,72 +108,187 @@ func (f *AnalyticsForwarder) hasData() bool {
 }
 
 func (f *AnalyticsForwarder) queueSize() int {
-	return len(f.uplinkFrame.Uplinks) +
-		len(f.uplinkFrame.Downlinks) +
-		len(f.uplinkFrame.Stats)
+	var total int = 0
+	for _, f := range f.metricsFrame.Values() {
+		sum := len(f.Uplinks) +
+			len(f.Downlinks) +
+			len(f.Stats)
+
+		if f.Metrics.DnRxPackets > 0 || f.Metrics.DnTxPackets > 0 ||
+			f.Metrics.UpRxPackets > 0 || f.Metrics.UpTxPackets > 0 {
+			if sum == 0 {
+				sum++
+			}
+		}
+
+		total += sum
+	}
+
+	return total
+}
+
+func (f *AnalyticsForwarder) flushDataFrame(frame *api.AnalyticsMetrics) {
+	// Copy frame to allow it to be re-used while sending
+	frameCopy := proto.Clone(frame).(*api.AnalyticsMetrics)
+
+	// Reset frame
+	frame.Downlinks = nil
+	frame.Uplinks = nil
+	frame.Stats = nil
+	frame.Metrics.DnRxPackets = 0
+	frame.Metrics.DnTxPackets = 0
+	frame.Metrics.UpRxPackets = 0
+	frame.Metrics.UpTxPackets = 0
+	frame.Metrics.PktPULL_ACK = 0
+	frame.Metrics.PktPULL_DATA = 0
+	frame.Metrics.PktPULL_RESP = 0
+	frame.Metrics.PktPUSH_ACK = 0
+	frame.Metrics.PktPUSH_DATA = 0
+	frame.Metrics.PktTX_ACK = 0
+
+	// Push a copy
+	err := f.client.PushMetrics(frameCopy)
+	if err != nil {
+		log.Warnf("Unable to push metrics: %s", err.Error())
+	}
 }
 
 func (f *AnalyticsForwarder) flushData() {
 	f.isSending = true
-	log.Debugf("Flushing %d frames", f.queueSize())
-
-	// Swap frames to let the current buffer to keep being filled
-	sendFrame := f.uplinkFrame
-	f.uplinkFrame = &api.AnalyticsMetrics{}
+	log.Debugf("Flushing %d frames in %d gateways", f.queueSize(), f.metricsFrame.Len())
 
 	// Flush data
-	sendFrame.GatewayId = f.config.GatewayId
-	err := f.client.PushMetrics(sendFrame)
-	if err != nil {
-		log.Warnf("Unable to push metrics: %s", err.Error())
+	for _, sendFrame := range f.metricsFrame.Values() {
+		f.flushDataFrame(sendFrame)
 	}
 
 	f.isSending = false
 }
 
-func (f *AnalyticsForwarder) HandleUplink(data []byte, addr *net.UDPAddr) {
-	log.Debugf("Handling uplink frame from %s: %s", addr.IP.String(), hex.EncodeToString(data))
-	frame, err := DecodeMessage(data, len(data), addr, time.Now(), []string{})
+func (f *AnalyticsForwarder) UpLocalData(data []byte, localEp *net.UDPAddr) {
+	frame := f.getMetricsFrame(localEp)
+	frame.Metrics.UpTxPackets += 1
+	if SemtechUDPIsUplink(data) {
+		f.handleUplink(data, localEp, frame)
+	} else if SemtechUDPIsDownlink(data) {
+		f.handleDownlink(data, localEp, frame)
+	}
+}
+
+func (f *AnalyticsForwarder) UpRemoteData(data []byte, localEp *net.UDPAddr) {
+	frame := f.getMetricsFrame(localEp)
+	frame.Metrics.UpRxPackets += 1
+
+	if SemtechUDPIsUplink(data) {
+		f.handleUplink(data, localEp, frame)
+	} else if SemtechUDPIsDownlink(data) {
+		f.handleDownlink(data, localEp, frame)
+	}
+}
+
+func (f *AnalyticsForwarder) DnLocalData(data []byte, localEp *net.UDPAddr) {
+	frame := f.getMetricsFrame(localEp)
+	frame.Metrics.DnTxPackets += 1
+
+	if SemtechUDPIsUplink(data) {
+		f.handleUplink(data, localEp, frame)
+	} else if SemtechUDPIsDownlink(data) {
+		f.handleDownlink(data, localEp, frame)
+	}
+}
+
+func (f *AnalyticsForwarder) DnRemoteData(data []byte, localEp *net.UDPAddr) {
+	frame := f.getMetricsFrame(localEp)
+	frame.Metrics.DnRxPackets += 1
+
+	if SemtechUDPIsUplink(data) {
+		f.handleUplink(data, localEp, frame)
+	} else if SemtechUDPIsDownlink(data) {
+		f.handleDownlink(data, localEp, frame)
+	}
+}
+
+func (f *AnalyticsForwarder) incPktStat(frame *SemtechUDPMessage, metricsFrame *api.AnalyticsMetrics) {
+	switch frame.Kind {
+	case PUSH_DATA:
+		metricsFrame.Metrics.PktPUSH_DATA += 1
+	case PUSH_ACK:
+		metricsFrame.Metrics.PktPUSH_ACK += 1
+
+	case PULL_DATA:
+		metricsFrame.Metrics.PktPULL_DATA += 1
+	case PULL_RESP:
+		metricsFrame.Metrics.PktPULL_RESP += 1
+
+	case PULL_ACK:
+		metricsFrame.Metrics.PktPULL_ACK += 1
+	case TX_ACK:
+		metricsFrame.Metrics.PktTX_ACK += 1
+	}
+}
+
+func (f *AnalyticsForwarder) handleUplink(data []byte, localEp *net.UDPAddr, metricsFrame *api.AnalyticsMetrics) {
+	log.Debugf("Handling uplink frame from %s: %s", localEp.String(), hex.EncodeToString(data))
+	frame, err := DecodeMessage(data, len(data), localEp, time.Now(), []string{})
 	if err != nil {
 		log.Warnf("Could not handle uplink: %s", err.Error())
 	} else {
-		f.uplinkFrame.GatewayEui = frame.GatewayEUI()
+		f.incPktStat(frame, metricsFrame)
+		eui := frame.GatewayEUI()
+		if eui != nil {
+			log.Debugf("Gateway EUI: %s, Token: %04x", hex.EncodeToString(eui), frame.Token)
 
-		// Convert uplinks
-		rx, err := frame.GetAllRxPkt()
-		if err == nil && rx != nil {
-			for _, r := range rx {
-				pkt := f.convertRxPkt(&r)
-				log.Debugf("Got uplink: %+v", pkt)
-				f.uplinkFrame.Uplinks = append(f.uplinkFrame.Uplinks, pkt)
+			// Configure gateway
+			metricsFrame.GatewayEui = eui
+			if !f.config.ServerSide {
+				metricsFrame.GatewayId = f.config.GatewayId
 			}
-		}
 
-		// Convert stat
-		stat, err := frame.GetStatMsg()
-		if err == nil && stat != nil {
-			pkt := f.convertStatPkt(stat)
-			log.Debugf("Got stat: %+v", pkt)
-			f.uplinkFrame.Stats = append(f.uplinkFrame.Stats, pkt)
+			// Convert uplinks
+			rx, err := frame.GetAllRxPkt()
+			if err == nil && rx != nil {
+				for _, r := range rx {
+					pkt := f.convertRxPkt(&r)
+					log.Debugf("Got uplink: %+v", pkt)
+					metricsFrame.Uplinks = append(metricsFrame.Uplinks, pkt)
+				}
+			}
+
+			// Convert stat
+			stat, err := frame.GetStatMsg()
+			if err == nil && stat != nil {
+				pkt := f.convertStatPkt(stat)
+				log.Debugf("Got stat: %+v", pkt)
+				metricsFrame.Stats = append(metricsFrame.Stats, pkt)
+			}
+		} else {
+			log.Debugf("No EUI in the frame")
 		}
 	}
 
 	log.Debugf("Queue size=%d", f.queueSize())
 }
 
-func (f *AnalyticsForwarder) HandleDownlink(data []byte, addr *net.UDPAddr) {
-	log.Debugf("Handling downlink frame from %s: %s", addr.IP.String(), hex.EncodeToString(data))
-	frame, err := DecodeMessage(data, len(data), addr, time.Now(), []string{})
+func (f *AnalyticsForwarder) handleDownlink(data []byte, localEp *net.UDPAddr, metricsFrame *api.AnalyticsMetrics) {
+	log.Debugf("Handling downlink frame from %s: %s", localEp.String(), hex.EncodeToString(data))
+	frame, err := DecodeMessage(data, len(data), localEp, time.Now(), []string{})
 	if err != nil {
 		log.Warnf("Could not handle downlink: %s", err.Error())
 	} else {
-		f.uplinkFrame.GatewayEui = frame.GatewayEUI()
+		f.incPktStat(frame, metricsFrame)
+
+		eui := frame.GatewayEUI()
+		log.Debugf("Gateway EUI: %s, Token: %04x", hex.EncodeToString(eui), frame.Token)
+		log.Debugf("Pair Gateway EUI: %s", hex.EncodeToString(metricsFrame.GatewayEui))
+		if eui != nil {
+			metricsFrame.GatewayEui = eui
+		}
 
 		// Convert downlinks
 		tx, err := frame.GetTxPacket()
 		if err == nil && tx != nil {
 			log.Debugf("Got downlink: %+v", tx)
-			f.uplinkFrame.Downlinks = append(f.uplinkFrame.Downlinks, f.convertTxPkt(tx))
+			metricsFrame.Downlinks = append(metricsFrame.Downlinks, f.convertTxPkt(tx))
 		}
 	}
 
