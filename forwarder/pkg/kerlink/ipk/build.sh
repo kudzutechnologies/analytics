@@ -1,7 +1,7 @@
 #!/bin/sh
 ########################
 OPKG_PKG_NAME="kudzu-forwarder"
-VERSION="0.1.8"
+VERSION="0.1.9"
 ARCH="klkgw"
 ########################
 ASSETS_DIR="/assets/pkg"

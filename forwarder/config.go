@@ -11,7 +11,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const MajorVersion = "0.1.8"
+const MajorVersion = "0.1.9"
 
 type ForwarderConfig struct {
 	BufferSize           int
