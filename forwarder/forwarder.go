@@ -114,10 +114,12 @@ func (f *AnalyticsForwarder) queueSize() int {
 			len(f.Downlinks) +
 			len(f.Stats)
 
-		if f.Metrics.DnRxPackets > 0 || f.Metrics.DnTxPackets > 0 ||
-			f.Metrics.UpRxPackets > 0 || f.Metrics.UpTxPackets > 0 {
-			if sum == 0 {
-				sum++
+		if f.Metrics != nil {
+			if f.Metrics.DnRxPackets > 0 || f.Metrics.DnTxPackets > 0 ||
+				f.Metrics.UpRxPackets > 0 || f.Metrics.UpTxPackets > 0 {
+				if sum == 0 {
+					sum++
+				}
 			}
 		}
 
@@ -135,16 +137,20 @@ func (f *AnalyticsForwarder) flushDataFrame(frame *api.AnalyticsMetrics) {
 	frame.Downlinks = nil
 	frame.Uplinks = nil
 	frame.Stats = nil
-	frame.Metrics.DnRxPackets = 0
-	frame.Metrics.DnTxPackets = 0
-	frame.Metrics.UpRxPackets = 0
-	frame.Metrics.UpTxPackets = 0
-	frame.Metrics.PktPULL_ACK = 0
-	frame.Metrics.PktPULL_DATA = 0
-	frame.Metrics.PktPULL_RESP = 0
-	frame.Metrics.PktPUSH_ACK = 0
-	frame.Metrics.PktPUSH_DATA = 0
-	frame.Metrics.PktTX_ACK = 0
+
+	// Reset metrics counters
+	if frame.Metrics != nil {
+		frame.Metrics.DnRxPackets = 0
+		frame.Metrics.DnTxPackets = 0
+		frame.Metrics.UpRxPackets = 0
+		frame.Metrics.UpTxPackets = 0
+		frame.Metrics.PktPULL_ACK = 0
+		frame.Metrics.PktPULL_DATA = 0
+		frame.Metrics.PktPULL_RESP = 0
+		frame.Metrics.PktPUSH_ACK = 0
+		frame.Metrics.PktPUSH_DATA = 0
+		frame.Metrics.PktTX_ACK = 0
+	}
 
 	// Push a copy
 	err := f.client.PushMetrics(frameCopy)
@@ -167,7 +173,9 @@ func (f *AnalyticsForwarder) flushData() {
 
 func (f *AnalyticsForwarder) UpLocalData(data []byte, localEp *net.UDPAddr) {
 	frame := f.getMetricsFrame(localEp)
-	frame.Metrics.UpTxPackets += 1
+	if frame.Metrics != nil {
+		frame.Metrics.UpTxPackets += 1
+	}
 	if SemtechUDPIsUplink(data) {
 		f.handleUplink(data, localEp, frame)
 	} else if SemtechUDPIsDownlink(data) {
@@ -177,7 +185,9 @@ func (f *AnalyticsForwarder) UpLocalData(data []byte, localEp *net.UDPAddr) {
 
 func (f *AnalyticsForwarder) UpRemoteData(data []byte, localEp *net.UDPAddr) {
 	frame := f.getMetricsFrame(localEp)
-	frame.Metrics.UpRxPackets += 1
+	if frame.Metrics != nil {
+		frame.Metrics.UpRxPackets += 1
+	}
 
 	if SemtechUDPIsUplink(data) {
 		f.handleUplink(data, localEp, frame)
@@ -188,7 +198,9 @@ func (f *AnalyticsForwarder) UpRemoteData(data []byte, localEp *net.UDPAddr) {
 
 func (f *AnalyticsForwarder) DnLocalData(data []byte, localEp *net.UDPAddr) {
 	frame := f.getMetricsFrame(localEp)
-	frame.Metrics.DnTxPackets += 1
+	if frame.Metrics != nil {
+		frame.Metrics.DnTxPackets += 1
+	}
 
 	if SemtechUDPIsUplink(data) {
 		f.handleUplink(data, localEp, frame)
@@ -199,7 +211,9 @@ func (f *AnalyticsForwarder) DnLocalData(data []byte, localEp *net.UDPAddr) {
 
 func (f *AnalyticsForwarder) DnRemoteData(data []byte, localEp *net.UDPAddr) {
 	frame := f.getMetricsFrame(localEp)
-	frame.Metrics.DnRxPackets += 1
+	if frame.Metrics != nil {
+		frame.Metrics.DnRxPackets += 1
+	}
 
 	if SemtechUDPIsUplink(data) {
 		f.handleUplink(data, localEp, frame)
@@ -209,6 +223,10 @@ func (f *AnalyticsForwarder) DnRemoteData(data []byte, localEp *net.UDPAddr) {
 }
 
 func (f *AnalyticsForwarder) incPktStat(frame *SemtechUDPMessage, metricsFrame *api.AnalyticsMetrics) {
+	if metricsFrame.Metrics == nil {
+		return
+	}
+
 	switch frame.Kind {
 	case PUSH_DATA:
 		metricsFrame.Metrics.PktPUSH_DATA += 1
