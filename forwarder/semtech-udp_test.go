@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"net"
 	"testing"
 	"time"
@@ -92,11 +91,6 @@ func decodeConstPayload(t *testing.T, str string) *SemtechUDPMessage {
 	}
 
 	return ret
-}
-
-func dump(v interface{}) {
-	b, _ := json.Marshal(v)
-	fmt.Printf("data=%s\n", string(b))
 }
 
 func TestParser(t *testing.T) {

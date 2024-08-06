@@ -36,7 +36,7 @@ type ProxyStream struct {
 	conf            *ProxyStreamConfig
 }
 
-var SocketClosedError = fmt.Errorf("Trying to use a closed socket")
+var ErrSocketClosed = fmt.Errorf("trying to use a closed socket")
 
 func strAddr(addr *net.UDPAddr) string {
 	if addr == nil {
@@ -56,7 +56,7 @@ func CreateProxyStream(config *ProxyStreamConfig) *ProxyStream {
 
 func (s *ProxyStream) HandleLocalData(data []byte) error {
 	if s.closed {
-		return SocketClosedError
+		return ErrSocketClosed
 	}
 
 	// Make sure we are connected
@@ -81,10 +81,6 @@ func (s *ProxyStream) HandleLocalData(data []byte) error {
 	}
 
 	return nil
-}
-
-func isDisconnected(err error) bool {
-	return false
 }
 
 func (s *ProxyStream) Close() {
@@ -165,7 +161,7 @@ func (s *ProxyStream) connect() error {
 	s.remote, err = net.DialUDP("udp4", s.conf.RemoteBindAddress, s.conf.RemoteAddress)
 	if err != nil {
 		return fmt.Errorf(
-			"Could not connect to %s: %s",
+			"could not connect to %s: %s",
 			s.conf.RemoteAddress.String(),
 			err,
 		)
@@ -177,7 +173,7 @@ func (s *ProxyStream) connect() error {
 	if addr, ok := rlAddr.(*net.UDPAddr); ok {
 		s.remoteBoundAddr = addr
 	} else {
-		return fmt.Errorf("Bound to unexpected local address")
+		return fmt.Errorf("bound to unexpected local address")
 	}
 
 	// Start the reader thread

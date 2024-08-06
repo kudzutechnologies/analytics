@@ -9,7 +9,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"time"
 
 	"github.com/kudzutechnologies/analytics/api"
@@ -31,7 +31,7 @@ var defaultEndpoint string = "analytics.v2.kudzu.gr:50051"
 
 var (
 	// An error thrown when trying to use the client while not connected
-	NotConnectedError = fmt.Errorf("Client is not connnected")
+	ErrNotConnected = fmt.Errorf("client is not connnected")
 )
 
 // Configuration parameters that can be passed to the analytics client
@@ -73,7 +73,7 @@ func loadTLSCredentials(cc *AnalyticsClientConfig) (credentials.TransportCredent
 	)
 
 	if cc.CAFile != "" {
-		pemServerCA, err = ioutil.ReadFile(cc.CAFile)
+		pemServerCA, err = os.ReadFile(cc.CAFile)
 		if err != nil {
 			return nil, err
 		}
@@ -93,7 +93,6 @@ func loadTLSCredentials(cc *AnalyticsClientConfig) (credentials.TransportCredent
 // Create an instance of the analytics client
 //
 // The client will not be connected until you call the .Connect method.
-//
 func CreateAnalyticsClient(config AnalyticsClientConfig) *Client {
 	// Default request time-out
 	reqTimeout := time.Duration(0)
@@ -117,7 +116,7 @@ func CreateAnalyticsClient(config AnalyticsClientConfig) *Client {
 
 func (c *Client) Disconnect() error {
 	if c.conn == nil {
-		return NotConnectedError
+		return ErrNotConnected
 	}
 
 	con := c.conn
@@ -134,7 +133,7 @@ func (c *Client) Connect() error {
 
 	tlsCredentials, err := loadTLSCredentials(&c.config)
 	if err != nil {
-		return fmt.Errorf("Could not load CA certificate: %w", err)
+		return fmt.Errorf("could not load CA certificate: %w", err)
 	}
 
 	endpoint := defaultEndpoint
@@ -143,7 +142,7 @@ func (c *Client) Connect() error {
 	}
 	conn, err := grpc.Dial(endpoint, grpc.WithTransportCredentials(tlsCredentials), grpc.WithBlock(), grpc.WithTimeout(c.connTimeout))
 	if err != nil {
-		return fmt.Errorf("Could not connect to server: %w", err)
+		return fmt.Errorf("could not connect to server: %w", err)
 	}
 
 	// Create a client for logging in
@@ -154,20 +153,20 @@ func (c *Client) Connect() error {
 	// Send hello & get login challenge
 	clientId, err := hex.DecodeString(c.config.ClientId)
 	if err != nil {
-		return fmt.Errorf("Invalid client ID")
+		return fmt.Errorf("invalid client ID")
 	}
 
 	helloResp, err := client.Hello(ctx, &api.ReqHello{
 		Version: ClientVersion,
 	})
 	if err != nil {
-		return fmt.Errorf("Could not handshake with server: %w", err)
+		return fmt.Errorf("could not handshake with server: %w", err)
 	}
 
 	// Use hello challenge to login
 	clientKey, err := hex.DecodeString(c.config.ClientKey)
 	if err != nil {
-		return fmt.Errorf("Invalid client key")
+		return fmt.Errorf("invalid client key")
 	}
 	b := append(append(helloResp.Challenge, '|'), clientKey...)
 	serverSide := false
@@ -180,7 +179,7 @@ func (c *Client) Connect() error {
 		ServerSide: serverSide,
 	})
 	if err != nil {
-		return fmt.Errorf("Could not login: %w", err)
+		return fmt.Errorf("could not login: %w", err)
 	}
 
 	// Store the new client parameters
@@ -246,7 +245,7 @@ func (c *Client) createContext() (context.Context, context.CancelFunc) {
 // Pushes analyics metrics to the service
 func (c *Client) PushMetrics(metrics *api.AnalyticsMetrics) error {
 	if c.conn == nil {
-		return NotConnectedError
+		return ErrNotConnected
 	}
 
 	ctx, cancel := c.createContext()

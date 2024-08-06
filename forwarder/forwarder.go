@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"net"
 	"strconv"
 	"strings"
@@ -51,7 +50,7 @@ func (f *AnalyticsForwarder) handleEvict(key string, frame *api.AnalyticsMetrics
 }
 
 func (f *AnalyticsForwarder) getMetricsFrame(localEp *net.UDPAddr) *api.AnalyticsMetrics {
-	key := fmt.Sprintf("%s", localEp.IP.String())
+	key := localEp.IP.String()
 	if found, ok := f.metricsFrame.Get(key); ok {
 		return found
 	}

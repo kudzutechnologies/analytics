@@ -117,10 +117,10 @@ type SemtechUDPRxPkt struct {
 
 func DecodeMessage(payload []byte, size int, sender *net.UDPAddr, time time.Time, tags []string) (*SemtechUDPMessage, error) {
 	if size < 4 {
-		return nil, fmt.Errorf("Packet too small")
+		return nil, fmt.Errorf("packet too small")
 	}
 	if payload[0] != PROTOCOL_VERSION {
-		return nil, fmt.Errorf("Invalid protocol version (%d)", payload[0])
+		return nil, fmt.Errorf("invalid protocol version (%d)", payload[0])
 	}
 
 	msg := &SemtechUDPMessage{
@@ -149,7 +149,7 @@ func (m *SemtechUDPMessage) parseJsonPayload() (*SemtechUDPJsonPayload, error) {
 
 	err := json.Unmarshal(m.Data[ofs:], &ret)
 	if err != nil {
-		return nil, fmt.Errorf("Could not parse JSON: %s", err.Error())
+		return nil, fmt.Errorf("could not parse JSON: %s", err.Error())
 	}
 
 	return &ret, nil
@@ -207,7 +207,7 @@ func (m *SemtechUDPMessage) GetStatMsg() (*SemtechUDPStat, error) {
 		return ret.Stats, nil
 	}
 
-	return nil, fmt.Errorf("Invalid packet type")
+	return nil, fmt.Errorf("invalid packet type")
 }
 
 func (m *SemtechUDPMessage) GetAllRxPkt() ([]SemtechUDPRxPkt, error) {
@@ -220,7 +220,7 @@ func (m *SemtechUDPMessage) GetAllRxPkt() ([]SemtechUDPRxPkt, error) {
 		return ret.RxPackets, nil
 	}
 
-	return nil, fmt.Errorf("Invalid packet type")
+	return nil, fmt.Errorf("invalid packet type")
 }
 
 func (m *SemtechUDPMessage) GetTxPacket() (*SemtechUDPTxPkt, error) {
@@ -233,12 +233,12 @@ func (m *SemtechUDPMessage) GetTxPacket() (*SemtechUDPTxPkt, error) {
 		return ret.TxPacket, nil
 	}
 
-	return nil, fmt.Errorf("Invalid packet type")
+	return nil, fmt.Errorf("invalid packet type")
 }
 
 func (m *SemtechUDPMessage) Encode() []byte {
 	totalLen := len(m.Data) + 4
-	bytes := make([]byte, totalLen, totalLen)
+	bytes := make([]byte, totalLen)
 
 	bytes[0] = m.Version
 	binary.LittleEndian.PutUint16(bytes[1:], m.Token)

@@ -53,15 +53,15 @@ func CreateUDPProxy(config *UDPProxyConfig) (*UDPProxy, error) {
 
 	inst.upStreams, err = lru.NewWithEvict(config.SocketStreams, inst.evictStream)
 	if err != nil {
-		return nil, fmt.Errorf("Could not allocate up-streams: %w", err)
+		return nil, fmt.Errorf("could not allocate up-streams: %w", err)
 	}
 	inst.dnStreams, err = lru.NewWithEvict(config.SocketStreams, inst.evictStream)
 	if err != nil {
-		return nil, fmt.Errorf("Could not allocate down-streams: %w", err)
+		return nil, fmt.Errorf("could not allocate down-streams: %w", err)
 	}
 	inst.streamIds, err = lru.New[string, int](config.SocketStreams)
 	if err != nil {
-		return nil, fmt.Errorf("Could not allocate indices: %w", err)
+		return nil, fmt.Errorf("could not allocate indices: %w", err)
 	}
 
 	err = inst.bindLocal()
@@ -102,7 +102,7 @@ func (s *UDPProxy) bindLocal() error {
 	// Open first connection
 	s.upSock, err = net.ListenUDP("udp", s.config.UpListenAddr)
 	if err != nil {
-		return fmt.Errorf("Could not bind to %s for UP: %w", s.config.UpListenAddr.String(), err)
+		return fmt.Errorf("could not bind to %s for UP: %w", s.config.UpListenAddr.String(), err)
 	}
 
 	s.closeWg.Add(1)
@@ -113,7 +113,7 @@ func (s *UDPProxy) bindLocal() error {
 	if s.config.DownListenAddr != nil {
 		s.dnSock, err = net.ListenUDP("udp", s.config.DownListenAddr)
 		if err != nil {
-			return fmt.Errorf("Could not bind to %s for DOWN: %w", s.config.DownListenAddr.String(), err)
+			return fmt.Errorf("could not bind to %s for DOWN: %w", s.config.DownListenAddr.String(), err)
 		}
 
 		s.closeWg.Add(1)
