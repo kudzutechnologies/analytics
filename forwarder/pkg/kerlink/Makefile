@@ -1,7 +1,7 @@
 PKG_DIR:=${CURDIR}
 BINFILE:=kudzu-forwarder-arm7
 BIN_DIR:=$(shell dirname $(shell dirname $(PKG_DIR)))
-PKG_VERSION:=0.1.10
+PKG_VERSION:=0.1.11
 IPKG_FILE:=kudzu-forwarder_$(PKG_VERSION)_klkgw.ipk
 IPKG_DELETE_FILE:=kudzu-forwarder_$(PKG_VERSION)_klkgw.ipk-remove.ipk
 

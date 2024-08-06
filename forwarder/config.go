@@ -10,7 +10,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const MajorVersion = "0.1.10"
+const MajorVersion = "0.1.11"
 
 type ForwarderConfig struct {
 	BufferSize           int    `json:"buffer-size,omitempty"`
