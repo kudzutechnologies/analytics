@@ -71,6 +71,7 @@ func (f *AnalyticsForwarder) getMetricsFrame(localEp *net.UDPAddr) *api.Analytic
 func (f *AnalyticsForwarder) connect() {
 	// Keep trying until the analytics client is connected
 	for {
+		log.Debugf("Connecting to: %s", f.config.Endpoint)
 		err := f.client.Connect()
 		if err != nil {
 			log.Warnf("Could not connect to analytics endpoint: %s", err.Error())

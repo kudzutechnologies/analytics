@@ -17,12 +17,14 @@ import (
 	codes "google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
 
 // Revision:
 // v1 - First public release of the client
 // v2 - Added support for multiple antennas
-const ClientVersion = 2
+// v3 - Changed the payload structure to accommodate older compilers
+const ClientVersion = 3
 
 //go:embed cert/kudzu-root-ca-2023.pem
 var defaultRootCertificate []byte
@@ -68,24 +70,32 @@ type Client struct {
 
 func loadTLSCredentials(cc *AnalyticsClientConfig) (credentials.TransportCredentials, error) {
 	var (
-		pemServerCA []byte = defaultRootCertificate
+		pemServerCA []byte = nil
 		err         error
 	)
+
+	rootCAs, err := x509.SystemCertPool()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load system root CAs: %w", err)
+	}
 
 	if cc.CAFile != "" {
 		pemServerCA, err = os.ReadFile(cc.CAFile)
 		if err != nil {
 			return nil, err
 		}
+	} else {
+		pemServerCA = defaultRootCertificate
 	}
 
-	certPool := x509.NewCertPool()
-	if !certPool.AppendCertsFromPEM(pemServerCA) {
+	if !rootCAs.AppendCertsFromPEM(pemServerCA) {
 		return nil, fmt.Errorf("failed to add server CA's certificate")
 	}
 
 	config := &tls.Config{
-		RootCAs: certPool,
+		RootCAs:    rootCAs,
+		MinVersion: tls.VersionTLS12, // Ensure using TLS v1.2 or higher
+		NextProtos: []string{"h2"},   // HTTP/2 is required for gRPC
 	}
 	return credentials.NewTLS(config), nil
 }
@@ -140,15 +150,18 @@ func (c *Client) Connect() error {
 	if c.config.Endpoint != "" {
 		endpoint = c.config.Endpoint
 	}
-	conn, err := grpc.Dial(endpoint, grpc.WithTransportCredentials(tlsCredentials), grpc.WithBlock(), grpc.WithTimeout(c.connTimeout))
+
+	ctx, cancel := context.WithTimeout(context.Background(), c.connTimeout)
+	defer cancel()
+
+	// Dial to the remote endpoint
+	conn, err := grpc.DialContext(ctx, endpoint, grpc.WithTransportCredentials(tlsCredentials), grpc.WithBlock())
 	if err != nil {
 		return fmt.Errorf("could not connect to server: %w", err)
 	}
 
 	// Create a client for logging in
 	client := api.NewAnalyticsServerClient(conn)
-	ctx, cancel := context.WithTimeout(context.Background(), c.connTimeout)
-	defer cancel()
 
 	// Send hello & get login challenge
 	clientId, err := hex.DecodeString(c.config.ClientId)
@@ -213,7 +226,7 @@ func (c *Client) withReconnect(fn func() error) error {
 		}
 
 		if err != nil {
-			code := grpc.Code(err)
+			code := status.Code(err)
 			if code == codes.DeadlineExceeded || code == codes.Unavailable || errors.Is(err, context.DeadlineExceeded) {
 				// Sleep for back-off duration and try to re-connect
 				time.Sleep(backoff)

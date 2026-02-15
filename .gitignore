@@ -1,10 +1,15 @@
 .vscode
 example/example
 forwarder/forwarder
+forwarder/config
 forwarder/kudzu-forwarder-*
+forwarder-bs/forwarder-bs
+forwarder-bs/kudzu-forwarder-bs-*
 .DS_Store
 *.log
 *.dmp
+*.local
+build
 
 # Kerlink IPK builder
 *.ipk
