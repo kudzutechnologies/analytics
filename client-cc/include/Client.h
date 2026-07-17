@@ -18,6 +18,7 @@ struct AnalyticsClientConfig {
     std::string client_key;
     std::string endpoint = "analytics.v2.kudzu.gr:50051";
     std::string ca_file;
+    std::string ssl_target_name_override;
     int connect_timeout = 30; // seconds
     int request_timeout = 0; // seconds
     int max_reconnect_backoff = 60; // seconds

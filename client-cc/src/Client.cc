@@ -45,6 +45,9 @@ bool Client::LoadTLSCredentials(std::shared_ptr<grpc::ChannelCredentials>& creds
     grpc::SslCredentialsOptions ssl_opts;
     if (!config_.ca_file.empty()) {
         ssl_opts.pem_root_certs = ReadFile(config_.ca_file);
+        if (ssl_opts.pem_root_certs.empty()) {
+            return false;  // CA file requested but read failed (missing file or empty)
+        }
     }
     creds = grpc::SslCredentials(ssl_opts);
     return true;
@@ -55,8 +58,11 @@ bool Client::Connect() {
     std::shared_ptr<grpc::ChannelCredentials> creds;
     if (!LoadTLSCredentials(creds)) return false;
     grpc::ChannelArguments args;
+    if (!config_.ssl_target_name_override.empty()) {
+        args.SetSslTargetNameOverride(config_.ssl_target_name_override);
+    }
     auto deadline = std::chrono::system_clock::now() + std::chrono::seconds(config_.connect_timeout);
-    channel_ = grpc::CreateChannel(config_.endpoint, creds);
+    channel_ = grpc::CreateCustomChannel(config_.endpoint, creds, args);
     stub_ = api::AnalyticsServer::NewStub(channel_);
     grpc::ClientContext ctx;
     ctx.set_deadline(deadline);
