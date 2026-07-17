@@ -18,6 +18,7 @@ func main() {
 		ClientId:            config.ClientId,
 		ClientKey:           config.ClientKey,
 		Endpoint:            config.Endpoint,
+		CAFile:              config.CAFile,
 		ConnectTimeout:      int32(config.ConnectTimeout),
 		RequestTimeout:      int32(config.RequestTimeout),
 		MaxReconnectBackoff: int32(config.MaxReconnectBackoff),

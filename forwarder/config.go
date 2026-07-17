@@ -24,6 +24,7 @@ type ForwarderConfig struct {
 	ConnectTimeout       int    `json:"connect-timeout,omitempty"`
 	DebugDump            string `json:"debug-dump,omitempty"`
 	Endpoint             string `json:"analytics-endpoint,omitempty"`
+	CAFile               string `json:"analytics-ca-file,omitempty"`
 	FlushInterval        int    `json:"flush-interval,omitempty"`
 	GatewayId            string `json:"gateway,omitempty"`
 	GaugeStat            bool   `json:"gauge-stat,omitempty"`
@@ -50,6 +51,7 @@ var defaultConf = ForwarderConfig{
 	ConnectTimeout:       0,
 	DebugDump:            "",
 	Endpoint:             "",
+	CAFile:               "",
 	FlushInterval:        0,
 	GatewayId:            "",
 	GaugeStat:            false,
@@ -96,6 +98,7 @@ func ParseConfigFromEnv() ForwarderConfig {
 	flag.StringVar(&config.ClientId, "client-id", defaultConf.ClientId, "the client ID to use for connecting to Kudzu Analytics")
 	flag.StringVar(&config.ClientKey, "client-key", defaultConf.ClientKey, "the private client key to use for connecting to Kudzu Analytics")
 	flag.StringVar(&config.Endpoint, "analytics-endpoint", defaultConf.Endpoint, "the analytics endpoint to push the data to")
+	flag.StringVar(&config.CAFile, "analytics-ca-file", defaultConf.CAFile, "optional CA certificate file appended to the system trust store for analytics TLS")
 	flag.IntVar(&config.ConnectTimeout, "analytics-connect-timeout", defaultConf.ConnectTimeout, "how long to wait for analytics connection")
 	flag.IntVar(&config.RequestTimeout, "analytics-request-timeout", defaultConf.RequestTimeout, "how long to wait for analytics to be pushed")
 	flag.IntVar(&config.MaxReconnectBackoff, "analytics-max-backoff", defaultConf.MaxReconnectBackoff, "the maximum time to wait for reconnecting")
@@ -127,6 +130,29 @@ func ParseConfigFromEnv() ForwarderConfig {
 		os.Exit(0)
 	}
 
+	// Apply log level
+	switch config.LogLevel {
+	case "debug":
+		log.SetLevel(log.DebugLevel)
+	case "info":
+		log.SetLevel(log.InfoLevel)
+	case "error":
+		log.SetLevel(log.ErrorLevel)
+	case "warn":
+		log.SetLevel(log.WarnLevel)
+	default:
+		log.Fatalf("Unknown log level: %s", config.LogLevel)
+	}
+
+	// If we have a logfile specified, redirect output now
+	if logFile != "" {
+		f, err := os.OpenFile(logFile, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0755)
+		if err != nil {
+			log.Fatalf("Could not open logfile %s for writing: %s", logFile, err.Error())
+		}
+		log.SetOutput(f)
+	}
+
 	// If we only need to pair, download pair config and write config file now
 	if pairPin != "" {
 		config, err := getRenderedPairConfig(pairPin, config)
@@ -135,9 +161,15 @@ func ParseConfigFromEnv() ForwarderConfig {
 		}
 
 		if writeConfig {
-			// Write the configuration to the file
-			log.Infof("Writing changes to configuration file: %s", flag.DefaultConfigFlagname)
-			err = os.WriteFile(flag.DefaultConfigFlagname, []byte(config), 0644)
+			configPath := ""
+			if f := flag.Lookup(flag.DefaultConfigFlagname); f != nil {
+				configPath = f.Value.String()
+			}
+			if configPath == "" {
+				log.Fatalf("You must specify a configuration file path (--config=) when using --write")
+			}
+			log.Infof("Writing changes to configuration file: %s", configPath)
+			err = os.WriteFile(configPath, []byte(config), 0644)
 			if err != nil {
 				log.Fatalf("Could not write configuration file: %s", err.Error())
 			}
@@ -178,29 +210,6 @@ func ParseConfigFromEnv() ForwarderConfig {
 		} else {
 			config.FlushInterval = 10
 		}
-	}
-
-	// Apply log level
-	switch config.LogLevel {
-	case "debug":
-		log.SetLevel(log.DebugLevel)
-	case "info":
-		log.SetLevel(log.InfoLevel)
-	case "error":
-		log.SetLevel(log.ErrorLevel)
-	case "warn":
-		log.SetLevel(log.WarnLevel)
-	default:
-		log.Fatalf("Unknown log level: %s", config.LogLevel)
-	}
-
-	// If we have a logfile specified, redirect output now
-	if logFile != "" {
-		f, err := os.OpenFile(logFile, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0755)
-		if err != nil {
-			log.Fatalf("Could not open logfile %s for writing: %s", logFile, err.Error())
-		}
-		log.SetOutput(f)
 	}
 
 	// Dump the default config

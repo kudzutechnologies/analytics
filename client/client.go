@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
-	_ "embed"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -26,9 +25,6 @@ import (
 // v3 - Changed the payload structure to accommodate older compilers
 const ClientVersion = 3
 
-//go:embed cert/kudzu-root-ca-2023.pem
-var defaultRootCertificate []byte
-
 var defaultEndpoint string = "analytics.v2.kudzu.gr:50051"
 
 var (
@@ -44,7 +40,8 @@ type AnalyticsClientConfig struct {
 
 	// The endpoint to use for uploading the data (Optional)
 	Endpoint string `json:"endpoint,omitempty"`
-	// The server CA certificate file to use for validating the connection (Optional)
+	// Optional CA PEM file appended to the system trust store (additive).
+	// When empty, only system roots are used.
 	CAFile string `json:"ca_file,omitempty"`
 	// The default timeout for connecting (seconds)
 	ConnectTimeout int32 `json:"connect_timeout,omitempty"`
@@ -68,34 +65,50 @@ type Client struct {
 	sessionToken string
 }
 
-func loadTLSCredentials(cc *AnalyticsClientConfig) (credentials.TransportCredentials, error) {
-	var (
-		pemServerCA []byte = nil
-		err         error
-	)
-
+// loadRootCAs returns the system certificate pool, optionally appending the
+// PEM certificates from caFile. When caFile is empty, only system roots are used.
+// When caFile is set, it is loaded in addition to the system roots and must parse
+// successfully (additive trust; explicit CA is required to be valid).
+func loadRootCAs(caFile string) (*x509.CertPool, error) {
 	rootCAs, err := x509.SystemCertPool()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load system root CAs: %w", err)
 	}
-
-	if cc.CAFile != "" {
-		pemServerCA, err = os.ReadFile(cc.CAFile)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		pemServerCA = defaultRootCertificate
+	if rootCAs == nil {
+		rootCAs = x509.NewCertPool()
 	}
 
+	if caFile == "" {
+		return rootCAs, nil
+	}
+
+	pemServerCA, err := os.ReadFile(caFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read CA file: %w", err)
+	}
 	if !rootCAs.AppendCertsFromPEM(pemServerCA) {
 		return nil, fmt.Errorf("failed to add server CA's certificate")
 	}
+	return rootCAs, nil
+}
 
-	config := &tls.Config{
+// loadTLSConfig builds a TLS config using system roots, plus an optional CA file.
+func loadTLSConfig(caFile string, nextProtos []string) (*tls.Config, error) {
+	rootCAs, err := loadRootCAs(caFile)
+	if err != nil {
+		return nil, err
+	}
+	return &tls.Config{
 		RootCAs:    rootCAs,
-		MinVersion: tls.VersionTLS12, // Ensure using TLS v1.2 or higher
-		NextProtos: []string{"h2"},   // HTTP/2 is required for gRPC
+		MinVersion: tls.VersionTLS12,
+		NextProtos: nextProtos,
+	}, nil
+}
+
+func loadTLSCredentials(cc *AnalyticsClientConfig) (credentials.TransportCredentials, error) {
+	config, err := loadTLSConfig(cc.CAFile, []string{"h2"})
+	if err != nil {
+		return nil, err
 	}
 	return credentials.NewTLS(config), nil
 }

@@ -17,6 +17,7 @@ struct AnalyticsClientConfig {
     std::string client_id;
     std::string client_key;
     std::string endpoint = "analytics.v2.kudzu.gr:50051";
+    // Optional CA PEM file appended to the system trust store (additive).
     std::string ca_file;
     std::string ssl_target_name_override;
     int connect_timeout = 30; // seconds

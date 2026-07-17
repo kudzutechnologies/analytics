@@ -10,6 +10,8 @@ import "github.com/kudzutechnologies/analytics/client"
 
 This package implements the gRPC analytics client package that can be used for implementing embedded analytics forwardrs to the Kudzu Analytis platform.
 
+TLS trust is additive: the client always uses the system certificate pool. When `CAFile` is set, those PEM certificates are appended and must load successfully. The same trust rules apply to `FetchPairingConfig` for edge pairing over HTTPS.
+
 <details><summary>Example</summary>
 <p>
 
@@ -81,7 +83,8 @@ type AnalyticsClientConfig struct {
 
     // The endpoint to use for uploading the data (Optional)
     Endpoint string `json:"endpoint,omitempty"`
-    // The server CA certificate file to use for validating the connection (Optional)
+    // Optional CA PEM appended to the system trust store (additive).
+    // When empty, only system roots are used.
     CAFile string `json:"ca_file,omitempty"`
     // The default timeout for connecting (seconds)
     ConnectTimeout int32 `json:"connect_timeout,omitempty"`

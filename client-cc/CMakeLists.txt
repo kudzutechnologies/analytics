@@ -11,6 +11,7 @@
 # Options:
 #   -DCLIENT_CC_BUILD_SHARED=ON/OFF (default: OFF)
 #   -DCLIENT_CC_USE_OPENSSL=ON/OFF (default: ON)
+#   -DCLIENT_CC_BUILD_TESTS=ON/OFF (default: OFF)
 #   -DProtobuf_ROOT=/path/to/protobuf
 #   -DgRPC_ROOT=/path/to/grpc
 #   -DOPENSSL_ROOT_DIR=/path/to/openssl
@@ -25,7 +26,8 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 option(CLIENT_CC_BUILD_SHARED "Build shared library" OFF)
-option(CLIENT_CC_USE_OPENSSL "Use OpenSSL for SHA256" ON)
+option(CLIENT_CC_USE_OPENSSL "Use OpenSSL for SHA256 and TLS helpers" ON)
+option(CLIENT_CC_BUILD_TESTS "Build client-cc unit tests" OFF)
 set(CLIENT_CC_EXTRA_SOURCES "" CACHE STRING "Extra user-supplied sources (e.g., fallback crypto)")
 
 # Allow user to specify custom dependency roots
@@ -56,12 +58,24 @@ endif()
 # Find gRPC
 find_package(gRPC REQUIRED)
 
-# OpenSSL is optional
+# OpenSSL is required for pairing / additive TLS trust helpers
 if(CLIENT_CC_USE_OPENSSL)
     find_package(OpenSSL)
     if(NOT OpenSSL_FOUND)
         message(WARNING "OpenSSL not found, but CLIENT_CC_USE_OPENSSL=ON. You may need to provide a fallback SHA256 implementation.")
     endif()
+endif()
+
+# nlohmann/json (header-only) for pairing response parsing
+if(NOT TARGET nlohmann_json::nlohmann_json)
+  include(FetchContent)
+  FetchContent_Declare(
+    json
+    URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+  )
+  set(JSON_BuildTests OFF CACHE BOOL "" FORCE)
+  FetchContent_MakeAvailable(json)
 endif()
 
 # Include directories (src so that "protobuf/api.pb.h" resolves to src/protobuf/api.pb.h)
@@ -79,15 +93,13 @@ endif()
 # Source files (include generated protobuf and gRPC stubs)
 set(CLIENT_CC_SOURCES
     src/Client.cc
+    src/Pairing.cc
+    src/TlsRoots.cc
     src/protobuf/api.pb.cc
     src/protobuf/analytics.pb.cc
     src/protobuf/api.grpc.pb.cc
     ${CLIENT_CC_EXTRA_SOURCES}
 )
-
-# Platform/architecture-specific sources or definitions (user can edit here)
-# Example: add_definitions(-DPLATFORM_EMBEDDED)
-# Example: list(APPEND CLIENT_CC_SOURCES src/sha256_fallback.c)
 
 # Library type
 if(CLIENT_CC_BUILD_SHARED)
@@ -98,8 +110,6 @@ endif()
 
 add_library(client-cc ${CLIENT_CC_LIB_TYPE} ${CLIENT_CC_SOURCES})
 
-# Modern CMake: target includes and definitions
-# (User can override/add more flags for embedded/cross builds)
 target_include_directories(client-cc
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -116,6 +126,8 @@ target_link_libraries(client-cc
         gRPC::grpc++
         ${CLIENT_CC_PROTOBUF_LIBS}
         Threads::Threads
+    PRIVATE
+        nlohmann_json::nlohmann_json
 )
 if(CLIENT_CC_USE_OPENSSL AND OpenSSL_FOUND)
     target_link_libraries(client-cc PUBLIC OpenSSL::SSL OpenSSL::Crypto)
@@ -125,7 +137,9 @@ else()
 endif()
 
 # Public headers
-set_target_properties(client-cc PROPERTIES PUBLIC_HEADER "include/Client.h")
+set_target_properties(client-cc PROPERTIES
+    PUBLIC_HEADER "include/Client.h;include/AnalyticsPairing.h"
+)
 
 # Install rules (both static and shared)
 install(TARGETS client-cc
@@ -134,9 +148,22 @@ install(TARGETS client-cc
     PUBLIC_HEADER DESTINATION include
 )
 
+if(CLIENT_CC_BUILD_TESTS)
+    enable_testing()
+    add_executable(client_cc_tls_test tests/tls_roots_test.cc)
+    target_link_libraries(client_cc_tls_test PRIVATE client-cc)
+    target_include_directories(client_cc_tls_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    add_test(NAME client_cc_tls_test COMMAND client_cc_tls_test)
+
+    add_executable(client_cc_pairing_test tests/pairing_test.cc)
+    target_link_libraries(client_cc_pairing_test PRIVATE client-cc)
+    add_test(NAME client_cc_pairing_test COMMAND client_cc_pairing_test)
+endif()
+
 # Print summary
 message(STATUS "client-cc build type: ${CLIENT_CC_LIB_TYPE}")
 message(STATUS "OpenSSL enabled: ${CLIENT_CC_USE_OPENSSL}")
+message(STATUS "Build tests: ${CLIENT_CC_BUILD_TESTS}")
 message(STATUS "Extra sources: ${CLIENT_CC_EXTRA_SOURCES}")
 message(STATUS "Protobuf: ${CLIENT_CC_PROTOBUF_LIBS}")
-message(STATUS "gRPC include: ${gRPC_INCLUDE_DIRS}") 
+message(STATUS "gRPC include: ${gRPC_INCLUDE_DIRS}")

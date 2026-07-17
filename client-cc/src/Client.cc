@@ -1,9 +1,7 @@
 #include "Client.h"
-#include <fstream>
-#include <sstream>
+#include "TlsRoots.h"
 #include <chrono>
 #include <thread>
-#include <iomanip>
 #include <openssl/sha.h>
 
 namespace client_cc {
@@ -25,13 +23,6 @@ std::string Sha256Hex(const std::string& input) {
     SHA256((const unsigned char*)input.data(), input.size(), hash);
     return std::string(reinterpret_cast<char*>(hash), SHA256_DIGEST_LENGTH);
 }
-
-std::string ReadFile(const std::string& path) {
-    std::ifstream file(path, std::ios::binary);
-    std::ostringstream ss;
-    ss << file.rdbuf();
-    return ss.str();
-}
 } // namespace
 
 Client::Client(const AnalyticsClientConfig& config)
@@ -43,11 +34,11 @@ Client::~Client() {
 
 bool Client::LoadTLSCredentials(std::shared_ptr<grpc::ChannelCredentials>& creds) {
     grpc::SslCredentialsOptions ssl_opts;
-    if (!config_.ca_file.empty()) {
-        ssl_opts.pem_root_certs = ReadFile(config_.ca_file);
-        if (ssl_opts.pem_root_certs.empty()) {
-            return false;  // CA file requested but read failed (missing file or empty)
-        }
+    std::string error_msg;
+    // Empty ca_file => empty pem_root_certs => gRPC platform/system defaults.
+    // Non-empty ca_file => system roots + custom CA PEM.
+    if (!LoadCombinedRootCertsPEM(config_.ca_file, ssl_opts.pem_root_certs, error_msg)) {
+        return false;
     }
     creds = grpc::SslCredentials(ssl_opts);
     return true;

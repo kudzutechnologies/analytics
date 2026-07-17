@@ -78,6 +78,7 @@ You can then launch the client using:
 |---|---|---|---|
 | **analytics-connect-timeout** | | `0` |  how long to wait for analytics connection |
 | **analytics-endpoint** | | `""` |  the analytics endpoint to push the data to |
+| **analytics-ca-file** | | `""` |  optional CA PEM appended to the system trust store for analytics gRPC and pairing HTTPS |
 | **analytics-max-backoff** | | `0` |  the maximum time to wait for reconnecting |
 | **analytics-request-timeout** | | `0` |  how long to wait for analytics to be pushed |
 | **buffer-size** | | `1500` |  how much memory to allocate for the UDP packets |
