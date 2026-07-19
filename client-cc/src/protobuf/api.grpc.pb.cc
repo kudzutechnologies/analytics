@@ -26,6 +26,8 @@ static const char* AnalyticsServer_method_names[] = {
   "/api.AnalyticsServer/Hello",
   "/api.AnalyticsServer/Login",
   "/api.AnalyticsServer/PushMetrics",
+  "/api.AnalyticsServer/GatewayUpsert",
+  "/api.AnalyticsServer/GatewayDelete",
 };
 
 std::unique_ptr< AnalyticsServer::Stub> AnalyticsServer::NewStub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options) {
@@ -38,6 +40,8 @@ AnalyticsServer::Stub::Stub(const std::shared_ptr< ::grpc::ChannelInterface>& ch
   : channel_(channel), rpcmethod_Hello_(AnalyticsServer_method_names[0], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
   , rpcmethod_Login_(AnalyticsServer_method_names[1], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
   , rpcmethod_PushMetrics_(AnalyticsServer_method_names[2], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  , rpcmethod_GatewayUpsert_(AnalyticsServer_method_names[3], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  , rpcmethod_GatewayDelete_(AnalyticsServer_method_names[4], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
   {}
 
 ::grpc::Status AnalyticsServer::Stub::Hello(::grpc::ClientContext* context, const ::api::ReqHello& request, ::api::RespHello* response) {
@@ -109,6 +113,52 @@ void AnalyticsServer::Stub::async::PushMetrics(::grpc::ClientContext* context, c
   return result;
 }
 
+::grpc::Status AnalyticsServer::Stub::GatewayUpsert(::grpc::ClientContext* context, const ::api::ReqGatewayUpsert& request, ::api::RespGatewaySync* response) {
+  return ::grpc::internal::BlockingUnaryCall< ::api::ReqGatewayUpsert, ::api::RespGatewaySync, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_GatewayUpsert_, context, request, response);
+}
+
+void AnalyticsServer::Stub::async::GatewayUpsert(::grpc::ClientContext* context, const ::api::ReqGatewayUpsert* request, ::api::RespGatewaySync* response, std::function<void(::grpc::Status)> f) {
+  ::grpc::internal::CallbackUnaryCall< ::api::ReqGatewayUpsert, ::api::RespGatewaySync, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_GatewayUpsert_, context, request, response, std::move(f));
+}
+
+void AnalyticsServer::Stub::async::GatewayUpsert(::grpc::ClientContext* context, const ::api::ReqGatewayUpsert* request, ::api::RespGatewaySync* response, ::grpc::ClientUnaryReactor* reactor) {
+  ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_GatewayUpsert_, context, request, response, reactor);
+}
+
+::grpc::ClientAsyncResponseReader< ::api::RespGatewaySync>* AnalyticsServer::Stub::PrepareAsyncGatewayUpsertRaw(::grpc::ClientContext* context, const ::api::ReqGatewayUpsert& request, ::grpc::CompletionQueue* cq) {
+  return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::api::RespGatewaySync, ::api::ReqGatewayUpsert, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_GatewayUpsert_, context, request);
+}
+
+::grpc::ClientAsyncResponseReader< ::api::RespGatewaySync>* AnalyticsServer::Stub::AsyncGatewayUpsertRaw(::grpc::ClientContext* context, const ::api::ReqGatewayUpsert& request, ::grpc::CompletionQueue* cq) {
+  auto* result =
+    this->PrepareAsyncGatewayUpsertRaw(context, request, cq);
+  result->StartCall();
+  return result;
+}
+
+::grpc::Status AnalyticsServer::Stub::GatewayDelete(::grpc::ClientContext* context, const ::api::ReqGatewayDelete& request, ::api::RespGatewaySync* response) {
+  return ::grpc::internal::BlockingUnaryCall< ::api::ReqGatewayDelete, ::api::RespGatewaySync, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_GatewayDelete_, context, request, response);
+}
+
+void AnalyticsServer::Stub::async::GatewayDelete(::grpc::ClientContext* context, const ::api::ReqGatewayDelete* request, ::api::RespGatewaySync* response, std::function<void(::grpc::Status)> f) {
+  ::grpc::internal::CallbackUnaryCall< ::api::ReqGatewayDelete, ::api::RespGatewaySync, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_GatewayDelete_, context, request, response, std::move(f));
+}
+
+void AnalyticsServer::Stub::async::GatewayDelete(::grpc::ClientContext* context, const ::api::ReqGatewayDelete* request, ::api::RespGatewaySync* response, ::grpc::ClientUnaryReactor* reactor) {
+  ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_GatewayDelete_, context, request, response, reactor);
+}
+
+::grpc::ClientAsyncResponseReader< ::api::RespGatewaySync>* AnalyticsServer::Stub::PrepareAsyncGatewayDeleteRaw(::grpc::ClientContext* context, const ::api::ReqGatewayDelete& request, ::grpc::CompletionQueue* cq) {
+  return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::api::RespGatewaySync, ::api::ReqGatewayDelete, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_GatewayDelete_, context, request);
+}
+
+::grpc::ClientAsyncResponseReader< ::api::RespGatewaySync>* AnalyticsServer::Stub::AsyncGatewayDeleteRaw(::grpc::ClientContext* context, const ::api::ReqGatewayDelete& request, ::grpc::CompletionQueue* cq) {
+  auto* result =
+    this->PrepareAsyncGatewayDeleteRaw(context, request, cq);
+  result->StartCall();
+  return result;
+}
+
 AnalyticsServer::Service::Service() {
   AddMethod(new ::grpc::internal::RpcServiceMethod(
       AnalyticsServer_method_names[0],
@@ -140,6 +190,26 @@ AnalyticsServer::Service::Service() {
              ::api::RespPush* resp) {
                return service->PushMetrics(ctx, req, resp);
              }, this)));
+  AddMethod(new ::grpc::internal::RpcServiceMethod(
+      AnalyticsServer_method_names[3],
+      ::grpc::internal::RpcMethod::NORMAL_RPC,
+      new ::grpc::internal::RpcMethodHandler< AnalyticsServer::Service, ::api::ReqGatewayUpsert, ::api::RespGatewaySync, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
+          [](AnalyticsServer::Service* service,
+             ::grpc::ServerContext* ctx,
+             const ::api::ReqGatewayUpsert* req,
+             ::api::RespGatewaySync* resp) {
+               return service->GatewayUpsert(ctx, req, resp);
+             }, this)));
+  AddMethod(new ::grpc::internal::RpcServiceMethod(
+      AnalyticsServer_method_names[4],
+      ::grpc::internal::RpcMethod::NORMAL_RPC,
+      new ::grpc::internal::RpcMethodHandler< AnalyticsServer::Service, ::api::ReqGatewayDelete, ::api::RespGatewaySync, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
+          [](AnalyticsServer::Service* service,
+             ::grpc::ServerContext* ctx,
+             const ::api::ReqGatewayDelete* req,
+             ::api::RespGatewaySync* resp) {
+               return service->GatewayDelete(ctx, req, resp);
+             }, this)));
 }
 
 AnalyticsServer::Service::~Service() {
@@ -160,6 +230,20 @@ AnalyticsServer::Service::~Service() {
 }
 
 ::grpc::Status AnalyticsServer::Service::PushMetrics(::grpc::ServerContext* context, const ::api::AnalyticsMetrics* request, ::api::RespPush* response) {
+  (void) context;
+  (void) request;
+  (void) response;
+  return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+}
+
+::grpc::Status AnalyticsServer::Service::GatewayUpsert(::grpc::ServerContext* context, const ::api::ReqGatewayUpsert* request, ::api::RespGatewaySync* response) {
+  (void) context;
+  (void) request;
+  (void) response;
+  return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+}
+
+::grpc::Status AnalyticsServer::Service::GatewayDelete(::grpc::ServerContext* context, const ::api::ReqGatewayDelete* request, ::api::RespGatewaySync* response) {
   (void) context;
   (void) request;
   (void) response;

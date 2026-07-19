@@ -89,8 +89,16 @@ func (f *AnalyticsForwarder) connect() {
 func (f *AnalyticsForwarder) main() {
 	log.Info("Connected to kudzu analytics")
 
-	// Start receiving traffic from the UDP proxy
+	// Start receiving traffic from the UDP proxy immediately so gateway sync
+	// never blocks packet forwarding.
 	f.proxy.SetEventHandler(f)
+
+	// Schedule optional post-connect gateway upsert in the background.
+	if parsed, err := ParseGatewaySyncConfig(f.config); err != nil {
+		log.Warnf("Skipping gateway upsert: %v", err)
+	} else {
+		f.scheduleGatewayUpsert(parsed)
+	}
 
 	// Periodically flush data waiting in the egress queue
 	for {

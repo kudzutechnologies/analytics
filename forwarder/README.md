@@ -42,6 +42,14 @@ client-key="<api-client-key>"
 # patform and is unique for every gateway.
 gateway="<platform-gateway-id>"
 
+# Optional: synchronize gateway metadata after analytics connect.
+# If any gateway-* option is set, gateway-eid or gateway-eui is required.
+# gateway-eid="<external-id>"
+# gateway-eui="0102030405060708"
+# gateway-name="Roof Gateway"
+# gateway-location="37.98,23.72,12"
+# gateway-radios="0:27,1:14:-130"
+
 # ======================================================
 # Configure this to point to the LoRaWAN Server
 # ======================================================
@@ -93,6 +101,11 @@ You can then launch the client using:
 | **debug-dump** | | `""` |  the filename where to write the traffic for debugging |
 | **flush-interval** | | `0` |  how frequently to flush collected metrics to analytics |
 | **gateway** | 🔴 | `""` |  the ID of the gateway the forwarder is pushing data for |
+| **gateway-eid** | | `""` |  external gateway identifier used for post-connect `GatewayUpsert` |
+| **gateway-eui** | | `""` |  LoRaWAN gateway EUI (16 hex chars) used for post-connect `GatewayUpsert` |
+| **gateway-location** | | `""` |  gateway location as `lat,lon[,alt]` for post-connect `GatewayUpsert` |
+| **gateway-name** | | `""` |  gateway display name for post-connect `GatewayUpsert` |
+| **gateway-radios** | | `""` |  radios as `rf_chain:max_tx_power[:tx_sensitivity][,...]` for post-connect `GatewayUpsert` |
 | **gauge-stat** | | `false` |  the statistics are gauge values |
 | **listen-host** | | `"127.0.0.1"` |  the hostname where to listen (UDP forwarder connects here) |
 | **listen-port-down** | | `1801` |  the UDP forwarder port where to send downlink datagrams to |

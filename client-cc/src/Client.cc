@@ -123,4 +123,36 @@ bool Client::PushMetrics(const api::AnalyticsMetrics& metrics) {
     });
 }
 
+bool Client::GatewayUpsert(const api::ReqGatewayUpsert& req, api::RespGatewaySync* resp) {
+    if (!connected_) return false;
+    return WithReconnect([&]() {
+        grpc::ClientContext ctx;
+        ctx.AddMetadata("token", session_token_);
+        if (config_.request_timeout > 0) {
+            auto deadline = std::chrono::system_clock::now() + std::chrono::seconds(config_.request_timeout);
+            ctx.set_deadline(deadline);
+        }
+        api::RespGatewaySync local;
+        api::RespGatewaySync* out = resp != nullptr ? resp : &local;
+        auto status = stub_->GatewayUpsert(&ctx, req, out);
+        return status.ok();
+    });
+}
+
+bool Client::GatewayDelete(const api::ReqGatewayDelete& req, api::RespGatewaySync* resp) {
+    if (!connected_) return false;
+    return WithReconnect([&]() {
+        grpc::ClientContext ctx;
+        ctx.AddMetadata("token", session_token_);
+        if (config_.request_timeout > 0) {
+            auto deadline = std::chrono::system_clock::now() + std::chrono::seconds(config_.request_timeout);
+            ctx.set_deadline(deadline);
+        }
+        api::RespGatewaySync local;
+        api::RespGatewaySync* out = resp != nullptr ? resp : &local;
+        auto status = stub_->GatewayDelete(&ctx, req, out);
+        return status.ok();
+    });
+}
+
 } // namespace client_cc 

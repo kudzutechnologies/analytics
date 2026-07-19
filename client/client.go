@@ -286,3 +286,39 @@ func (c *Client) PushMetrics(metrics *api.AnalyticsMetrics) error {
 		return nil
 	})
 }
+
+// GatewayUpsert creates or updates a gateway record on the analytics service.
+func (c *Client) GatewayUpsert(req *api.ReqGatewayUpsert) (*api.RespGatewaySync, error) {
+	if c.conn == nil {
+		return nil, ErrNotConnected
+	}
+
+	ctx, cancel := c.createContext()
+	defer cancel()
+
+	var resp *api.RespGatewaySync
+	err := c.withReconnect(func() error {
+		var err error
+		resp, err = c.client.GatewayUpsert(ctx, req)
+		return err
+	})
+	return resp, err
+}
+
+// GatewayDelete removes a gateway record controlled by the ingress_api integration.
+func (c *Client) GatewayDelete(req *api.ReqGatewayDelete) (*api.RespGatewaySync, error) {
+	if c.conn == nil {
+		return nil, ErrNotConnected
+	}
+
+	ctx, cancel := c.createContext()
+	defer cancel()
+
+	var resp *api.RespGatewaySync
+	err := c.withReconnect(func() error {
+		var err error
+		resp, err = c.client.GatewayDelete(ctx, req)
+		return err
+	})
+	return resp, err
+}

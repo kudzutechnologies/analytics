@@ -27,6 +27,11 @@ type ForwarderConfig struct {
 	CAFile               string `json:"analytics-ca-file,omitempty"`
 	FlushInterval        int    `json:"flush-interval,omitempty"`
 	GatewayId            string `json:"gateway,omitempty"`
+	GatewayEID           string `json:"gateway-eid,omitempty"`
+	GatewayEUI           string `json:"gateway-eui,omitempty"`
+	GatewayLocation      string `json:"gateway-location,omitempty"`
+	GatewayName          string `json:"gateway-name,omitempty"`
+	GatewayRadios        string `json:"gateway-radios,omitempty"`
 	GaugeStat            bool   `json:"gauge-stat,omitempty"`
 	ListenHost           string `json:"listen-host,omitempty"`
 	ListenPortDown       int    `json:"listen-port-down,omitempty"`
@@ -106,6 +111,11 @@ func ParseConfigFromEnv() ForwarderConfig {
 	// Forwarder component config
 	flag.IntVar(&config.FlushInterval, "flush-interval", defaultConf.FlushInterval, "how frequently to flush collected metrics to analytics")
 	flag.StringVar(&config.GatewayId, "gateway", defaultConf.GatewayId, "the ID of the gateway the forwarder is pushing data for")
+	flag.StringVar(&config.GatewayEID, "gateway-eid", defaultConf.GatewayEID, "external gateway identifier used for GatewayUpsert")
+	flag.StringVar(&config.GatewayEUI, "gateway-eui", defaultConf.GatewayEUI, "LoRaWAN gateway EUI (16 hex chars) used for GatewayUpsert")
+	flag.StringVar(&config.GatewayLocation, "gateway-location", defaultConf.GatewayLocation, "gateway location as lat,lon[,alt] for GatewayUpsert")
+	flag.StringVar(&config.GatewayName, "gateway-name", defaultConf.GatewayName, "gateway display name for GatewayUpsert")
+	flag.StringVar(&config.GatewayRadios, "gateway-radios", defaultConf.GatewayRadios, "gateway radios as rf_chain:max_tx_power[:tx_sensitivity][,...] for GatewayUpsert")
 	flag.BoolVar(&config.GaugeStat, "gauge-stat", defaultConf.GaugeStat, "the statistics are gauge values")
 	flag.BoolVar(&config.ServerSide, "server-side", defaultConf.ServerSide, "the forwarder runs on the server-side")
 
@@ -190,6 +200,11 @@ func ParseConfigFromEnv() ForwarderConfig {
 	}
 	if config.GatewayId == "" && !config.ServerSide {
 		log.Fatalf("You must specify a gateway ID (--gateway=) when running on the client-side")
+	}
+
+	// Validate optional gateway sync options early so misconfiguration fails fast.
+	if _, err := ParseGatewaySyncConfig(config); err != nil {
+		log.Fatalf("Invalid gateway sync configuration: %s", err.Error())
 	}
 
 	// Adjust MaxUDPStreams defaults

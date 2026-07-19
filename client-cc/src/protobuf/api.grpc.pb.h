@@ -59,6 +59,22 @@ class AnalyticsServer final {
     std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::api::RespPush>> PrepareAsyncPushMetrics(::grpc::ClientContext* context, const ::api::AnalyticsMetrics& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::api::RespPush>>(PrepareAsyncPushMetricsRaw(context, request, cq));
     }
+    // Creates or updates a gateway record
+    virtual ::grpc::Status GatewayUpsert(::grpc::ClientContext* context, const ::api::ReqGatewayUpsert& request, ::api::RespGatewaySync* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::api::RespGatewaySync>> AsyncGatewayUpsert(::grpc::ClientContext* context, const ::api::ReqGatewayUpsert& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::api::RespGatewaySync>>(AsyncGatewayUpsertRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::api::RespGatewaySync>> PrepareAsyncGatewayUpsert(::grpc::ClientContext* context, const ::api::ReqGatewayUpsert& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::api::RespGatewaySync>>(PrepareAsyncGatewayUpsertRaw(context, request, cq));
+    }
+    // Deletes a gateway record controlled by this integration
+    virtual ::grpc::Status GatewayDelete(::grpc::ClientContext* context, const ::api::ReqGatewayDelete& request, ::api::RespGatewaySync* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::api::RespGatewaySync>> AsyncGatewayDelete(::grpc::ClientContext* context, const ::api::ReqGatewayDelete& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::api::RespGatewaySync>>(AsyncGatewayDeleteRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::api::RespGatewaySync>> PrepareAsyncGatewayDelete(::grpc::ClientContext* context, const ::api::ReqGatewayDelete& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::api::RespGatewaySync>>(PrepareAsyncGatewayDeleteRaw(context, request, cq));
+    }
     class async_interface {
      public:
       virtual ~async_interface() {}
@@ -70,6 +86,12 @@ class AnalyticsServer final {
       // Pushes analytics data to the server
       virtual void PushMetrics(::grpc::ClientContext* context, const ::api::AnalyticsMetrics* request, ::api::RespPush* response, std::function<void(::grpc::Status)>) = 0;
       virtual void PushMetrics(::grpc::ClientContext* context, const ::api::AnalyticsMetrics* request, ::api::RespPush* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      // Creates or updates a gateway record
+      virtual void GatewayUpsert(::grpc::ClientContext* context, const ::api::ReqGatewayUpsert* request, ::api::RespGatewaySync* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void GatewayUpsert(::grpc::ClientContext* context, const ::api::ReqGatewayUpsert* request, ::api::RespGatewaySync* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      // Deletes a gateway record controlled by this integration
+      virtual void GatewayDelete(::grpc::ClientContext* context, const ::api::ReqGatewayDelete* request, ::api::RespGatewaySync* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void GatewayDelete(::grpc::ClientContext* context, const ::api::ReqGatewayDelete* request, ::api::RespGatewaySync* response, ::grpc::ClientUnaryReactor* reactor) = 0;
     };
     typedef class async_interface experimental_async_interface;
     virtual class async_interface* async() { return nullptr; }
@@ -81,6 +103,10 @@ class AnalyticsServer final {
     virtual ::grpc::ClientAsyncResponseReaderInterface< ::api::RespLogin>* PrepareAsyncLoginRaw(::grpc::ClientContext* context, const ::api::ReqLogin& request, ::grpc::CompletionQueue* cq) = 0;
     virtual ::grpc::ClientAsyncResponseReaderInterface< ::api::RespPush>* AsyncPushMetricsRaw(::grpc::ClientContext* context, const ::api::AnalyticsMetrics& request, ::grpc::CompletionQueue* cq) = 0;
     virtual ::grpc::ClientAsyncResponseReaderInterface< ::api::RespPush>* PrepareAsyncPushMetricsRaw(::grpc::ClientContext* context, const ::api::AnalyticsMetrics& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::api::RespGatewaySync>* AsyncGatewayUpsertRaw(::grpc::ClientContext* context, const ::api::ReqGatewayUpsert& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::api::RespGatewaySync>* PrepareAsyncGatewayUpsertRaw(::grpc::ClientContext* context, const ::api::ReqGatewayUpsert& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::api::RespGatewaySync>* AsyncGatewayDeleteRaw(::grpc::ClientContext* context, const ::api::ReqGatewayDelete& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::api::RespGatewaySync>* PrepareAsyncGatewayDeleteRaw(::grpc::ClientContext* context, const ::api::ReqGatewayDelete& request, ::grpc::CompletionQueue* cq) = 0;
   };
   class Stub final : public StubInterface {
    public:
@@ -106,6 +132,20 @@ class AnalyticsServer final {
     std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::api::RespPush>> PrepareAsyncPushMetrics(::grpc::ClientContext* context, const ::api::AnalyticsMetrics& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::api::RespPush>>(PrepareAsyncPushMetricsRaw(context, request, cq));
     }
+    ::grpc::Status GatewayUpsert(::grpc::ClientContext* context, const ::api::ReqGatewayUpsert& request, ::api::RespGatewaySync* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::api::RespGatewaySync>> AsyncGatewayUpsert(::grpc::ClientContext* context, const ::api::ReqGatewayUpsert& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::api::RespGatewaySync>>(AsyncGatewayUpsertRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::api::RespGatewaySync>> PrepareAsyncGatewayUpsert(::grpc::ClientContext* context, const ::api::ReqGatewayUpsert& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::api::RespGatewaySync>>(PrepareAsyncGatewayUpsertRaw(context, request, cq));
+    }
+    ::grpc::Status GatewayDelete(::grpc::ClientContext* context, const ::api::ReqGatewayDelete& request, ::api::RespGatewaySync* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::api::RespGatewaySync>> AsyncGatewayDelete(::grpc::ClientContext* context, const ::api::ReqGatewayDelete& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::api::RespGatewaySync>>(AsyncGatewayDeleteRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::api::RespGatewaySync>> PrepareAsyncGatewayDelete(::grpc::ClientContext* context, const ::api::ReqGatewayDelete& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::api::RespGatewaySync>>(PrepareAsyncGatewayDeleteRaw(context, request, cq));
+    }
     class async final :
       public StubInterface::async_interface {
      public:
@@ -115,6 +155,10 @@ class AnalyticsServer final {
       void Login(::grpc::ClientContext* context, const ::api::ReqLogin* request, ::api::RespLogin* response, ::grpc::ClientUnaryReactor* reactor) override;
       void PushMetrics(::grpc::ClientContext* context, const ::api::AnalyticsMetrics* request, ::api::RespPush* response, std::function<void(::grpc::Status)>) override;
       void PushMetrics(::grpc::ClientContext* context, const ::api::AnalyticsMetrics* request, ::api::RespPush* response, ::grpc::ClientUnaryReactor* reactor) override;
+      void GatewayUpsert(::grpc::ClientContext* context, const ::api::ReqGatewayUpsert* request, ::api::RespGatewaySync* response, std::function<void(::grpc::Status)>) override;
+      void GatewayUpsert(::grpc::ClientContext* context, const ::api::ReqGatewayUpsert* request, ::api::RespGatewaySync* response, ::grpc::ClientUnaryReactor* reactor) override;
+      void GatewayDelete(::grpc::ClientContext* context, const ::api::ReqGatewayDelete* request, ::api::RespGatewaySync* response, std::function<void(::grpc::Status)>) override;
+      void GatewayDelete(::grpc::ClientContext* context, const ::api::ReqGatewayDelete* request, ::api::RespGatewaySync* response, ::grpc::ClientUnaryReactor* reactor) override;
      private:
       friend class Stub;
       explicit async(Stub* stub): stub_(stub) { }
@@ -132,9 +176,15 @@ class AnalyticsServer final {
     ::grpc::ClientAsyncResponseReader< ::api::RespLogin>* PrepareAsyncLoginRaw(::grpc::ClientContext* context, const ::api::ReqLogin& request, ::grpc::CompletionQueue* cq) override;
     ::grpc::ClientAsyncResponseReader< ::api::RespPush>* AsyncPushMetricsRaw(::grpc::ClientContext* context, const ::api::AnalyticsMetrics& request, ::grpc::CompletionQueue* cq) override;
     ::grpc::ClientAsyncResponseReader< ::api::RespPush>* PrepareAsyncPushMetricsRaw(::grpc::ClientContext* context, const ::api::AnalyticsMetrics& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::api::RespGatewaySync>* AsyncGatewayUpsertRaw(::grpc::ClientContext* context, const ::api::ReqGatewayUpsert& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::api::RespGatewaySync>* PrepareAsyncGatewayUpsertRaw(::grpc::ClientContext* context, const ::api::ReqGatewayUpsert& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::api::RespGatewaySync>* AsyncGatewayDeleteRaw(::grpc::ClientContext* context, const ::api::ReqGatewayDelete& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::api::RespGatewaySync>* PrepareAsyncGatewayDeleteRaw(::grpc::ClientContext* context, const ::api::ReqGatewayDelete& request, ::grpc::CompletionQueue* cq) override;
     const ::grpc::internal::RpcMethod rpcmethod_Hello_;
     const ::grpc::internal::RpcMethod rpcmethod_Login_;
     const ::grpc::internal::RpcMethod rpcmethod_PushMetrics_;
+    const ::grpc::internal::RpcMethod rpcmethod_GatewayUpsert_;
+    const ::grpc::internal::RpcMethod rpcmethod_GatewayDelete_;
   };
   static std::unique_ptr<Stub> NewStub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options = ::grpc::StubOptions());
 
@@ -147,6 +197,10 @@ class AnalyticsServer final {
     virtual ::grpc::Status Login(::grpc::ServerContext* context, const ::api::ReqLogin* request, ::api::RespLogin* response);
     // Pushes analytics data to the server
     virtual ::grpc::Status PushMetrics(::grpc::ServerContext* context, const ::api::AnalyticsMetrics* request, ::api::RespPush* response);
+    // Creates or updates a gateway record
+    virtual ::grpc::Status GatewayUpsert(::grpc::ServerContext* context, const ::api::ReqGatewayUpsert* request, ::api::RespGatewaySync* response);
+    // Deletes a gateway record controlled by this integration
+    virtual ::grpc::Status GatewayDelete(::grpc::ServerContext* context, const ::api::ReqGatewayDelete* request, ::api::RespGatewaySync* response);
   };
   template <class BaseClass>
   class WithAsyncMethod_Hello : public BaseClass {
@@ -208,7 +262,47 @@ class AnalyticsServer final {
       ::grpc::Service::RequestAsyncUnary(2, context, request, response, new_call_cq, notification_cq, tag);
     }
   };
-  typedef WithAsyncMethod_Hello<WithAsyncMethod_Login<WithAsyncMethod_PushMetrics<Service > > > AsyncService;
+  template <class BaseClass>
+  class WithAsyncMethod_GatewayUpsert : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_GatewayUpsert() {
+      ::grpc::Service::MarkMethodAsync(3);
+    }
+    ~WithAsyncMethod_GatewayUpsert() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status GatewayUpsert(::grpc::ServerContext* /*context*/, const ::api::ReqGatewayUpsert* /*request*/, ::api::RespGatewaySync* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestGatewayUpsert(::grpc::ServerContext* context, ::api::ReqGatewayUpsert* request, ::grpc::ServerAsyncResponseWriter< ::api::RespGatewaySync>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(3, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithAsyncMethod_GatewayDelete : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_GatewayDelete() {
+      ::grpc::Service::MarkMethodAsync(4);
+    }
+    ~WithAsyncMethod_GatewayDelete() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status GatewayDelete(::grpc::ServerContext* /*context*/, const ::api::ReqGatewayDelete* /*request*/, ::api::RespGatewaySync* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestGatewayDelete(::grpc::ServerContext* context, ::api::ReqGatewayDelete* request, ::grpc::ServerAsyncResponseWriter< ::api::RespGatewaySync>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(4, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  typedef WithAsyncMethod_Hello<WithAsyncMethod_Login<WithAsyncMethod_PushMetrics<WithAsyncMethod_GatewayUpsert<WithAsyncMethod_GatewayDelete<Service > > > > > AsyncService;
   template <class BaseClass>
   class WithCallbackMethod_Hello : public BaseClass {
    private:
@@ -290,7 +384,61 @@ class AnalyticsServer final {
     virtual ::grpc::ServerUnaryReactor* PushMetrics(
       ::grpc::CallbackServerContext* /*context*/, const ::api::AnalyticsMetrics* /*request*/, ::api::RespPush* /*response*/)  { return nullptr; }
   };
-  typedef WithCallbackMethod_Hello<WithCallbackMethod_Login<WithCallbackMethod_PushMetrics<Service > > > CallbackService;
+  template <class BaseClass>
+  class WithCallbackMethod_GatewayUpsert : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_GatewayUpsert() {
+      ::grpc::Service::MarkMethodCallback(3,
+          new ::grpc::internal::CallbackUnaryHandler< ::api::ReqGatewayUpsert, ::api::RespGatewaySync>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::api::ReqGatewayUpsert* request, ::api::RespGatewaySync* response) { return this->GatewayUpsert(context, request, response); }));}
+    void SetMessageAllocatorFor_GatewayUpsert(
+        ::grpc::MessageAllocator< ::api::ReqGatewayUpsert, ::api::RespGatewaySync>* allocator) {
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(3);
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::api::ReqGatewayUpsert, ::api::RespGatewaySync>*>(handler)
+              ->SetMessageAllocator(allocator);
+    }
+    ~WithCallbackMethod_GatewayUpsert() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status GatewayUpsert(::grpc::ServerContext* /*context*/, const ::api::ReqGatewayUpsert* /*request*/, ::api::RespGatewaySync* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* GatewayUpsert(
+      ::grpc::CallbackServerContext* /*context*/, const ::api::ReqGatewayUpsert* /*request*/, ::api::RespGatewaySync* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithCallbackMethod_GatewayDelete : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_GatewayDelete() {
+      ::grpc::Service::MarkMethodCallback(4,
+          new ::grpc::internal::CallbackUnaryHandler< ::api::ReqGatewayDelete, ::api::RespGatewaySync>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::api::ReqGatewayDelete* request, ::api::RespGatewaySync* response) { return this->GatewayDelete(context, request, response); }));}
+    void SetMessageAllocatorFor_GatewayDelete(
+        ::grpc::MessageAllocator< ::api::ReqGatewayDelete, ::api::RespGatewaySync>* allocator) {
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(4);
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::api::ReqGatewayDelete, ::api::RespGatewaySync>*>(handler)
+              ->SetMessageAllocator(allocator);
+    }
+    ~WithCallbackMethod_GatewayDelete() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status GatewayDelete(::grpc::ServerContext* /*context*/, const ::api::ReqGatewayDelete* /*request*/, ::api::RespGatewaySync* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* GatewayDelete(
+      ::grpc::CallbackServerContext* /*context*/, const ::api::ReqGatewayDelete* /*request*/, ::api::RespGatewaySync* /*response*/)  { return nullptr; }
+  };
+  typedef WithCallbackMethod_Hello<WithCallbackMethod_Login<WithCallbackMethod_PushMetrics<WithCallbackMethod_GatewayUpsert<WithCallbackMethod_GatewayDelete<Service > > > > > CallbackService;
   typedef CallbackService ExperimentalCallbackService;
   template <class BaseClass>
   class WithGenericMethod_Hello : public BaseClass {
@@ -339,6 +487,40 @@ class AnalyticsServer final {
     }
     // disable synchronous version of this method
     ::grpc::Status PushMetrics(::grpc::ServerContext* /*context*/, const ::api::AnalyticsMetrics* /*request*/, ::api::RespPush* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
+  class WithGenericMethod_GatewayUpsert : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_GatewayUpsert() {
+      ::grpc::Service::MarkMethodGeneric(3);
+    }
+    ~WithGenericMethod_GatewayUpsert() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status GatewayUpsert(::grpc::ServerContext* /*context*/, const ::api::ReqGatewayUpsert* /*request*/, ::api::RespGatewaySync* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
+  class WithGenericMethod_GatewayDelete : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_GatewayDelete() {
+      ::grpc::Service::MarkMethodGeneric(4);
+    }
+    ~WithGenericMethod_GatewayDelete() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status GatewayDelete(::grpc::ServerContext* /*context*/, const ::api::ReqGatewayDelete* /*request*/, ::api::RespGatewaySync* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -401,6 +583,46 @@ class AnalyticsServer final {
     }
     void RequestPushMetrics(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
       ::grpc::Service::RequestAsyncUnary(2, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithRawMethod_GatewayUpsert : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_GatewayUpsert() {
+      ::grpc::Service::MarkMethodRaw(3);
+    }
+    ~WithRawMethod_GatewayUpsert() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status GatewayUpsert(::grpc::ServerContext* /*context*/, const ::api::ReqGatewayUpsert* /*request*/, ::api::RespGatewaySync* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestGatewayUpsert(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(3, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithRawMethod_GatewayDelete : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_GatewayDelete() {
+      ::grpc::Service::MarkMethodRaw(4);
+    }
+    ~WithRawMethod_GatewayDelete() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status GatewayDelete(::grpc::ServerContext* /*context*/, const ::api::ReqGatewayDelete* /*request*/, ::api::RespGatewaySync* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestGatewayDelete(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(4, context, request, response, new_call_cq, notification_cq, tag);
     }
   };
   template <class BaseClass>
@@ -467,6 +689,50 @@ class AnalyticsServer final {
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
     virtual ::grpc::ServerUnaryReactor* PushMetrics(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_GatewayUpsert : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_GatewayUpsert() {
+      ::grpc::Service::MarkMethodRawCallback(3,
+          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->GatewayUpsert(context, request, response); }));
+    }
+    ~WithRawCallbackMethod_GatewayUpsert() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status GatewayUpsert(::grpc::ServerContext* /*context*/, const ::api::ReqGatewayUpsert* /*request*/, ::api::RespGatewaySync* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* GatewayUpsert(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_GatewayDelete : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_GatewayDelete() {
+      ::grpc::Service::MarkMethodRawCallback(4,
+          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->GatewayDelete(context, request, response); }));
+    }
+    ~WithRawCallbackMethod_GatewayDelete() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status GatewayDelete(::grpc::ServerContext* /*context*/, const ::api::ReqGatewayDelete* /*request*/, ::api::RespGatewaySync* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* GatewayDelete(
       ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
   };
   template <class BaseClass>
@@ -550,9 +816,63 @@ class AnalyticsServer final {
     // replace default version of method with streamed unary
     virtual ::grpc::Status StreamedPushMetrics(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::api::AnalyticsMetrics,::api::RespPush>* server_unary_streamer) = 0;
   };
-  typedef WithStreamedUnaryMethod_Hello<WithStreamedUnaryMethod_Login<WithStreamedUnaryMethod_PushMetrics<Service > > > StreamedUnaryService;
+  template <class BaseClass>
+  class WithStreamedUnaryMethod_GatewayUpsert : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithStreamedUnaryMethod_GatewayUpsert() {
+      ::grpc::Service::MarkMethodStreamed(3,
+        new ::grpc::internal::StreamedUnaryHandler<
+          ::api::ReqGatewayUpsert, ::api::RespGatewaySync>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerUnaryStreamer<
+                     ::api::ReqGatewayUpsert, ::api::RespGatewaySync>* streamer) {
+                       return this->StreamedGatewayUpsert(context,
+                         streamer);
+                  }));
+    }
+    ~WithStreamedUnaryMethod_GatewayUpsert() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable regular version of this method
+    ::grpc::Status GatewayUpsert(::grpc::ServerContext* /*context*/, const ::api::ReqGatewayUpsert* /*request*/, ::api::RespGatewaySync* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    // replace default version of method with streamed unary
+    virtual ::grpc::Status StreamedGatewayUpsert(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::api::ReqGatewayUpsert,::api::RespGatewaySync>* server_unary_streamer) = 0;
+  };
+  template <class BaseClass>
+  class WithStreamedUnaryMethod_GatewayDelete : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithStreamedUnaryMethod_GatewayDelete() {
+      ::grpc::Service::MarkMethodStreamed(4,
+        new ::grpc::internal::StreamedUnaryHandler<
+          ::api::ReqGatewayDelete, ::api::RespGatewaySync>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerUnaryStreamer<
+                     ::api::ReqGatewayDelete, ::api::RespGatewaySync>* streamer) {
+                       return this->StreamedGatewayDelete(context,
+                         streamer);
+                  }));
+    }
+    ~WithStreamedUnaryMethod_GatewayDelete() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable regular version of this method
+    ::grpc::Status GatewayDelete(::grpc::ServerContext* /*context*/, const ::api::ReqGatewayDelete* /*request*/, ::api::RespGatewaySync* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    // replace default version of method with streamed unary
+    virtual ::grpc::Status StreamedGatewayDelete(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::api::ReqGatewayDelete,::api::RespGatewaySync>* server_unary_streamer) = 0;
+  };
+  typedef WithStreamedUnaryMethod_Hello<WithStreamedUnaryMethod_Login<WithStreamedUnaryMethod_PushMetrics<WithStreamedUnaryMethod_GatewayUpsert<WithStreamedUnaryMethod_GatewayDelete<Service > > > > > StreamedUnaryService;
   typedef Service SplitStreamedService;
-  typedef WithStreamedUnaryMethod_Hello<WithStreamedUnaryMethod_Login<WithStreamedUnaryMethod_PushMetrics<Service > > > StreamedService;
+  typedef WithStreamedUnaryMethod_Hello<WithStreamedUnaryMethod_Login<WithStreamedUnaryMethod_PushMetrics<WithStreamedUnaryMethod_GatewayUpsert<WithStreamedUnaryMethod_GatewayDelete<Service > > > > > StreamedService;
 };
 
 }  // namespace api

@@ -35,6 +35,8 @@ public:
     bool Connect();
     void Disconnect();
     bool PushMetrics(const api::AnalyticsMetrics& metrics);
+    bool GatewayUpsert(const api::ReqGatewayUpsert& req, api::RespGatewaySync* resp = nullptr);
+    bool GatewayDelete(const api::ReqGatewayDelete& req, api::RespGatewaySync* resp = nullptr);
 
 private:
     bool LoadTLSCredentials(std::shared_ptr<grpc::ChannelCredentials>& creds);
