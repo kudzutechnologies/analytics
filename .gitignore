@@ -14,3 +14,5 @@ build
 # Kerlink IPK builder
 *.ipk
 gen_remove_ipk
+forwarder-cc/build*
+client-cc/build*

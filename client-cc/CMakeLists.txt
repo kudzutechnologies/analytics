@@ -150,6 +150,11 @@ install(TARGETS client-cc
 
 if(CLIENT_CC_BUILD_TESTS)
     enable_testing()
+    add_executable(client_cc_client_test tests/client_test.cc)
+    target_link_libraries(client_cc_client_test PRIVATE client-cc)
+    target_include_directories(client_cc_client_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    add_test(NAME client_cc_client_test COMMAND client_cc_client_test)
+
     add_executable(client_cc_tls_test tests/tls_roots_test.cc)
     target_link_libraries(client_cc_tls_test PRIVATE client-cc)
     target_include_directories(client_cc_tls_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)

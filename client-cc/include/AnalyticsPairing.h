@@ -6,7 +6,7 @@
 namespace client_cc {
 
 inline constexpr const char* kDefaultPairingBaseURL =
-    "https://eu1.cluster.kudzu.gr/api/v1/pairing/edge";
+    "https://console.eu1.cluster.kudzu.gr/api/v1/pairing/edge";
 
 struct PairingOptions {
   // Pairing PIN. Non-digit characters are stripped before use.

@@ -1,4 +1,5 @@
 #include "Client.h"
+#include "ClientInternal.h"
 #include "TlsRoots.h"
 #include <chrono>
 #include <thread>
@@ -18,12 +19,16 @@ std::string HexToBytes(const std::string& hex) {
     return bytes;
 }
 
-std::string Sha256Hex(const std::string& input) {
-    unsigned char hash[SHA256_DIGEST_LENGTH];
-    SHA256((const unsigned char*)input.data(), input.size(), hash);
-    return std::string(reinterpret_cast<char*>(hash), SHA256_DIGEST_LENGTH);
-}
 } // namespace
+
+std::string BuildLoginHash(const std::string& challenge,
+                           const std::string& key_bytes) {
+    std::string input = challenge + "|" + key_bytes;
+    unsigned char empty_hash[SHA256_DIGEST_LENGTH];
+    SHA256(reinterpret_cast<const unsigned char*>(""), 0, empty_hash);
+    input.append(reinterpret_cast<const char*>(empty_hash), SHA256_DIGEST_LENGTH);
+    return input;
+}
 
 Client::Client(const AnalyticsClientConfig& config)
     : config_(config) {}
@@ -38,6 +43,7 @@ bool Client::LoadTLSCredentials(std::shared_ptr<grpc::ChannelCredentials>& creds
     // Empty ca_file => empty pem_root_certs => gRPC platform/system defaults.
     // Non-empty ca_file => system roots + custom CA PEM.
     if (!LoadCombinedRootCertsPEM(config_.ca_file, ssl_opts.pem_root_certs, error_msg)) {
+        last_error_ = "TLS credentials: " + error_msg;
         return false;
     }
     creds = grpc::SslCredentials(ssl_opts);
@@ -46,6 +52,7 @@ bool Client::LoadTLSCredentials(std::shared_ptr<grpc::ChannelCredentials>& creds
 
 bool Client::Connect() {
     Disconnect();
+    last_error_.clear();
     std::shared_ptr<grpc::ChannelCredentials> creds;
     if (!LoadTLSCredentials(creds)) return false;
     grpc::ChannelArguments args;
@@ -61,7 +68,11 @@ bool Client::Connect() {
     hello_req.set_version(kClientVersion);
     api::RespHello hello_resp;
     auto status = stub_->Hello(&ctx, hello_req, &hello_resp);
-    if (!status.ok()) return false;
+    if (!status.ok()) {
+        last_error_ = "Hello RPC failed (" + std::to_string(status.error_code()) +
+                      "): " + status.error_message();
+        return false;
+    }
     if (!Login(hello_resp.challenge())) return false;
     connected_ = true;
     return true;
@@ -72,12 +83,15 @@ bool Client::Login(const std::string& challenge) {
     api::ReqLogin login_req;
     login_req.set_clientid(HexToBytes(config_.client_id));
     std::string key_bytes = HexToBytes(config_.client_key);
-    std::string to_hash = challenge + "|" + key_bytes;
-    login_req.set_hash(Sha256Hex(to_hash));
+    login_req.set_hash(BuildLoginHash(challenge, key_bytes));
     login_req.set_serverside(config_.server_side.value_or(false));
     api::RespLogin login_resp;
     auto status = stub_->Login(&ctx, login_req, &login_resp);
-    if (!status.ok()) return false;
+    if (!status.ok()) {
+        last_error_ = "Login RPC failed (" + std::to_string(status.error_code()) +
+                      "): " + status.error_message();
+        return false;
+    }
     session_token_ = login_resp.accesstoken();
     return true;
 }
@@ -86,6 +100,10 @@ void Client::Disconnect() {
     stub_.reset();
     channel_.reset();
     connected_ = false;
+}
+
+const std::string& Client::LastError() const {
+    return last_error_;
 }
 
 bool Client::WithReconnect(const std::function<bool()>& fn) {

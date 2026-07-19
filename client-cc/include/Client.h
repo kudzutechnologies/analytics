@@ -16,7 +16,7 @@ constexpr int kClientVersion = 3;
 struct AnalyticsClientConfig {
     std::string client_id;
     std::string client_key;
-    std::string endpoint = "analytics.v2.kudzu.gr:50051";
+    std::string endpoint = "ingress.eu1.cluster.kudzu.gr:443";
     // Optional CA PEM file appended to the system trust store (additive).
     std::string ca_file;
     std::string ssl_target_name_override;
@@ -34,6 +34,7 @@ public:
 
     bool Connect();
     void Disconnect();
+    const std::string& LastError() const;
     bool PushMetrics(const api::AnalyticsMetrics& metrics);
     bool GatewayUpsert(const api::ReqGatewayUpsert& req, api::RespGatewaySync* resp = nullptr);
     bool GatewayDelete(const api::ReqGatewayDelete& req, api::RespGatewaySync* resp = nullptr);
@@ -46,6 +47,7 @@ private:
     std::unique_ptr<api::AnalyticsServer::Stub> stub_;
     AnalyticsClientConfig config_;
     std::string session_token_;
+    std::string last_error_;
     bool connected_ = false;
 };
 
