@@ -33,7 +33,7 @@ An example of such configuration file is the following:
 # ======================================================
 
 # The following parameters are obtained from the Kudzu Analytics
-# platform https://analytics.v2.kudzu.gr/ and is typically shared
+# platform https://ingress.eu1.cluster.kudzu.gr/ and is typically shared
 # between all of the gateways of the same customer
 client-id="<api-client-id>"
 client-key="<api-client-key>"

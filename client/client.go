@@ -25,7 +25,7 @@ import (
 // v3 - Changed the payload structure to accommodate older compilers
 const ClientVersion = 3
 
-var defaultEndpoint string = "analytics.v2.kudzu.gr:50051"
+var defaultEndpoint string = "ingress.eu1.cluster.kudzu.gr:443"
 
 var (
 	// An error thrown when trying to use the client while not connected
