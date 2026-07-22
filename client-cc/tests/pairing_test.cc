@@ -32,10 +32,23 @@ int main() {
 
   ExpectEq(PairingBaseURL(PairingOptions{}), kDefaultPairingBaseURL, "default base URL");
 
+  PairingOptions with_legacy_endpoint;
+  with_legacy_endpoint.endpoint = "example.com:8443";
+  ExpectEq(PairingBaseURL(with_legacy_endpoint),
+           "https://example.com/api/v1/pairing/edge",
+           "legacy endpoint remains supported");
+
   PairingOptions with_endpoint;
-  with_endpoint.endpoint = "example.com:50051";
+  with_endpoint.endpoint = "https://example.com:8443/";
   ExpectEq(PairingBaseURL(with_endpoint),
-           "https://example.com/api/v1/pairing/edge", "endpoint strips port");
+           "https://example.com:8443/api/v1/pairing/edge",
+           "endpoint preserves origin and strips trailing slash");
+
+  PairingOptions with_api_endpoint;
+  with_api_endpoint.endpoint = "https://example.com/api/v1/pairing/edge/";
+  ExpectEq(PairingBaseURL(with_api_endpoint),
+           "https://example.com/api/v1/pairing/edge",
+           "endpoint does not duplicate API suffix");
 
   PairingOptions with_base;
   with_base.base_url = "https://custom/base/";
@@ -76,6 +89,12 @@ int main() {
   bad_pin.pin = "abc";
   Expect(!FetchPairingConfig(bad_pin, unused, err), "empty pin rejected");
   ExpectEq(err, "pairing PIN must contain digits", "empty pin message");
+
+  PairingOptions insecure;
+  insecure.pin = "123456";
+  insecure.endpoint = "http://console.example.com/";
+  Expect(!FetchPairingConfig(insecure, unused, err), "insecure endpoint rejected");
+  ExpectEq(err, "invalid URL", "insecure endpoint message");
 
   if (failures) {
     std::cerr << failures << " failure(s)\n";

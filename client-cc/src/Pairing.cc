@@ -18,18 +18,20 @@
 namespace client_cc {
 namespace {
 
-bool ParseUrl(const std::string& url, std::string& host, int& port, std::string& path) {
+constexpr const char* kPairingAPIPath = "/api/v1/pairing/edge";
+
+bool ParseUrl(const std::string& url,
+              std::string& host,
+              int& port,
+              std::string& path,
+              std::string& authority) {
   if (url.size() < 8 || url.substr(0, 8) != "https://") return false;
   size_t start = 8;
   size_t slash = url.find('/', start);
-  if (slash == std::string::npos) {
-    host = url.substr(start);
-    path = "/";
-    port = 443;
-    return true;
-  }
-  host = url.substr(start, slash - start);
-  path = url.substr(slash);
+  authority = slash == std::string::npos ? url.substr(start)
+                                         : url.substr(start, slash - start);
+  host = authority;
+  path = slash == std::string::npos ? "/" : url.substr(slash);
   port = 443;
   size_t colon = host.rfind(':');
   if (colon != std::string::npos && colon > 0) {
@@ -45,8 +47,9 @@ std::string HttpsGet(const std::string& url,
                      int* status_code,
                      std::string& error_msg) {
   std::string host, path;
+  std::string authority;
   int port = 443;
-  if (!ParseUrl(url, host, port, path)) {
+  if (!ParseUrl(url, host, port, path, authority)) {
     error_msg = "invalid URL";
     return "";
   }
@@ -127,7 +130,7 @@ std::string HttpsGet(const std::string& url,
 
   std::ostringstream req;
   req << "GET " << path << " HTTP/1.1\r\n"
-      << "Host: " << host << "\r\n"
+      << "Host: " << authority << "\r\n"
       << "Connection: close\r\n\r\n";
   std::string req_str = req.str();
   int n = SSL_write(ssl, req_str.data(), static_cast<int>(req_str.size()));
@@ -211,12 +214,33 @@ std::string PairingBaseURL(const PairingOptions& opts) {
     return url;
   }
   if (!opts.endpoint.empty()) {
-    std::string host = opts.endpoint;
-    size_t colon = host.find(':');
-    if (colon != std::string::npos) host = host.substr(0, colon);
-    return "https://" + host + "/api/v1/pairing/edge";
+    std::string endpoint = opts.endpoint;
+    while (!endpoint.empty() && endpoint.back() == '/') endpoint.pop_back();
+    const size_t path_len = std::strlen(kPairingAPIPath);
+    if (endpoint.size() >= path_len &&
+        endpoint.compare(endpoint.size() - path_len, path_len, kPairingAPIPath) == 0) {
+      return endpoint;
+    }
+    if (endpoint.find("://") == std::string::npos) {
+      size_t colon = endpoint.find(':');
+      if (colon != std::string::npos) endpoint = endpoint.substr(0, colon);
+      endpoint = "https://" + endpoint;
+    }
+    return endpoint + kPairingAPIPath;
   }
   return kDefaultPairingBaseURL;
+}
+
+std::string DefaultPairingEndpoint() {
+  std::string base_url = kDefaultPairingBaseURL;
+  return base_url.substr(0, base_url.size() - std::strlen(kPairingAPIPath));
+}
+
+bool IsProtectedPairingConfigKey(const std::string& key) {
+  return key == "client-id" || key == "client-key" || key == "gateway" ||
+         key == "analytics-endpoint" || key == "pairing-endpoint" ||
+         key == "analytics-ca-file" || key == "analytics-ssl-target-name" ||
+         key == "config" || key == "pair-pin" || key == "write";
 }
 
 bool ParsePairingResponseJSON(const std::string& body,

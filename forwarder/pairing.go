@@ -23,13 +23,17 @@ func toFlatMap(input interface{}) map[string]interface{} {
 func getRenderedPairConfig(pin string, config ForwarderConfig) (string, error) {
 	pairConfig, err := client.FetchPairingConfig(client.PairingOptions{
 		Pin:      pin,
-		Endpoint: config.Endpoint,
+		Endpoint: config.PairingEndpoint,
 		CAFile:   config.CAFile,
 	})
 	if err != nil {
 		return "", err
 	}
 
+	return renderPairConfig(config, pairConfig), nil
+}
+
+func renderPairConfig(config ForwarderConfig, pairConfig *client.PairingConfig) string {
 	// Update known config properties
 	config.ClientId = pairConfig.ClientID
 	config.ClientKey = pairConfig.ClientKey
@@ -38,6 +42,9 @@ func getRenderedPairConfig(pin string, config ForwarderConfig) (string, error) {
 	// Merge extras
 	configMap := toFlatMap(config)
 	for k, v := range pairConfig.Extras {
+		if client.IsProtectedPairingConfigKey(k) {
+			continue
+		}
 		configMap[k] = v
 	}
 
@@ -51,5 +58,5 @@ func getRenderedPairConfig(pin string, config ForwarderConfig) (string, error) {
 		iniConfig += fmt.Sprintf("%s=%v\n", k, v)
 	}
 
-	return iniConfig, nil
+	return iniConfig
 }

@@ -11,8 +11,11 @@ import (
 )
 
 const (
+	pairingAPIPath = "/api/v1/pairing/edge"
+	// DefaultPairingEndpoint is the default HTTPS origin used for edge pairing.
+	DefaultPairingEndpoint = "https://console.eu1.cluster.kudzu.gr"
 	// DefaultPairingBaseURL is the default HTTPS endpoint used for edge pairing.
-	DefaultPairingBaseURL = "https://console.eu1.cluster.kudzu.gr/api/v1/pairing/edge"
+	DefaultPairingBaseURL = DefaultPairingEndpoint + pairingAPIPath
 	defaultPairingTimeout = 30 * time.Second
 )
 
@@ -21,10 +24,11 @@ type PairingOptions struct {
 	// Pin is the pairing PIN. Non-digit characters are stripped before use.
 	Pin string
 	// BaseURL is the pairing API base URL without the trailing PIN segment.
-	// When empty, DefaultPairingBaseURL is used.
+	// It takes precedence over Endpoint. When both are empty,
+	// DefaultPairingBaseURL is used.
 	BaseURL string
-	// Endpoint is an optional analytics host[:port]. When set and BaseURL is
-	// empty, the pairing URL becomes https://{Endpoint}/api/v1/pairing/edge.
+	// Endpoint is an optional pairing HTTPS origin/base URL. Legacy host:port
+	// values remain supported. BaseURL takes precedence.
 	Endpoint string
 	// CAFile is an optional PEM CA bundle appended to the system trust store.
 	CAFile string
@@ -38,6 +42,20 @@ type PairingConfig struct {
 	ClientID  string                 `json:"client-id"`
 	ClientKey string                 `json:"client-key"`
 	Extras    map[string]interface{} `json:"extras,omitempty"`
+}
+
+// IsProtectedPairingConfigKey reports whether a pairing response extra must
+// not replace local identity or transport configuration.
+func IsProtectedPairingConfigKey(key string) bool {
+	switch key {
+	case "client-id", "client-key", "gateway",
+		"analytics-endpoint", "pairing-endpoint",
+		"analytics-ca-file", "analytics-ssl-target-name",
+		"config", "pair-pin", "write":
+		return true
+	default:
+		return false
+	}
 }
 
 // NormalizePairingPin keeps only ASCII digits from pin.
@@ -56,7 +74,14 @@ func PairingBaseURL(opts PairingOptions) string {
 		return strings.TrimRight(opts.BaseURL, "/")
 	}
 	if opts.Endpoint != "" {
-		return fmt.Sprintf("https://%s/api/v1/pairing/edge", opts.Endpoint)
+		endpoint := strings.TrimRight(opts.Endpoint, "/")
+		if strings.HasSuffix(endpoint, pairingAPIPath) {
+			return endpoint
+		}
+		if !strings.Contains(endpoint, "://") {
+			endpoint = "https://" + endpoint
+		}
+		return fmt.Sprintf("%s%s", endpoint, pairingAPIPath)
 	}
 	return DefaultPairingBaseURL
 }
@@ -86,7 +111,11 @@ func FetchPairingConfig(opts PairingOptions) (*PairingConfig, error) {
 		},
 	}
 
-	url := fmt.Sprintf("%s/%s", PairingBaseURL(opts), pin)
+	baseURL := PairingBaseURL(opts)
+	if !strings.HasPrefix(baseURL, "https://") {
+		return nil, fmt.Errorf("pairing endpoint must use HTTPS")
+	}
+	url := fmt.Sprintf("%s/%s", baseURL, pin)
 	resp, err := httpClient.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("error making GET request: %w", err)

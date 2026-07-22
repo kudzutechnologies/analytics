@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -28,8 +29,14 @@ func TestPairingBaseURL(t *testing.T) {
 	if got := PairingBaseURL(PairingOptions{}); got != DefaultPairingBaseURL {
 		t.Fatalf("default = %q, want %q", got, DefaultPairingBaseURL)
 	}
-	if got := PairingBaseURL(PairingOptions{Endpoint: "example.com:443"}); got != "https://example.com:443/api/v1/pairing/edge" {
+	if got := PairingBaseURL(PairingOptions{Endpoint: "example.com:8443"}); got != "https://example.com:8443/api/v1/pairing/edge" {
+		t.Fatalf("legacy endpoint = %q", got)
+	}
+	if got := PairingBaseURL(PairingOptions{Endpoint: "https://example.com:8443/"}); got != "https://example.com:8443/api/v1/pairing/edge" {
 		t.Fatalf("endpoint = %q", got)
+	}
+	if got := PairingBaseURL(PairingOptions{Endpoint: "https://example.com/api/v1/pairing/edge/"}); got != "https://example.com/api/v1/pairing/edge" {
+		t.Fatalf("endpoint with API suffix = %q", got)
 	}
 	if got := PairingBaseURL(PairingOptions{BaseURL: "https://custom/base/", Endpoint: "ignored"}); got != "https://custom/base" {
 		t.Fatalf("baseURL = %q", got)
@@ -136,6 +143,16 @@ func TestFetchPairingConfigEmptyPin(t *testing.T) {
 	_, err := FetchPairingConfig(PairingOptions{Pin: "abc"})
 	if err == nil {
 		t.Fatal("expected empty PIN error")
+	}
+}
+
+func TestFetchPairingConfigRejectsInsecureEndpoint(t *testing.T) {
+	_, err := FetchPairingConfig(PairingOptions{
+		Pin:      "123456",
+		Endpoint: "http://console.example.com/",
+	})
+	if err == nil || !strings.Contains(err.Error(), "HTTPS") {
+		t.Fatalf("expected HTTPS endpoint error, got %v", err)
 	}
 }
 

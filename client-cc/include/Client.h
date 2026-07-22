@@ -12,11 +12,13 @@ namespace client_cc {
 
 // Protocol version; must match analytics/client (v3: payload structure for older compilers).
 constexpr int kClientVersion = 3;
+inline constexpr const char* kDefaultAnalyticsEndpoint =
+    "ingress.eu1.cluster.kudzu.gr:443";
 
 struct AnalyticsClientConfig {
     std::string client_id;
     std::string client_key;
-    std::string endpoint = "ingress.eu1.cluster.kudzu.gr:443";
+    std::string endpoint = kDefaultAnalyticsEndpoint;
     // Optional CA PEM file appended to the system trust store (additive).
     std::string ca_file;
     std::string ssl_target_name_override;

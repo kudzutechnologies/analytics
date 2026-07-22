@@ -56,6 +56,7 @@ int main() {
 
 client_cc::PairingOptions opts;
 opts.pin = "123-456";
+opts.endpoint = "https://console.eu1.cluster.kudzu.gr";  // optional origin override
 opts.ca_file = "/path/to/extra-ca.pem";  // optional
 
 client_cc::PairingConfig cfg;
@@ -66,7 +67,9 @@ if (!client_cc::FetchPairingConfig(opts, cfg, error)) {
 // cfg.client_id, cfg.client_key, cfg.gateway_id, cfg.extras
 ```
 
-Default pairing base URL: `https://eu1.cluster.kudzu.gr/api/v1/pairing/edge`.
+Default pairing endpoint: `https://console.eu1.cluster.kudzu.gr`; the client
+appends `/api/v1/pairing/edge`. `PairingOptions::base_url` remains available as
+a higher-priority full API base-path override.
 
 ## API
 - `AnalyticsClientConfig`: Configuration struct for the client.

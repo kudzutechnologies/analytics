@@ -20,6 +20,7 @@ void ConfigToIniMap(const Config& c, IniMap& out) {
   out["gateway-location"] = c.gateway_location;
   out["gateway-radios"] = c.gateway_radios;
   out["analytics-endpoint"] = c.endpoint;
+  out["pairing-endpoint"] = c.pairing_endpoint;
   out["analytics-ca-file"] = c.ca_file;
   out["analytics-ssl-target-name"] = c.ssl_target_name_override;
   out["connect-host"] = c.connect_host;
@@ -64,6 +65,7 @@ std::string RenderIni(const Config& config, const std::map<std::string, std::str
   IniMap config_map;
   ConfigToIniMap(config, config_map);
   for (const auto& p : extras) {
+    if (client_cc::IsProtectedPairingConfigKey(p.first)) continue;
     config_map[p.first] = p.second;
   }
   Config default_c = DefaultConfig();
@@ -81,12 +83,21 @@ std::string RenderIni(const Config& config, const std::map<std::string, std::str
 
 }  // namespace
 
+std::string RenderPairConfig(const Config& current_config,
+                             const client_cc::PairingConfig& pair_config) {
+  Config merged = current_config;
+  merged.client_id = pair_config.client_id;
+  merged.client_key = pair_config.client_key;
+  merged.gateway_id = pair_config.gateway_id;
+  return RenderIni(merged, pair_config.extras);
+}
+
 std::string GetRenderedPairConfig(const std::string& pin,
                                   const Config& current_config,
                                   std::string& error_msg) {
   client_cc::PairingOptions opts;
   opts.pin = pin;
-  opts.endpoint = current_config.endpoint;
+  opts.endpoint = current_config.pairing_endpoint;
   opts.ca_file = current_config.ca_file;
 
   client_cc::PairingConfig pair_config;
@@ -94,11 +105,7 @@ std::string GetRenderedPairConfig(const std::string& pin,
     return "";
   }
 
-  Config merged = current_config;
-  merged.client_id = pair_config.client_id;
-  merged.client_key = pair_config.client_key;
-  merged.gateway_id = pair_config.gateway_id;
-  return RenderIni(merged, pair_config.extras);
+  return RenderPairConfig(current_config, pair_config);
 }
 
 }  // namespace forwarder_cc

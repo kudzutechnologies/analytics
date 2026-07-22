@@ -1,5 +1,8 @@
 #pragma once
 
+#include "AnalyticsPairing.h"
+#include "Client.h"
+
 #include <cstdint>
 #include <string>
 
@@ -26,7 +29,8 @@ struct Config {
   // Analytics client
   std::string client_id;
   std::string client_key;
-  std::string endpoint;
+  std::string endpoint = client_cc::kDefaultAnalyticsEndpoint;
+  std::string pairing_endpoint = client_cc::DefaultPairingEndpoint();
   std::string ca_file;  // path to CA cert for TLS (analytics gRPC)
   std::string ssl_target_name_override;  // TLS server name for verification
   int connect_timeout = 0;

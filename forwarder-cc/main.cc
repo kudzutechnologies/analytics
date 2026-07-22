@@ -63,11 +63,6 @@ int main(int argc, char* argv[]) {
     std::cerr << "forwarder-cc: --gateway is required when not server-side\n";
     return 1;
   }
-  // Align with client-cc / Go default when unset.
-  if (config.endpoint.empty()) {
-    config.endpoint = "ingress.eu1.cluster.kudzu.gr:443";
-  }
-
   client_cc::AnalyticsClientConfig client_config;
   client_config.client_id = config.client_id;
   client_config.client_key = config.client_key;

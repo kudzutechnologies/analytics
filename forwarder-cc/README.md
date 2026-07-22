@@ -71,6 +71,7 @@ Same semantics as the [Go forwarder](../forwarder). Config file, environment var
 | `--gateway-location` | | `lat,lon[,alt]` for upsert |
 | `--gateway-radios` | | `rf_chain:max_tx_power[:tx_sensitivity][,...]` |
 | `--analytics-endpoint` | `ingress.eu1.cluster.kudzu.gr:443` | Analytics gRPC endpoint |
+| `--pairing-endpoint` | `https://console.eu1.cluster.kudzu.gr` | Pairing HTTPS base URL |
 | `--analytics-ca-file` | | Optional CA PEM (additive to system trust) |
 | `--analytics-ssl-target-name` | | TLS SNI / cert hostname override (C++-specific) |
 | `--listen-host` | `127.0.0.1` | Bind address for UDP proxy |
@@ -100,7 +101,10 @@ If any of `gateway-eid`, `gateway-eui`, `gateway-name`, `gateway-location`, or `
 ./forwarder-cc --pair-pin=YOUR_PIN --write --config=/etc/kudzu-forwarder.conf
 ```
 
-Default pairing URL (when `--analytics-endpoint` unset): `https://console.eu1.cluster.kudzu.gr/api/v1/pairing/edge`.
+Default pairing endpoint: `https://console.eu1.cluster.kudzu.gr`. The client
+appends `/api/v1/pairing/edge`. Override it with `--pairing-endpoint`, the
+`pairing-endpoint` INI key, or `PAIRING_ENDPOINT`. Pairing never derives its URL
+from the independent `analytics-endpoint` gRPC setting.
 
 ### Example
 

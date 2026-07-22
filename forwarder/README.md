@@ -85,7 +85,7 @@ You can then launch the client using:
 | Parameter Name | Required | Default | Description |
 |---|---|---|---|
 | **analytics-connect-timeout** | | `0` |  how long to wait for analytics connection |
-| **analytics-endpoint** | | `""` |  the analytics endpoint to push the data to |
+| **analytics-endpoint** | | `ingress.eu1.cluster.kudzu.gr:443` | Analytics gRPC endpoint |
 | **analytics-ca-file** | | `""` |  optional CA PEM appended to the system trust store for analytics gRPC and pairing HTTPS |
 | **analytics-max-backoff** | | `0` |  the maximum time to wait for reconnecting |
 | **analytics-request-timeout** | | `0` |  how long to wait for analytics to be pushed |
@@ -113,9 +113,27 @@ You can then launch the client using:
 | **log-file** | | `""` |  writes the program output to the specified logfile |
 | **log-level** | | `"info"` |  selects the verbosity of logging, can be 'error', 'warn', 'info', 'debug' |
 | **max-udp-streams** | | `0` |  how many distinct UDP streams to maintain. Only useful on server-side mode |
+| **pairing-endpoint** | | `https://console.eu1.cluster.kudzu.gr` | HTTPS base URL used only for pairing |
+| **pair-pin** | | `""` | Fetch configuration using a pairing PIN and exit |
 | **queue-size** | | `100` |  how many items to keep in the queue |
 | **server-side** | | `false` |  the forwarder runs on the server-side |
+| **write** | | `false` | With **pair-pin**, write the result to **config** |
 | **version** | | `false` |  show the package version and exit |
+
+### Pairing
+
+Pairing uses the console HTTPS API independently from the analytics gRPC ingress:
+
+```sh
+/usr/bin/kudzu-forwarder --pair-pin=123456
+/usr/bin/kudzu-forwarder --pair-pin=123456 \
+  --pairing-endpoint=https://console.example.com/ \
+  --config=/etc/kudzu-forwarder.conf --write
+```
+
+The base URL can also be set as `pairing-endpoint` in the config file or
+`PAIRING_ENDPOINT` in the environment. The client appends
+`/api/v1/pairing/edge`; `analytics-endpoint` is never used for pairing.
 
 ### Alternative Configuration Ways
 

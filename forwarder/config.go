@@ -6,6 +6,7 @@ import (
 	"os"
 	"runtime/debug"
 
+	"github.com/kudzutechnologies/analytics/client"
 	"github.com/namsral/flag"
 	log "github.com/sirupsen/logrus"
 )
@@ -24,6 +25,7 @@ type ForwarderConfig struct {
 	ConnectTimeout       int    `json:"connect-timeout,omitempty"`
 	DebugDump            string `json:"debug-dump,omitempty"`
 	Endpoint             string `json:"analytics-endpoint,omitempty"`
+	PairingEndpoint      string `json:"pairing-endpoint,omitempty"`
 	CAFile               string `json:"analytics-ca-file,omitempty"`
 	FlushInterval        int    `json:"flush-interval,omitempty"`
 	GatewayId            string `json:"gateway,omitempty"`
@@ -55,7 +57,8 @@ var defaultConf = ForwarderConfig{
 	ConnectRetryInterval: 1,
 	ConnectTimeout:       0,
 	DebugDump:            "",
-	Endpoint:             "",
+	Endpoint:             client.DefaultEndpoint,
+	PairingEndpoint:      client.DefaultPairingEndpoint,
 	CAFile:               "",
 	FlushInterval:        0,
 	GatewayId:            "",
@@ -103,6 +106,7 @@ func ParseConfigFromEnv() ForwarderConfig {
 	flag.StringVar(&config.ClientId, "client-id", defaultConf.ClientId, "the client ID to use for connecting to Kudzu Analytics")
 	flag.StringVar(&config.ClientKey, "client-key", defaultConf.ClientKey, "the private client key to use for connecting to Kudzu Analytics")
 	flag.StringVar(&config.Endpoint, "analytics-endpoint", defaultConf.Endpoint, "the analytics endpoint to push the data to")
+	flag.StringVar(&config.PairingEndpoint, "pairing-endpoint", defaultConf.PairingEndpoint, "the HTTPS base URL used for pairing")
 	flag.StringVar(&config.CAFile, "analytics-ca-file", defaultConf.CAFile, "optional CA certificate file appended to the system trust store for analytics TLS")
 	flag.IntVar(&config.ConnectTimeout, "analytics-connect-timeout", defaultConf.ConnectTimeout, "how long to wait for analytics connection")
 	flag.IntVar(&config.RequestTimeout, "analytics-request-timeout", defaultConf.RequestTimeout, "how long to wait for analytics to be pushed")

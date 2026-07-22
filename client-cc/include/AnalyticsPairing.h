@@ -5,6 +5,7 @@
 
 namespace client_cc {
 
+// Default pairing API base URL without the trailing PIN segment.
 inline constexpr const char* kDefaultPairingBaseURL =
     "https://console.eu1.cluster.kudzu.gr/api/v1/pairing/edge";
 
@@ -14,8 +15,9 @@ struct PairingOptions {
   // Pairing API base URL without the trailing PIN segment.
   // When empty, endpoint or kDefaultPairingBaseURL is used.
   std::string base_url;
-  // Optional analytics host[:port]. When set and base_url is empty, the pairing
-  // URL becomes https://{host}/api/v1/pairing/edge (port stripped from host).
+  // Optional pairing HTTPS origin/base URL. Legacy analytics host:port values
+  // remain supported (the analytics port is discarded). base_url takes
+  // precedence.
   std::string endpoint;
   // Optional PEM CA file appended to the system trust store.
   std::string ca_file;
@@ -28,11 +30,18 @@ struct PairingConfig {
   std::map<std::string, std::string> extras;
 };
 
+// Return true when a pairing response extra must not replace local identity
+// or transport configuration.
+bool IsProtectedPairingConfigKey(const std::string& key);
+
 // Keep only ASCII digits from pin.
 std::string NormalizePairingPin(const std::string& pin);
 
 // Resolve the pairing base URL from options.
 std::string PairingBaseURL(const PairingOptions& opts);
+
+// Return the default HTTPS pairing origin without the API path.
+std::string DefaultPairingEndpoint();
 
 // Parse a pairing JSON response body into PairingConfig.
 // Returns false and sets error_msg on failure.

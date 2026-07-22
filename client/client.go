@@ -25,7 +25,7 @@ import (
 // v3 - Changed the payload structure to accommodate older compilers
 const ClientVersion = 3
 
-var defaultEndpoint string = "ingress.eu1.cluster.kudzu.gr:443"
+const DefaultEndpoint = "ingress.eu1.cluster.kudzu.gr:443"
 
 var (
 	// An error thrown when trying to use the client while not connected
@@ -159,7 +159,7 @@ func (c *Client) Connect() error {
 		return fmt.Errorf("could not load CA certificate: %w", err)
 	}
 
-	endpoint := defaultEndpoint
+	endpoint := DefaultEndpoint
 	if c.config.Endpoint != "" {
 		endpoint = c.config.Endpoint
 	}

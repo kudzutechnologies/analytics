@@ -52,6 +52,7 @@ static void ApplyConfigKey(Config& c, const std::string& key, const std::string&
   if (key == "client-id") { c.client_id = value; return; }
   if (key == "client-key") { c.client_key = value; return; }
   if (key == "analytics-endpoint") { c.endpoint = value; return; }
+  if (key == "pairing-endpoint") { c.pairing_endpoint = value; return; }
   if (key == "analytics-ca-file") { c.ca_file = value; return; }
   if (key == "analytics-ssl-target-name") { c.ssl_target_name_override = value; return; }
   if (key == "analytics-connect-timeout") { c.connect_timeout = std::atoi(value.c_str()); return; }
@@ -122,6 +123,7 @@ void ApplyEnv(Config& c) {
   c.client_id = GetEnv("CLIENT_ID", c.client_id);
   c.client_key = GetEnv("CLIENT_KEY", c.client_key);
   c.endpoint = GetEnv("ANALYTICS_ENDPOINT", c.endpoint);
+  c.pairing_endpoint = GetEnv("PAIRING_ENDPOINT", c.pairing_endpoint);
   c.ca_file = GetEnv("ANALYTICS_CA_FILE", c.ca_file);
   c.ssl_target_name_override = GetEnv("ANALYTICS_SSL_TARGET_NAME", c.ssl_target_name_override);
   c.connect_timeout = GetEnvInt("ANALYTICS_CONNECT_TIMEOUT", c.connect_timeout);
@@ -206,6 +208,7 @@ bool ParseConfig(int argc, char* argv[], Config& out, std::string* validation_er
     if (handle("client-id", [&](const std::string& v) { out.client_id = v; })) continue;
     if (handle("client-key", [&](const std::string& v) { out.client_key = v; })) continue;
     if (handle("analytics-endpoint", [&](const std::string& v) { out.endpoint = v; })) continue;
+    if (handle("pairing-endpoint", [&](const std::string& v) { out.pairing_endpoint = v; })) continue;
     if (handle("analytics-ca-file", [&](const std::string& v) { out.ca_file = v; })) continue;
     if (handle("analytics-ssl-target-name", [&](const std::string& v) { out.ssl_target_name_override = v; })) continue;
     if (handle("analytics-connect-timeout", [&](const std::string& v) { out.connect_timeout = std::atoi(v.c_str()); })) continue;
@@ -242,7 +245,7 @@ bool ParseConfig(int argc, char* argv[], Config& out, std::string* validation_er
                    "[--client-key=KEY] [--gateway=ID] ...\n"
                 << "       [--gateway-eid=] [--gateway-eui=] [--gateway-name=] "
                    "[--gateway-location=] [--gateway-radios=]\n"
-                << "       [--pair-pin=PIN] [--write]  fetch config from server and exit\n"
+                << "       [--pair-pin=PIN] [--pairing-endpoint=URL] [--write]\n"
                 << "       [--log-level=] [--log-file=] [--debug-dump=] [--connect-retry-interval=]\n";
       return false;
     }
