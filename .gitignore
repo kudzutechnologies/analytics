@@ -10,6 +10,7 @@ forwarder-bs/kudzu-forwarder-bs-*
 *.dmp
 *.local
 build
+releases/
 
 # Kerlink IPK builder
 *.ipk
