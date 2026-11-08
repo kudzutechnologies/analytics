@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/hex"
-	"strings"
 	"sync"
 	"time"
 
@@ -389,17 +388,10 @@ func (f *AnalyticsForwarder) OnSessionClosed(key string) {
 
 // GatewayEUIFromRouter parses router string (16 hex chars, optional separators) to 8-byte EUI.
 func GatewayEUIFromRouter(router string) []byte {
-	const hexChars = "0123456789abcdefABCDEF"
-	s := router
-	for _, sep := range []string{"-", ":", " "} {
-		s = strings.ReplaceAll(s, sep, "")
-	}
-	if len(s) != 16 {
+	id, err := ParseGatewayID(router)
+	if err != nil {
 		return nil
 	}
-	eui, err := hex.DecodeString(s)
-	if err != nil || len(eui) != 8 {
-		return nil
-	}
+	eui, _ := hex.DecodeString(id)
 	return eui
 }

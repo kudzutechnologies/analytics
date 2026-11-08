@@ -24,12 +24,12 @@ import (
 )
 
 const (
-	caCertFile     = "ca.crt"
-	caKeyFile      = "ca.key"
-	bootstrapCert  = "bootstrap.crt"
-	bootstrapKey   = "bootstrap.key"
-	certValidity   = 365 * 24 * time.Hour
-	caValidity     = 10 * 365 * 24 * time.Hour
+	caCertFile    = "ca.crt"
+	caKeyFile     = "ca.key"
+	bootstrapCert = "bootstrap.crt"
+	bootstrapKey  = "bootstrap.key"
+	certValidity  = 365 * 24 * time.Hour
+	caValidity    = 10 * 365 * 24 * time.Hour
 )
 
 // CertStore holds per-gateway client certs, the CA, per-gateway LNS config (from router-info), and legacy data URIs.
@@ -84,23 +84,6 @@ func NewCertStore(dir, caCertPath, caKeyPath string) (*CertStore, error) {
 		return nil, err
 	}
 	return s, nil
-}
-
-// NormalizeGatewayID returns a stable, filesystem-safe ID from a CUPS "router" value (ID6 or hex).
-func NormalizeGatewayID(router string) string {
-	s := strings.ReplaceAll(router, "-", "")
-	s = strings.ReplaceAll(s, ":", "")
-	s = strings.ReplaceAll(s, " ", "")
-	s = strings.ToLower(s)
-	var b strings.Builder
-	for _, r := range s {
-		if (r >= 'a' && r <= 'f') || (r >= '0' && r <= '9') {
-			b.WriteRune(r)
-		} else {
-			b.WriteRune('_')
-		}
-	}
-	return b.String()
 }
 
 func loadCAFromPaths(caCertPath, caKeyPath string) (*x509.Certificate, crypto.Signer, error) {

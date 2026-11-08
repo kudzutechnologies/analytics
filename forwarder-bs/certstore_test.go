@@ -16,7 +16,7 @@ func TestNormalizeGatewayID(t *testing.T) {
 		{"01:02:03:04:05:06:07:08", "0102030405060708"},
 		{"0102030405060708", "0102030405060708"},
 		{"AA-BB-CC-DD-EE-FF-00-11", "aabbccddeeff0011"},
-		{"x-y-z", "___"}, // non-hex chars become _
+		{"x-y-z", ""}, // non-hex chars become _
 	}
 	for _, tt := range tests {
 		got := NormalizeGatewayID(tt.in)
