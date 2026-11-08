@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -168,5 +169,59 @@ func TestUnauthenticatedOriginRedirectRejected(t *testing.T) {
 	}
 	if c.allowedUpstream("wss://user:secret@configured.example:443") {
 		t.Fatal("accepted URI credentials")
+	}
+}
+
+func TestLongIdleConnection(t *testing.T) {
+	if os.Getenv("ANALYTICS_SLOW_TESTS") != "1" {
+		t.Skip("release integration: set ANALYTICS_SLOW_TESTS=1")
+	}
+	up := websocket.Upgrader{}
+	lns := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		c, e := up.Upgrade(w, r, nil)
+		if e != nil {
+			return
+		}
+		defer c.Close()
+		for {
+			mt, raw, e := c.ReadMessage()
+			if e != nil {
+				return
+			}
+			if c.WriteMessage(mt, raw) != nil {
+				return
+			}
+		}
+	}))
+	defer lns.Close()
+	_, proxy := startProxyFixture(t, &WSProxyConfig{ConnectURI: wsURL(lns.URL)})
+	c, _, e := websocket.DefaultDialer.Dial(wsURL(proxy.URL)+"/?router=0102030405060708", nil)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer c.Close()
+	done := make(chan error, 1)
+	go func() {
+		_, raw, err := c.ReadMessage()
+		if err == nil && string(raw) != "after idle" {
+			err = context.Canceled
+		}
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		t.Fatalf("disconnected before 75 seconds: %v", err)
+	case <-time.After(75 * time.Second):
+	}
+	if e = c.WriteMessage(websocket.TextMessage, []byte("after idle")); e != nil {
+		t.Fatal(e)
+	}
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("no response after idle")
 	}
 }
