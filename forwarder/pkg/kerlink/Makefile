@@ -8,14 +8,14 @@ IPKG_DELETE_FILE:=kudzu-forwarder_$(PKG_VERSION)_klkgw.ipk-remove.ipk
 all: $(IPKG_FILE) $(IPKG_DELETE_FILE)
 
 $(IPKG_FILE): container $(BIN_DIR)/$(BINFILE)
-	docker run --rm \
+	docker run --rm -e VERSION="$(PKG_VERSION)" \
 		-v $(PKG_DIR):/assets/pkg \
 		-v $(BIN_DIR)/$(BINFILE):/assets/bin/$(BINFILE) \
 		ipkg_build:latest \
 		/assets/pkg/ipk/build.sh
 
 $(IPKG_DELETE_FILE): $(IPKG_FILE)
-	docker run --rm \
+	docker run --rm -e VERSION="$(PKG_VERSION)" \
 		-v $(PKG_DIR):/assets/pkg \
 		-v $(BIN_DIR)/$(BINFILE):/assets/bin/$(BINFILE) \
 		-w /assets/pkg \

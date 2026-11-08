@@ -7,7 +7,7 @@
 #
 # Expects client-cc at ../client-cc.
 
-cmake_minimum_required(VERSION 3.14)
+cmake_minimum_required(VERSION 3.24)
 project(basicstation_analytics LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -33,7 +33,7 @@ execute_process(
 if(NOT BS_ANALYTICS_GIT_HASH)
   set(BS_ANALYTICS_GIT_HASH "unknown")
 endif()
-set(BS_ANALYTICS_VERSION "0.1.0")
+set(BS_ANALYTICS_VERSION "dev" CACHE STRING "Release version")
 
 # -----------------------------------------------------------------------------
 # client-cc
@@ -79,6 +79,14 @@ endif()
 # -----------------------------------------------------------------------------
 add_executable(basicstation-analytics main.cc)
 target_link_libraries(basicstation-analytics PRIVATE bs-analytics-core)
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+  target_compile_options(bs-analytics-core PRIVATE -ffunction-sections -fdata-sections)
+  if(APPLE)
+    target_link_options(basicstation-analytics PRIVATE -Wl,-dead_strip)
+  else()
+    target_link_options(basicstation-analytics PRIVATE -Wl,--gc-sections)
+  endif()
+endif()
 install(TARGETS basicstation-analytics RUNTIME DESTINATION bin)
 
 # -----------------------------------------------------------------------------

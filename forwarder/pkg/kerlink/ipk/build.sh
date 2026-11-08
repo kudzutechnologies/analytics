@@ -1,7 +1,7 @@
 #!/bin/sh
 ########################
 OPKG_PKG_NAME="kudzu-forwarder"
-VERSION="0.1.14"
+VERSION="${VERSION:-0.1.14}"
 ARCH="klkgw"
 ########################
 ASSETS_DIR="/assets/pkg"
@@ -13,6 +13,7 @@ OPKG_PKG_DIR="${BUILD_DIR}/package"
 rm -rf ${OPKG_PKG_DIR}
 mkdir -p ${OPKG_PKG_DIR}/CONTROL
 cp ${ASSETS_DIR}/ipk/control ${OPKG_PKG_DIR}/CONTROL/control
+sed -i "s/^Version: .*/Version: ${VERSION}/" ${OPKG_PKG_DIR}/CONTROL/control
 
 # -- Create package files --
 

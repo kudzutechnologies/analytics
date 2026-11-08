@@ -19,7 +19,7 @@
 #
 # Requires: gRPC, Protobuf, OpenSSL (unless disabled)
 
-cmake_minimum_required(VERSION 3.14)
+cmake_minimum_required(VERSION 3.24)
 project(client_cc LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -222,3 +222,9 @@ message(STATUS "Protobuf: ${CLIENT_CC_PROTOBUF_LIBS}")
 message(STATUS "gRPC include: ${gRPC_INCLUDE_DIRS}")
 
 install(DIRECTORY "${CLIENT_CC_GENERATED_DIR}/" DESTINATION include/protobuf FILES_MATCHING PATTERN "*.h")
+
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/dependency-versions.json"
+  "{\"protobuf\":\"${Protobuf_VERSION}\",\"grpc\":\"${gRPC_VERSION}\",\"protoc\":\"${CLIENT_CC_PROTOC_VERSION}\"}\n")
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+  target_compile_options(client-cc PRIVATE -ffunction-sections -fdata-sections)
+endif()

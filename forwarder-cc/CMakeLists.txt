@@ -6,7 +6,7 @@
 #
 # Uses client-cc as a sub-project (same repo). No -march=native for portability.
 
-cmake_minimum_required(VERSION 3.14)
+cmake_minimum_required(VERSION 3.24)
 project(forwarder_cc LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 17)

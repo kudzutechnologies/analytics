@@ -21,7 +21,7 @@ Auth: JWT `token` metadata like `PushMetrics` (Hello/Login remain unauthenticate
 `make api` regenerates:
 
 1. Go: `api/*.pb.go`, `api/*_grpc.pb.go`
-2. C++: `client-cc/src/protobuf/*.{pb,grpc.pb}.{cc,h}` via `protoc` + `grpc_cpp_plugin`
+2. C++: build-tree `generated/protobuf/*.{pb,grpc.pb}.{cc,h}` using host tools matching the target runtime; checked-in legacy gencode is not compiled by CMake
 
 Keep Go and C++ clients in parity (`client/client.go`, `client-cc`). Forwarder behavior must stay in parity between `forwarder/` (Go) and `forwarder-cc/` (C++).
 

@@ -11,6 +11,7 @@ parser=argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--producer-header',type=Path,required=True)
 parser.add_argument('--producer-ref',required=True,help='Pinned producer commit')
 parser.add_argument('--cxx',default='c++')
+parser.add_argument('--sysroot')
 parser.add_argument('--include-dir',type=Path,action='append',default=[])
 a=parser.parse_args()
 if not a.producer_header.is_file():parser.error('producer header is unavailable; ABI gate is blocked')
@@ -36,5 +37,5 @@ for name,members in fields.items():
 lines += [f'static_assert({c}==producer_constant_{c},"{c} mismatch");' for c in constants]
 with tempfile.TemporaryDirectory(prefix='basicstation-abi-') as directory:
  source=Path(directory)/'layout.cc';source.write_text('\n'.join(lines)+'\n')
- subprocess.run([a.cxx,'-std=c++17','-fsyntax-only',str(source),*[v for p in a.include_dir for v in ('-I',str(p))]],check=True)
+ subprocess.run([a.cxx,'-std=c++17','-fsyntax-only',str(source),*(['--sysroot='+a.sysroot] if a.sysroot else []),*[v for p in a.include_dir for v in ('-I',str(p))]],check=True)
 print(json.dumps({'layout_verified':True,'producer_ref':a.producer_ref,'producer_header_sha256':hashlib.sha256(a.producer_header.read_bytes()).hexdigest(),'radio_semantics_and_producer_fixtures':'still require validation'},indent=2))

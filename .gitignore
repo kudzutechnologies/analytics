@@ -26,3 +26,6 @@ forwarder-bs/*.crt
 forwarder-bs/*.pem
 forwarder-bs/*.key
 forwarder-bs/certs
+
+# Python build/verification helpers
+__pycache__/
