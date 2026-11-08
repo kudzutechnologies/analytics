@@ -231,17 +231,21 @@ def main():
     threading.Thread(target=fixture.serve_forever, daemon=True).start()
     try:
         binaries = {'go': args.go_binary.resolve(), 'cpp': args.cpp_binary.resolve()}
+        source_commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
+        source_dirty = bool(subprocess.check_output(['git','status','--porcelain','--untracked-files=no'],cwd=ROOT,text=True).strip())
+        binary_info = {component: dict(bytes=binary.stat().st_size, sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),
+                                      version=subprocess.check_output([str(binary),'--version'],text=True).strip(),
+                                      dynamic_dependencies=dependencies(binary)) for component,binary in binaries.items()}
         results = [run(binary, component, profile, args.seconds, fixture.server_port)
                    for component, binary in binaries.items() for profile in ['default', 'minimum']]
         result = dict(scope='native dummy-fixture smoke; not producer ABI or target certification',
                       platform=platform.platform(), machine=platform.machine(),
-                      source_commit=subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
-                      source_dirty=bool(subprocess.check_output(['git','status','--porcelain','--untracked-files=no'],cwd=ROOT,text=True).strip()),
+                      source_commit=source_commit, source_dirty=source_dirty,
                       overrides={'BATCH_SEC': 1, 'SHUTDOWN_DEADLINE_MS': 100, 'LOG_LEVEL': 'info'},
                       caveats=['sampled RSS includes language runtime, libraries and allocator; no absolute device budget is claimed',
                                'ps sampling can miss transient peaks; socket inode sizes do not measure filesystem block allocation',
                                'default configuration writes no telemetry spool or application log; zero-byte socket lock is retained'],
-                      binaries={component: dict(bytes=binary.stat().st_size, sha256=hashlib.sha256(binary.read_bytes()).hexdigest(), dynamic_dependencies=dependencies(binary)) for component,binary in binaries.items()},
+                      binaries=binary_info,
                       results=results)
         args.output.write_text(json.dumps(result, indent=2) + '\n')
         print(args.output)
