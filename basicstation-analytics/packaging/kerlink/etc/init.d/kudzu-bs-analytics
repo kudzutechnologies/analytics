@@ -1,0 +1,61 @@
+#!/bin/sh -e
+### BEGIN INIT INFO
+# Provides:        kudzu-bs-analytics
+# Required-Start:  $remote_fs $syslog
+# Required-Stop:   $remote_fs $syslog
+# Default-Start:   5
+# Default-Stop:    0 6
+# Short-Description: Kudzu Basic Station Analytics Bridge
+### END INIT INFO
+
+# SPDX-License-Identifier: MIT
+# Copyright 2026 Kudzu Technologies
+
+BINARY="/usr/bin/basicstation-analytics"
+PIDFILE="/var/run/kudzu/kudzu-bs-analytics.pid"
+CONFIGURATION_FILE="/etc/kudzu-bs-analytics.conf"
+LOG_FILE="/var/log/kudzu-bs-analytics.log"
+
+[ -f /etc/default/kudzu-bs-analytics ] && . /etc/default/kudzu-bs-analytics
+
+alive() { [ "${1}" ] && kill -0 ${1} 2> /dev/null ; }
+pid() { [ -f ${PIDFILE} ] && cat ${PIDFILE} || pidof basicstation-analytics ; }
+
+iptables_accept_tcp() {
+	local RULE="OUTPUT -t filter -p tcp --dport 443 -j ACCEPT"
+	iptables -C ${RULE} 2> /dev/null || iptables -I ${RULE}
+}
+
+start() {
+	mkdir -p "/etc/sysupgrade.d"
+	echo "/etc/default/kudzu-bs-analytics" > "/etc/sysupgrade.d/kudzu-bs-analytics.conf"
+	echo "${CONFIGURATION_FILE}" >> "/etc/sysupgrade.d/kudzu-bs-analytics.conf"
+	if [ "x${DISABLE_KUDZU_BS_ANALYTICS}" = "xyes" ]; then
+		echo "kudzu-bs-analytics disabled by configuration"
+		exit 0
+	fi
+	mkdir -p "/var/run/kudzu" "/run/basicstation"
+	if alive $(pid) ; then return 0; fi
+	iptables_accept_tcp
+	${BINARY} --config ${CONFIGURATION_FILE} --log-file=${LOG_FILE} ${EXTRA_ARGS}&
+	echo $! > ${PIDFILE}
+	monit monitor kudzu-bs-analytics 2>/dev/null || true
+}
+
+stop() {
+	monit unmonitor kudzu-bs-analytics 2>/dev/null || true
+	local p=$(pid)
+	if alive ${p}; then
+		kill ${p} 2>/dev/null || true
+		sleep 1
+		alive ${p} && kill -9 ${p} 2>/dev/null || true
+	fi
+	rm -f ${PIDFILE}
+}
+
+case "$1" in
+	start) start ;;
+	stop) stop ;;
+	restart) stop; start ;;
+	*) echo "Usage: $0 {start|stop|restart}"; exit 1 ;;
+esac

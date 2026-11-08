@@ -1,0 +1,7 @@
+# Cross-compilation for Corecell (arm-linux-gnueabihf)
+# Expects toolchain at ~/toolchain-corecell (or set TOOLCHAIN_ROOT)
+set(TOOLCHAIN_ROOT "$ENV{HOME}/toolchain-corecell" CACHE PATH "Corecell toolchain root")
+set(CMAKE_SYSTEM_NAME Linux)
+set(CMAKE_SYSTEM_PROCESSOR arm)
+set(CMAKE_C_COMPILER "${TOOLCHAIN_ROOT}/bin/arm-linux-gnueabihf-gcc")
+set(CMAKE_CXX_COMPILER "${TOOLCHAIN_ROOT}/bin/arm-linux-gnueabihf-g++")

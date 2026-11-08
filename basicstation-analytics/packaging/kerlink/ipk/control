@@ -1,0 +1,8 @@
+Package: kudzu-bs-analytics
+Version: 0.1.0
+Architecture: klkgw
+Maintainer: Kudzu Technologies <info@kudzu.gr>
+Priority: optional
+Section: analytics
+Source: Kudzu Analytics
+Description: Basic Station UNIX side-channel bridge to Kudzu Analytics

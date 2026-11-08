@@ -1,0 +1,7 @@
+# Cross-compilation for Raspberry Pi (arm-linux-gnueabihf)
+# Expects toolchain at ~/toolchain-rpi (or set TOOLCHAIN_ROOT)
+set(TOOLCHAIN_ROOT "$ENV{HOME}/toolchain-rpi" CACHE PATH "RPi toolchain root")
+set(CMAKE_SYSTEM_NAME Linux)
+set(CMAKE_SYSTEM_PROCESSOR arm)
+set(CMAKE_C_COMPILER "${TOOLCHAIN_ROOT}/bin/arm-linux-gnueabihf-gcc")
+set(CMAKE_CXX_COMPILER "${TOOLCHAIN_ROOT}/bin/arm-linux-gnueabihf-g++")

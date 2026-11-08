@@ -1,0 +1,7 @@
+# Cross-compilation for Kerlink (arm-klk-linux-gnueabi)
+# Expects toolchain at ~/toolchain-kerlink (or set TOOLCHAIN_ROOT)
+set(TOOLCHAIN_ROOT "$ENV{HOME}/toolchain-kerlink" CACHE PATH "Kerlink toolchain root")
+set(CMAKE_SYSTEM_NAME Linux)
+set(CMAKE_SYSTEM_PROCESSOR arm)
+set(CMAKE_C_COMPILER "${TOOLCHAIN_ROOT}/bin/arm-klk-linux-gnueabi-gcc")
+set(CMAKE_CXX_COMPILER "${TOOLCHAIN_ROOT}/bin/arm-klk-linux-gnueabi-g++")
