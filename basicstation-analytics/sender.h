@@ -1,43 +1,52 @@
 /* SPDX-License-Identifier: MIT */
-/* Copyright 2026 Kudzu Technologies */
 #pragma once
-
 #include <atomic>
-#include <string>
+#include <chrono>
+#include <condition_variable>
+#include <functional>
+#include <mutex>
 #include <thread>
-
 #include "batch_queue.h"
 #include "Client.h"
 
 namespace basicstation_analytics {
-
-class Sender {
-public:
-  Sender(client_cc::Client* client, BatchQueue* queue)
-      : client_(client), queue_(queue) {}
-  ~Sender() { Stop(); }
-
-  void Start();
-  void Stop();
-  // Drain with deadline_ms; return false if batches remain.
-  bool Drain(int deadline_ms);
-
-  uint64_t PushFailures() const { return push_failures_; }
-  uint64_t Reconnects() const { return reconnects_; }
-
-private:
-  void Loop();
-  bool EnsureConnected();
-  bool PushOne(api::AnalyticsMetrics& batch);
-
-  client_cc::Client* client_;
-  BatchQueue* queue_;
-  std::atomic<bool> running_{false};
-  std::thread thr_;
-  std::atomic<uint64_t> push_failures_{0};
-  std::atomic<uint64_t> reconnects_{0};
-  int backoff_sec_ = 1;
-  bool connected_ = false;
+class AnalyticsTransport {
+ public:
+  virtual ~AnalyticsTransport()=default;
+  virtual grpc::Status Connect(client_cc::Client::Deadline)=0;
+  virtual grpc::Status Push(const api::AnalyticsMetrics&,client_cc::Client::Deadline)=0;
+  virtual void Disconnect()=0;
+  virtual void Cancel()=0;
 };
-
-}  // namespace basicstation_analytics
+class ClientTransport final:public AnalyticsTransport {
+ public:
+  explicit ClientTransport(client_cc::Client* c):client_(c){}
+  grpc::Status Connect(client_cc::Client::Deadline d)override{return client_->ConnectOnce(d);}
+  grpc::Status Push(const api::AnalyticsMetrics& m,client_cc::Client::Deadline d)override{return client_->PushMetricsOnce(m,d);}
+  void Disconnect()override{client_->Disconnect();}
+  void Cancel()override{client_->CancelPending();}
+ private:client_cc::Client* client_;
+};
+class Sender {
+ public:
+  Sender(client_cc::Client* c,BatchQueue* q,int connect_sec=5,int request_sec=5,int max_backoff=60,std::function<void()> on_connected={})
+    :adapter_(c),transport_(&adapter_),queue_(q),connect_sec_(connect_sec),request_sec_(request_sec),max_backoff_(max_backoff),on_connected_(std::move(on_connected)){}
+  Sender(AnalyticsTransport* t,BatchQueue* q):adapter_(nullptr),transport_(t),queue_(q){}
+  ~Sender(){Stop();}
+  void Start();
+  void Stop(){Shutdown(0);}
+  bool Drain(int deadline_ms){return Shutdown(deadline_ms);}
+  bool Shutdown(int deadline_ms);
+  uint64_t PushFailures()const{return failures_;}
+  uint64_t Reconnects()const{return reconnects_;}
+ private:
+  void Loop();
+  bool Backoff(int seconds);
+  ClientTransport adapter_;AnalyticsTransport* transport_;BatchQueue* queue_;
+  int connect_sec_=5,request_sec_=5,max_backoff_=60;
+  std::function<void()> on_connected_;
+  std::atomic<bool> running_{false};std::thread thread_;
+  std::atomic<uint64_t> failures_{0},reconnects_{0};
+  std::mutex mu_;std::condition_variable cv_;bool done_=true;
+};
+}

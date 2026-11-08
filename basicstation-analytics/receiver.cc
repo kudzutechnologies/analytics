@@ -20,7 +20,7 @@ namespace basicstation_analytics {
 namespace {
 
 constexpr size_t kMaxDatagram = sizeof(struct ana_uplink) + ANA_MAX_PAYLOAD + 64;
-constexpr int kMaxPollPerCall = 256;
+
 
 api::LoRaSF WireSfToProto(uint8_t sf) {
     if (sf >= 7 && sf <= 12) {
@@ -185,7 +185,7 @@ bool Receiver::Open(const std::string& socket_path, mode_t mode, std::string* er
         close(fd);
         return false;
     }
-    int rcv = 1024 * 1024;
+    int rcv = receive_buffer_;
     setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &rcv, sizeof(rcv));
 
     fd_ = fd;
@@ -279,34 +279,24 @@ int Receiver::ParseDatagram(const char* buf, size_t n, api::AnalyticsMetrics* me
     }
 }
 
-PollStats Receiver::Poll(api::AnalyticsMetrics* metrics) {
+PollStats Receiver::PollEach(const std::function<void(api::AnalyticsMetrics&&)>& consume) {
     PollStats st;
-    if (fd_ < 0 || !metrics) return st;
+    if(fd_<0)return st;
     char buf[kMaxDatagram];
-    for (int i = 0; i < kMaxPollPerCall; i++) {
-        ssize_t n = recv(fd_, buf, sizeof(buf), MSG_TRUNC);
-        if (n < 0) {
-            if (errno == EAGAIN || errno == EWOULDBLOCK) break;
-            break;
-        }
-        if (static_cast<size_t>(n) > sizeof(buf)) {
-            ++rejected_;
-            ++st.rejected;
-            continue;
-        }
-        int added = ParseDatagram(buf, static_cast<size_t>(n), metrics);
-        if (added > 0) {
-            st.parsed += added;
-        } else if (n >= static_cast<ssize_t>(sizeof(struct ana_hdr))) {
-            const auto* h = reinterpret_cast<const struct ana_hdr*>(buf);
-            if (!(ana_hdr_ok(h) && h->type == ANA_HELLO)) {
-                ++st.rejected;
-            }
-        } else {
-            ++st.rejected;
-        }
+    for(int i=0;i<max_poll_;++i){
+      ssize_t n=recv(fd_,buf,sizeof(buf),MSG_TRUNC);
+      if(n<0)break;
+      if(static_cast<size_t>(n)>sizeof(buf)){++rejected_;++st.rejected;continue;}
+      api::AnalyticsMetrics one;auto before=rejected_;
+      int parsed=ParseDatagram(buf,static_cast<size_t>(n),&one);
+      st.rejected+=static_cast<int>(rejected_-before);st.parsed+=parsed;
+      if(parsed)consume(std::move(one));
     }
     return st;
+}
+PollStats Receiver::Poll(api::AnalyticsMetrics* metrics){
+  if(!metrics)return {};
+  return PollEach([&](api::AnalyticsMetrics&& one){metrics->MergeFrom(one);});
 }
 
 }  // namespace basicstation_analytics

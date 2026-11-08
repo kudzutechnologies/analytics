@@ -13,7 +13,7 @@ LogLevel g_level = LogLevel::kInfo;
 std::ofstream g_file;
 std::ostream* g_out = &std::cerr;
 std::mutex g_mu;
-std::ostringstream g_null;
+
 
 }  // namespace
 
@@ -57,10 +57,7 @@ LogMessage::~LogMessage() {
 }
 
 std::ostream& LogMessage::stream() {
-  if (enabled_) return buf_;
-  g_null.str("");
-  g_null.clear();
-  return g_null;
+  return buf_;
 }
 
 }  // namespace basicstation_analytics

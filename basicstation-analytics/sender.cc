@@ -1,79 +1,34 @@
 /* SPDX-License-Identifier: MIT */
-/* Copyright 2026 Kudzu Technologies */
 #include "sender.h"
 #include "logging.h"
-
-#include <chrono>
-#include <thread>
-
 namespace basicstation_analytics {
-
-void Sender::Start() {
-  if (running_) return;
-  running_ = true;
-  thr_ = std::thread([this] { Loop(); });
+void Sender::Start(){
+ std::lock_guard<std::mutex> lock(mu_);if(thread_.joinable())return;
+ running_=true;done_=false;thread_=std::thread([this]{Loop();});
 }
-
-void Sender::Stop() {
-  running_ = false;
-  if (thr_.joinable()) thr_.join();
-}
-
-bool Sender::EnsureConnected() {
-  if (connected_) return true;
-  if (client_->Connect()) {
-    connected_ = true;
-    backoff_sec_ = 1;
-    return true;
+bool Sender::Backoff(int seconds){std::unique_lock<std::mutex> lock(mu_);cv_.wait_for(lock,std::chrono::seconds(seconds),[this]{return !running_;});return running_;}
+void Sender::Loop(){
+ bool connected=false;int backoff=1;
+ while(running_&&!queue_->Finished()){
+  if(!connected){
+   auto status=transport_->Connect(std::chrono::system_clock::now()+std::chrono::seconds(connect_sec_));
+   if(!status.ok()){++reconnects_;if(!Backoff(backoff))break;backoff=std::min(backoff*2,max_backoff_);continue;}
+   connected=true;backoff=1;if(on_connected_)on_connected_();
   }
-  ++reconnects_;
-  LOG_WARN() << "analytics connect failed: " << client_->LastError();
-  std::this_thread::sleep_for(std::chrono::seconds(backoff_sec_));
-  backoff_sec_ = std::min(backoff_sec_ * 2, 60);
-  return false;
+  auto item=queue_->Next();if(!item){queue_->Wait(std::chrono::milliseconds(100));continue;}
+  auto status=transport_->Push(item->metrics,std::chrono::system_clock::now()+std::chrono::seconds(request_sec_));
+  queue_->Complete(item,status.ok(),status.error_code()==grpc::StatusCode::INVALID_ARGUMENT);
+  if(!status.ok()){++failures_;transport_->Disconnect();connected=false;if(!Backoff(backoff))break;backoff=std::min(backoff*2,max_backoff_);}else backoff=1;
+ }
+ transport_->Disconnect();
+ {std::lock_guard<std::mutex> lock(mu_);done_=true;}cv_.notify_all();
 }
-
-bool Sender::PushOne(api::AnalyticsMetrics& batch) {
-  if (!client_->PushMetrics(batch)) {
-    ++push_failures_;
-    LOG_WARN() << "PushMetrics failed: " << client_->LastError();
-    client_->Disconnect();
-    connected_ = false;
-    return false;
-  }
-  return true;
+bool Sender::Shutdown(int deadline_ms){
+ queue_->Seal(true);
+ if(!thread_.joinable())return queue_->Size()==0;
+ auto deadline=std::chrono::steady_clock::now()+std::chrono::milliseconds(std::max(0,deadline_ms));
+ {std::unique_lock<std::mutex> lock(mu_);cv_.wait_until(lock,deadline,[this]{return done_;});}
+ running_=false;transport_->Cancel();cv_.notify_all();queue_->Wake();thread_.join();
+ return queue_->Size()==0;
 }
-
-void Sender::Loop() {
-  while (running_) {
-    api::AnalyticsMetrics batch;
-    if (!queue_->Pop(&batch)) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(50));
-      continue;
-    }
-    if (!EnsureConnected() || !PushOne(batch)) {
-      queue_->PushFront(std::move(batch));
-      std::this_thread::sleep_for(std::chrono::seconds(backoff_sec_));
-      backoff_sec_ = std::min(backoff_sec_ * 2, 60);
-    } else {
-      backoff_sec_ = 1;
-    }
-  }
 }
-
-bool Sender::Drain(int deadline_ms) {
-  auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(deadline_ms);
-  while (queue_->Size() > 0) {
-    if (std::chrono::steady_clock::now() >= deadline) return false;
-    if (!EnsureConnected()) continue;
-    api::AnalyticsMetrics batch;
-    if (!queue_->Pop(&batch)) break;
-    if (!PushOne(batch)) {
-      queue_->PushFront(std::move(batch));
-      return false;
-    }
-  }
-  return queue_->Size() == 0;
-}
-
-}  // namespace basicstation_analytics

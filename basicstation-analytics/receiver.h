@@ -3,6 +3,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <sys/types.h>
 
@@ -33,6 +34,8 @@ public:
 
     // Non-blocking: read available datagrams and append to metrics.
     PollStats Poll(api::AnalyticsMetrics* metrics);
+    PollStats PollEach(const std::function<void(api::AnalyticsMetrics&&)>& consume);
+    void Configure(int receive_buffer,int max_poll){receive_buffer_=receive_buffer;max_poll_=max_poll;}
 
     // Parse a single native-layout datagram. Returns number of metrics messages appended
     // (0 for HELLO / rejected, 1 for uplink/downlink/stat).
@@ -49,6 +52,7 @@ public:
 
 private:
     int fd_ = -1;
+    int receive_buffer_=16384, max_poll_=32;
     bool bound_path_owned_ = false;
     std::string socket_path_;
     mode_t socket_mode_ = 0660;

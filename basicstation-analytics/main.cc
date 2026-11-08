@@ -47,24 +47,6 @@ void Usage(const char* prog) {
       << "  -h, --help\n";
 }
 
-void ScheduleGatewayUpsert(client_cc::Client* client, const basicstation_analytics::Config& cfg) {
-  basicstation_analytics::ParsedGatewaySync parsed;
-  std::string err;
-  if (!basicstation_analytics::ParseGatewaySyncConfig(cfg, parsed, err)) {
-    if (!err.empty()) LOG_WARN() << "Skipping gateway upsert: " << err;
-    return;
-  }
-  if (!parsed.has_any) return;
-  std::thread([client, parsed] {
-    auto req = basicstation_analytics::ToUpsertRequest(parsed);
-    if (!client->GatewayUpsert(req)) {
-      LOG_WARN() << "GatewayUpsert failed: " << client->LastError();
-    } else {
-      LOG_INFO() << "GatewayUpsert completed";
-    }
-  }).detach();
-}
-
 }  // namespace
 
 int main(int argc, char* argv[]) {
@@ -116,6 +98,7 @@ int main(int argc, char* argv[]) {
   signal(SIGTERM, SignalHandler);
 
   Receiver receiver;
+  receiver.Configure(cfg.socket_rcvbuf_bytes,cfg.poll_max_datagrams);
   std::string open_err;
   if (!receiver.Open(cfg.socket_path, cfg.socket_mode, &open_err)) {
     LOG_ERROR() << "Failed to open socket " << cfg.socket_path << ": " << open_err;
@@ -125,99 +108,48 @@ int main(int argc, char* argv[]) {
   LOG_INFO() << "Listening on " << cfg.socket_path;
 
   client_cc::AnalyticsClientConfig client_cfg;
-  client_cfg.client_id = cfg.client_id;
-  client_cfg.client_key = cfg.client_key;
-  client_cfg.endpoint = cfg.endpoint;
-  client_cfg.ca_file = cfg.ca_file;
-  client_cfg.ssl_target_name_override = cfg.ssl_target_name_override;
-  client_cfg.connect_timeout = cfg.connect_timeout > 0 ? cfg.connect_timeout : 30;
-  client_cfg.request_timeout = cfg.request_timeout;
-  client_cfg.max_reconnect_backoff =
-      cfg.max_reconnect_backoff > 0 ? cfg.max_reconnect_backoff : 60;
+  client_cfg.client_id=cfg.client_id;client_cfg.client_key=cfg.client_key;
+  client_cfg.endpoint=cfg.endpoint;client_cfg.ca_file=cfg.ca_file;
+  client_cfg.ssl_target_name_override=cfg.ssl_target_name_override;
+  client_cfg.connect_timeout=cfg.connect_timeout;client_cfg.request_timeout=cfg.request_timeout;
+  client_cfg.max_reconnect_backoff=cfg.max_reconnect_backoff;client_cfg.auto_reconnect=false;
   client_cc::Client client(client_cfg);
-  BatchQueue queue(static_cast<size_t>(cfg.max_batches));
-  Sender sender(&client, &queue);
+  BatchQueue queue(cfg.max_batches,cfg.max_messages_per_batch,cfg.max_buffer_bytes,true,cfg.pre_identity_max_messages);
+  ParsedGatewaySync parsed;std::string sync_error;
+  const bool do_sync=ParseGatewaySyncConfig(cfg,parsed,sync_error)&&parsed.has_any;
+  std::unique_ptr<client_cc::Client> sync_client;
+  if(do_sync)sync_client=std::make_unique<client_cc::Client>(client_cfg);
+  std::thread sync_thread;std::atomic<bool> sync_started{false};
+  Sender sender(&client,&queue,cfg.connect_timeout,cfg.request_timeout,cfg.max_reconnect_backoff,[&]{
+    if(!do_sync||sync_started.exchange(true))return;
+    sync_thread=std::thread([&]{
+      auto deadline=std::chrono::system_clock::now()+std::chrono::seconds(cfg.connect_timeout+cfg.request_timeout);
+      auto status=sync_client->ConnectOnce(deadline);
+      if(status.ok())status=sync_client->GatewayUpsertOnce(ToUpsertRequest(parsed),deadline);
+      if(!status.ok())LOG_WARN()<<"GatewayUpsert failed: "<<status.error_message();
+      sync_client->Disconnect();
+    });
+  });
   sender.Start();
-
-  // Background connect + gateway sync once connected.
-  std::thread([&] {
-    while (g_running.load()) {
-      if (client.Connect()) {
-        LOG_INFO() << "Connected to analytics";
-        ScheduleGatewayUpsert(&client, cfg);
-        return;
-      }
-      LOG_WARN() << "Connect failed: " << client.LastError();
-      std::this_thread::sleep_for(std::chrono::seconds(5));
+  auto last_flush=std::chrono::steady_clock::now();
+  while(g_running.load()){
+    struct pollfd pfd={};pfd.fd=receiver.Fd();pfd.events=POLLIN;
+    int result=poll(&pfd,1,100);
+    if(result>0&&(pfd.revents&POLLIN)){
+      receiver.PollEach([&](api::AnalyticsMetrics&& record){
+        if(receiver.HasIdentity())queue.SetIdentity(cfg.gateway_id,receiver.GatewayEuiBytes());
+        queue.Add(std::move(record));
+      });
+      if(receiver.HasIdentity())queue.SetIdentity(cfg.gateway_id,receiver.GatewayEuiBytes());
     }
-  }).detach();
-
-  api::AnalyticsMetrics batch;
-  auto last_flush = std::chrono::steady_clock::now();
-  const auto batch_interval = std::chrono::seconds(cfg.batch_sec);
-  // Hold telemetry until EUI HELLO arrives.
-  api::AnalyticsMetrics pending;
-
-  auto flush_if_ready = [&](bool force) {
-    if (!receiver.HasIdentity()) return;
-    if (pending.uplinks_size() || pending.downlinks_size() || pending.stats_size()) {
-      batch.mutable_uplinks()->MergeFrom(pending.uplinks());
-      batch.mutable_downlinks()->MergeFrom(pending.downlinks());
-      batch.mutable_stats()->MergeFrom(pending.stats());
-      pending.Clear();
-    }
-    const int n = batch.uplinks_size() + batch.downlinks_size() + batch.stats_size();
-    if (n == 0) return;
-    auto now = std::chrono::steady_clock::now();
-    if (!force && n < cfg.max_messages_per_batch && now - last_flush < batch_interval) return;
-
-    if (!cfg.gateway_id.empty()) batch.set_gatewayid(cfg.gateway_id);
-    batch.set_gatewayeui(receiver.GatewayEuiBytes());
-    if (cfg.gauge_stat) {
-      for (int i = 0; i < batch.stats_size(); ++i) batch.mutable_stats(i)->set_isgauge(true);
-    }
-    if (queue.Push(batch)) {
-      LOG_WARN() << "queue full; dropped oldest batch (total drops=" << queue.Drops() << ")";
-    }
-    batch.Clear();
-    last_flush = now;
-  };
-
-  while (g_running.load()) {
-    struct pollfd pfd = {};
-    pfd.fd = receiver.Fd();
-    pfd.events = POLLIN;
-    int pr = poll(&pfd, 1, 100);
-    if (pr > 0 && (pfd.revents & POLLIN)) {
-      api::AnalyticsMetrics scratch;
-      auto st = receiver.Poll(&scratch);
-      if (st.rejected) {
-        LOG_DEBUG() << "rejected datagrams=" << st.rejected;
-      }
-      if (scratch.uplinks_size() || scratch.downlinks_size() || scratch.stats_size()) {
-        if (receiver.HasGatewayEui()) {
-          batch.mutable_uplinks()->MergeFrom(scratch.uplinks());
-          batch.mutable_downlinks()->MergeFrom(scratch.downlinks());
-          batch.mutable_stats()->MergeFrom(scratch.stats());
-        } else {
-          pending.mutable_uplinks()->MergeFrom(scratch.uplinks());
-          pending.mutable_downlinks()->MergeFrom(scratch.downlinks());
-          pending.mutable_stats()->MergeFrom(scratch.stats());
-        }
-      }
-    }
-    flush_if_ready(false);
+    auto now=std::chrono::steady_clock::now();
+    if(now-last_flush>=std::chrono::seconds(cfg.batch_sec)){queue.Seal();last_flush=now;}
   }
-
-  flush_if_ready(true);
-  sender.Stop();
-  bool drained = sender.Drain(cfg.shutdown_deadline_ms);
-  if (!drained) {
-    LOG_WARN() << "shutdown drain incomplete; queue size=" << queue.Size();
-  }
-  client.Disconnect();
+  const auto deadline=std::chrono::steady_clock::now()+std::chrono::milliseconds(cfg.shutdown_deadline_ms);
+  if(sync_client)sync_client->CancelPending();
+  bool drained=sender.Shutdown(std::max(0,static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(deadline-std::chrono::steady_clock::now()).count())));
+  if(sync_thread.joinable())sync_thread.join();
   receiver.Close();
-  LOG_INFO() << "stopped rejected=" << receiver.Rejected() << " queue_drops=" << queue.Drops()
-             << " push_failures=" << sender.PushFailures();
-  return drained ? 0 : 2;
+  LOG_INFO()<<"stopped rejected="<<receiver.Rejected()<<" dropped_messages="<<queue.DroppedMessages()<<" retained_bytes="<<queue.Bytes()<<" push_failures="<<sender.PushFailures();
+  return drained?0:2;
 }
