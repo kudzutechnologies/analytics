@@ -35,11 +35,11 @@ func CredBlobFromTrustCertKey(trustDER, certDER, keyDER []byte) []byte {
 // BuildCupsResponseWithCreds builds a full CUPS update-info binary response with the given URIs and credential blobs.
 // Trailing sig/upd fields are written as zero (no signature, no update data).
 func BuildCupsResponseWithCreds(proxyCupsURI, proxyTcURI string, cupsCred, tcCred []byte) ([]byte, error) {
-	if len(proxyCupsURI) > 255 || len(proxyTcURI) > 255 {
+	if len(proxyCupsURI) > 255 || len(proxyTcURI) > 255 || len(cupsCred) > 65535 || len(tcCred) > 65535 {
 		return nil, fmt.Errorf("proxy URIs must be ≤255 bytes")
 	}
 	// Layout: cupsUriLen(1) cupsUri tcUriLen(1) tcUri cupsCredLen(2 LE) cupsCred tcCredLen(2 LE) tcCred sigLen(4) keyCRC(4) sig updLen(4) updData
-	sigUpdLen := 4 + 4 + 0 + 4 // sigLen=0, keyCRC=0, no sig, updLen=0
+	sigUpdLen := 4 + 4 // sigLen=0, updLen=0; no keyCRC when no signature
 	n := 1 + len(proxyCupsURI) + 1 + len(proxyTcURI) + 2 + len(cupsCred) + 2 + len(tcCred) + sigUpdLen
 	out := make([]byte, 0, n)
 	out = append(out, byte(len(proxyCupsURI)))
@@ -53,7 +53,7 @@ func BuildCupsResponseWithCreds(proxyCupsURI, proxyTcURI string, cupsCred, tcCre
 	binary.LittleEndian.PutUint16(lenBuf[:], uint16(len(tcCred)))
 	out = append(out, lenBuf[:]...)
 	out = append(out, tcCred...)
-	// sigLen=0, keyCRC=0, updLen=0 (12 zero bytes)
+	// sigLen=0, updLen=0 (8 zero bytes)
 	for i := 0; i < sigUpdLen; i++ {
 		out = append(out, 0)
 	}
@@ -117,6 +117,8 @@ func RewriteCupsResponseURIs(body []byte, proxyCupsURI, proxyTcURI string) ([]by
 
 // ParsedCUPSResponse holds the result of parsing a full CUPS update-info response.
 type ParsedCUPSResponse struct {
+	CupsURI, TcURI string
+
 	CupsCred []byte // cups credentials blob (trust+cert+key)
 	TcCred   []byte // tc credentials blob (trust+cert+key)
 	Trailing []byte // sigLen(4) keyCRC(4) sig updLen(4) updData — preserved when replacing creds
@@ -143,6 +145,7 @@ func ParseCUPSUpdateResponseFull(body []byte) (*ParsedCUPSResponse, error) {
 	if off+cun > len(body) {
 		return nil, fmt.Errorf("cups response: cupsUri overflow")
 	}
+	cupsURI := string(body[off : off+cun])
 	off += cun
 	// tcUriLen (1) + tcUri
 	if off >= len(body) {
@@ -153,6 +156,7 @@ func ParseCUPSUpdateResponseFull(body []byte) (*ParsedCUPSResponse, error) {
 	if off+tun > len(body) {
 		return nil, fmt.Errorf("cups response: tcUri overflow")
 	}
+	tcURI := string(body[off : off+tun])
 	off += tun
 	// cupsCredLen (2 LE)
 	if off+2 > len(body) {
@@ -177,13 +181,16 @@ func ParseCUPSUpdateResponseFull(body []byte) (*ParsedCUPSResponse, error) {
 	tcCred := body[off : off+tcn]
 	off += tcn
 	trailing := body[off:]
-	return &ParsedCUPSResponse{CupsCred: cupsCred, TcCred: tcCred, Trailing: trailing}, nil
+	if err := validateCUPSTail(trailing); err != nil {
+		return nil, err
+	}
+	return &ParsedCUPSResponse{CupsURI: cupsURI, TcURI: tcURI, CupsCred: cupsCred, TcCred: tcCred, Trailing: trailing}, nil
 }
 
 // BuildCupsResponseFull builds a full CUPS update-info binary response with proxy URIs, proxy credential blobs,
 // and the original trailing segment (sigLen, keyCRC, sig, updLen, updData) from the upstream response.
 func BuildCupsResponseFull(proxyCupsURI, proxyTcURI string, cupsCred, tcCred, trailing []byte) ([]byte, error) {
-	if len(proxyCupsURI) > 255 || len(proxyTcURI) > 255 {
+	if len(proxyCupsURI) > 255 || len(proxyTcURI) > 255 || len(cupsCred) > 65535 || len(tcCred) > 65535 {
 		return nil, fmt.Errorf("proxy URIs must be ≤255 bytes")
 	}
 	n := 1 + len(proxyCupsURI) + 1 + len(proxyTcURI) + 2 + len(cupsCred) + 2 + len(tcCred) + len(trailing)
@@ -218,18 +225,21 @@ func derObjectLength(b []byte) (int, error) {
 		return total, nil
 	}
 	n := int(l & 0x7f)
+	if n == 0 || n > 4 {
+		return 0, fmt.Errorf("invalid DER length encoding")
+	}
 	if len(b) < 2+n {
 		return 0, fmt.Errorf("der length bytes overflow")
 	}
-	var contentLen int
+	var contentLen uint64
 	for i := 0; i < n; i++ {
-		contentLen = contentLen<<8 | int(b[2+i])
+		contentLen = contentLen<<8 | uint64(b[2+i])
 	}
-	total := 2 + n + contentLen
-	if total > len(b) {
+	total := uint64(2+n) + contentLen
+	if total > uint64(len(b)) {
 		return 0, fmt.Errorf("der object overflows")
 	}
-	return total, nil
+	return int(total), nil
 }
 
 // extractCertKeyFromCredBlob parses a CUPS credentials blob (trust + cert + key in DER)
@@ -268,4 +278,19 @@ func extractCertKeyFromCredBlob(blob []byte) (certDER, keyDER []byte, err error)
 	keyDER = make([]byte, n)
 	copy(keyDER, rest[:n])
 	return certDER, keyDER, nil
+}
+
+func validateCUPSTail(tail []byte) error {
+	if len(tail) < 8 {
+		return fmt.Errorf("truncated CUPS trailer")
+	}
+	sig := uint64(binary.LittleEndian.Uint32(tail))
+	if sig > 4096 || (sig > 0 && sig < 8) || sig+8 > uint64(len(tail)) {
+		return fmt.Errorf("invalid CUPS signature length")
+	}
+	update := uint64(binary.LittleEndian.Uint32(tail[4+int(sig):]))
+	if sig+8+update != uint64(len(tail)) {
+		return fmt.Errorf("invalid CUPS update length")
+	}
+	return nil
 }

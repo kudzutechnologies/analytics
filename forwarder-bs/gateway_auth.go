@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"crypto/subtle"
 	"crypto/x509"
@@ -158,9 +159,15 @@ func (r *gatewayRegistry) authorize(req *http.Request, claimed string, store *Ce
 		digest := sha256.Sum256(cert.Raw)
 		certID = r.pins[hex.EncodeToString(digest[:])]
 		if certID == "" && store != nil {
-			candidate := store.GatewayIDForClientCert(cert)
+			candidate := NormalizeGatewayID(claimed)
+			if candidate == "" {
+				candidate = NormalizeGatewayID(cert.Subject.CommonName)
+			}
 			if r.gateways[candidate] != nil {
-				certID = candidate
+				stored, err := store.loadGatewayCert(candidate)
+				if err == nil && len(stored.Certificate) > 0 && bytes.Equal(stored.Certificate[0], cert.Raw) {
+					certID = candidate
+				}
 			}
 		}
 		if certID == "" {
@@ -219,6 +226,18 @@ func (p *WSProxy) upstreamHeaders(id, purpose string, in http.Header) http.Heade
 		}
 		if v != "" {
 			h.Set("Authorization", v)
+		}
+	}
+	if p.config.CertStore != nil {
+		suffix := id
+		if purpose == "tc" {
+			suffix += "_tc"
+		}
+		if _, err := p.config.CertStore.upstreamCredential(suffix); err == nil {
+			h.Del("Authorization")
+			if token := p.config.CertStore.upstreamToken(suffix); token != "" {
+				h.Set("Authorization", token)
+			}
 		}
 	}
 	return h

@@ -59,7 +59,8 @@ func runMain() int {
 	}
 
 	proxyConfig := &WSProxyConfig{
-		ProxyMode: config.ProxyMode, PublicURI: config.PublicURI, GatewayAuthFile: config.GatewayAuthFile,
+		CUPSMaxCredentialBytes: config.CUPSMaxCredentialBytes,
+		ProxyMode:              config.ProxyMode, PublicURI: config.PublicURI, GatewayAuthFile: config.GatewayAuthFile,
 		LocalRouter: config.GatewayEUI, UpstreamAllowedOrigins: config.UpstreamAllowedOrigins, CUPSMode: config.CUPSMode,
 		InjectRouterIntoVersion:  config.InjectRouterIntoVersion,
 		ListenHost:               config.ListenHost,

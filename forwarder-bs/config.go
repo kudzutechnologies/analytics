@@ -60,6 +60,7 @@ type ForwarderConfig struct {
 	MaxWSStreams  int    `json:"max-ws-streams,omitempty"`
 
 	GatewayEUI              string `json:"gateway-eui,omitempty"`
+	CUPSMaxCredentialBytes  int    `json:"cups-max-credential-bytes,omitempty"`
 	MaxBatches              int    `json:"max-batches,omitempty"`
 	MaxMessages             int    `json:"max-messages,omitempty"`
 	MaxBufferBytes          int    `json:"max-buffer-bytes,omitempty"`
@@ -86,7 +87,7 @@ var defaultConf = ForwarderConfig{
 	ListenHost: "127.0.0.1", ListenPort: 8090,
 	Endpoint: client.DefaultEndpoint, PairingEndpoint: client.DefaultPairingEndpoint,
 	ConnectTimeout: 5, RequestTimeout: 5, MaxReconnectBackoff: 60,
-	FlushInterval: 10, MaxBatches: 2, MaxMessages: 32, MaxBufferBytes: 65536,
+	FlushInterval: 10, CUPSMaxCredentialBytes: 16384, MaxBatches: 2, MaxMessages: 32, MaxBufferBytes: 65536,
 	ShutdownDeadlineMS: 5000, ProxyMode: "local", CUPSMode: "off", LogLevel: "info",
 }
 
@@ -312,6 +313,9 @@ func ValidateForwarderConfig(c *ForwarderConfig) error {
 		if v < 1 {
 			return fmt.Errorf("%s must be at least 1", k)
 		}
+	}
+	if c.CUPSMaxCredentialBytes < 1024 || c.CUPSMaxCredentialBytes > 65535 {
+		return fmt.Errorf("invalid CUPS credential limit")
 	}
 	if c.MaxBufferBytes < 1024 || c.ShutdownDeadlineMS < 0 || c.PreIdentityMaxMessages < 0 {
 		return fmt.Errorf("invalid buffer or shutdown limits")

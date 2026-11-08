@@ -82,18 +82,6 @@ func openCertStore(dir, caCertPath, caKeyPath string, writable bool) (*CertStore
 		lnsConfigs:  make(map[string]*GatewayLNSConfig),
 		dataURIs:    make(map[string]string),
 	}
-	if err := s.loadExistingGatewayCerts(); err != nil {
-		return nil, err
-	}
-	if err := s.loadExistingServerIssuedCerts(); err != nil {
-		return nil, err
-	}
-	if err := s.loadExistingDataURIs(); err != nil {
-		return nil, err
-	}
-	if err := s.loadExistingLNSConfigs(); err != nil {
-		return nil, err
-	}
 	return s, nil
 }
 
@@ -214,12 +202,7 @@ func loadOrCreateCA(dir string) (*x509.Certificate, crypto.Signer, error) {
 var maxSerial = new(big.Int).Lsh(big.NewInt(1), 128)
 
 func writePEM(path, typ string, data []byte) error {
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	return pem.Encode(f, &pem.Block{Type: typ, Bytes: data})
+	return atomicCredentialWrite(path, pem.EncodeToMemory(&pem.Block{Type: typ, Bytes: data}))
 }
 
 func (s *CertStore) loadExistingGatewayCerts() error {
@@ -439,11 +422,27 @@ func (s *CertStore) loadGatewayCert(gatewayID string) (*tls.Certificate, error) 
 }
 
 // GetServerIssuedCert returns the server-issued (CUPS) client cert for the gateway if stored.
-func (s *CertStore) GetServerIssuedCert(gatewayID string) (*tls.Certificate, bool) {
+func (s *CertStore) GetServerIssuedCert(id string) (*tls.Certificate, bool) {
 	s.mu.RLock()
-	defer s.mu.RUnlock()
-	c, ok := s.serverCerts[gatewayID]
-	return c, ok
+	c, ok := s.serverCerts[id]
+	s.mu.RUnlock()
+	if ok {
+		return c, true
+	}
+	if blob, err := s.upstreamCredential(id); err == nil {
+		_, cert, key, _, err := decodeCredential(blob)
+		if err == nil && len(cert) == 0 {
+			return nil, false
+		}
+		if err == nil && len(cert) > 0 {
+			pair, e := tls.X509KeyPair(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert}), pemEncodeKey(key))
+			if e == nil {
+				return &pair, true
+			}
+		}
+	}
+	c, err := s.loadServerIssuedCert(id)
+	return c, err == nil
 }
 
 // PutServerIssuedCert stores the cert and key (DER from CUPS credentials blob) for the gateway.
@@ -490,6 +489,9 @@ func pemEncodeKey(keyDER []byte) []byte {
 		b, _ := x509.MarshalECPrivateKey(key)
 		return pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: b})
 	}
+	if key, err := x509.ParsePKCS1PrivateKey(keyDER); err == nil {
+		return pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
+	}
 	return pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
 }
 
@@ -510,11 +512,18 @@ func (s *CertStore) GetOrCreateClientCert(gatewayID string) (*tls.Certificate, e
 	if c, ok := s.certs[gatewayID]; ok {
 		return c, nil
 	}
-	tlsCert, err := s.issueAndSaveClientCert(gatewayID)
+	tlsCert, err := s.loadGatewayCert(gatewayID)
+	if err == nil {
+		return tlsCert, nil
+	}
+	if !os.IsNotExist(err) {
+		return nil, err
+	}
+	tlsCert, err = s.issueAndSaveClientCert(gatewayID)
 	if err != nil {
 		return nil, err
 	}
-	s.certs[gatewayID] = tlsCert
+	// Read issued credentials on demand to keep gateway memory bounded.
 	return tlsCert, nil
 }
 
