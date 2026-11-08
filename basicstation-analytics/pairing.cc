@@ -27,6 +27,15 @@ void ConfigToIniMap(const Config& c, IniMap& out) {
   out["analytics-ssl-target-name"] = c.ssl_target_name_override;
   out["batch-sec"] = std::to_string(c.batch_sec);
   out["max-batches"] = std::to_string(c.max_batches);
+  out["max-messages"] = std::to_string(c.max_messages_per_batch);
+  out["max-buffer-bytes"] = std::to_string(c.max_buffer_bytes);
+  out["pre-identity-max-messages"] = std::to_string(c.pre_identity_max_messages);
+  out["socket-rcvbuf-bytes"] = std::to_string(c.socket_rcvbuf_bytes);
+  out["poll-max-datagrams"] = std::to_string(c.poll_max_datagrams);
+  out["shutdown-deadline-ms"] = std::to_string(c.shutdown_deadline_ms);
+  out["analytics-connect-timeout"] = std::to_string(c.connect_timeout);
+  out["analytics-request-timeout"] = std::to_string(c.request_timeout);
+  out["analytics-max-backoff"] = std::to_string(c.max_reconnect_backoff);
   out["log-level"] = c.log_level;
   out["log-file"] = c.log_file;
   out["gauge-stat"] = c.gauge_stat ? "true" : "false";

@@ -92,5 +92,21 @@ int main() {
            "missing gateway error is reported");
   }
 
+  {
+    setenv("BATCH_SEC", "30", 1);
+    setenv("LOG_LEVEL", "debug", 1);
+    Config c; std::string error;
+    char a[]="test", b[]="--pair-pin=123456", d[]="--batch-sec=10", e[]="--max-messages=1", f[]="--max-buffer-bytes=1024", g[]="--max-batches=1";
+    char* args[]={a,b,d,e,f,g};
+    Expect(ParseConfig(6,args,c,&error), "minimum resource profile parses");
+    ExpectEq(c.batch_sec,10,"explicit default overrides env");
+    ExpectEq(c.log_level,std::string("debug"),"env log level retained");
+    ExpectEq(c.max_messages_per_batch,1,"message limit applied");
+    unsetenv("BATCH_SEC"); unsetenv("LOG_LEVEL");
+    char invalid[]="--max-batches=0"; char* bad[]={a,b,invalid};
+    Expect(!ParseConfig(3,bad,c,&error),"reject zero batches");
+    char unknown[]="--mxa-batches=1"; char* typo[]={a,b,unknown};
+    Expect(!ParseConfig(3,typo,c,&error),"reject typo");
+  }
   return Summary();
 }

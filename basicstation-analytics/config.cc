@@ -1,273 +1,113 @@
 /* SPDX-License-Identifier: MIT */
-/* Copyright 2026 Kudzu Technologies */
 #include "config.h"
 #include "gateway_sync.h"
-
+#include <cerrno>
+#include <climits>
 #include <cstdlib>
-#include <cstring>
 #include <fstream>
-#include <iostream>
+#include <functional>
+#include <map>
 #include <sstream>
+#include <stdexcept>
 
 namespace basicstation_analytics {
 namespace {
-
-std::string GetEnv(const char* key, const std::string& def = "") {
-  const char* v = getenv(key);
-  return v ? std::string(v) : def;
+std::string Trim(std::string s) {
+ auto a=s.find_first_not_of(" \t\r\n"); if(a==std::string::npos)return "";
+ s=s.substr(a,s.find_last_not_of(" \t\r\n")-a+1);
+ if(s.size()>=2&&((s.front()=='"'&&s.back()=='"')||(s.front()=='\''&&s.back()=='\'')))s=s.substr(1,s.size()-2);
+ return s;
+}
+std::string Canonical(const std::string& k) {
+ static const std::map<std::string,std::string> a={
+ {"s","socket"},{"analytics-sock","socket"},{"i","client-id"},{"k","client-key"},{"c","config"},{"b","batch-sec"},
+ {"e","analytics-endpoint"},{"endpoint","analytics-endpoint"},{"flush-interval","batch-sec"},{"ca-file","analytics-ca-file"},
+ {"ssl-target-name","analytics-ssl-target-name"},{"connect-timeout","analytics-connect-timeout"},
+ {"request-timeout","analytics-request-timeout"},{"max-backoff","analytics-max-backoff"}};
+ auto it=a.find(k);return it==a.end()?k:it->second;
+}
+int Number(const std::string& v,int base=10) {
+ if(v.empty())throw std::runtime_error("empty integer");
+ errno=0;char* end=nullptr;long long n=std::strtoll(v.c_str(),&end,base);
+ if(errno||!end||*end||n<INT_MIN||n>INT_MAX)throw std::runtime_error("invalid integer: "+v);
+ return static_cast<int>(n);
+}
+bool Boolean(const std::string& v) {
+ if(v=="true"||v=="1"||v=="yes")return true;
+ if(v=="false"||v=="0"||v=="no")return false;
+ throw std::runtime_error("invalid boolean: "+v);
+}
+using Values=std::map<std::string,std::string>;
+void Put(Values& values,const std::string& key,const std::string& value) {
+ auto k=Canonical(key);auto it=values.find(k);
+ if(it!=values.end()&&it->second!=value)throw std::runtime_error("conflicting values for "+k);
+ values[k]=value;
+}
 }
 
-int GetEnvInt(const char* key, int def) {
-  const char* v = getenv(key);
-  return v ? std::atoi(v) : def;
-}
-
-void ApplyKey(Config& c, const std::string& key, const std::string& value) {
-  if (key == "socket" || key == "analytics-sock") { c.socket_path = value; return; }
-  if (key == "socket-mode") {
-    c.socket_mode = static_cast<mode_t>(std::strtoul(value.c_str(), nullptr, 8));
-    return;
+bool ParseConfig(int argc,char* argv[],Config& out,std::string* error) {
+ out=Config{};if(error)error->clear();
+ try {
+  Values cli;
+  for(int i=1;i<argc;++i) {
+   std::string a=argv[i];if(a=="--help"||a=="-h"){out.show_help=true;return false;}
+   if(a=="--version"){out.show_version=true;return false;}
+   if(a.empty()||a[0]!='-')throw std::runtime_error("unexpected argument: "+a);
+   a.erase(0,a.find_first_not_of('-'));auto eq=a.find('=');std::string k=a.substr(0,eq),v;
+   if(eq!=std::string::npos)v=a.substr(eq+1);
+   else if(k=="gauge-stat"||k=="write")v="true";
+   else {if(i+1==argc)throw std::runtime_error("missing value for "+k);v=argv[++i];}
+   Put(cli,k,v);
   }
-  if (key == "client-id") { c.client_id = value; return; }
-  if (key == "client-key") { c.client_key = value; return; }
-  if (key == "analytics-endpoint") { c.endpoint = value; return; }
-  if (key == "pairing-endpoint") { c.pairing_endpoint = value; return; }
-  if (key == "analytics-ca-file") { c.ca_file = value; return; }
-  if (key == "analytics-ssl-target-name") { c.ssl_target_name_override = value; return; }
-  if (key == "analytics-connect-timeout") { c.connect_timeout = std::atoi(value.c_str()); return; }
-  if (key == "analytics-request-timeout") { c.request_timeout = std::atoi(value.c_str()); return; }
-  if (key == "analytics-max-backoff") { c.max_reconnect_backoff = std::atoi(value.c_str()); return; }
-  if (key == "batch-sec" || key == "flush-interval") { c.batch_sec = std::atoi(value.c_str()); return; }
-  if (key == "max-batches") { c.max_batches = std::atoi(value.c_str()); return; }
-  if (key == "max-messages") { c.max_messages_per_batch = std::atoi(value.c_str()); return; }
-  if (key == "shutdown-deadline-ms") { c.shutdown_deadline_ms = std::atoi(value.c_str()); return; }
-  if (key == "gateway") { c.gateway_id = value; return; }
-  if (key == "gateway-eid") { c.gateway_eid = value; return; }
-  if (key == "gateway-eui") { c.gateway_eui = value; return; }
-  if (key == "gateway-name") { c.gateway_name = value; return; }
-  if (key == "gateway-location") { c.gateway_location = value; return; }
-  if (key == "gateway-radios") { c.gateway_radios = value; return; }
-  if (key == "gauge-stat") { c.gauge_stat = (value == "1" || value == "true" || value == "yes"); return; }
-  if (key == "log-level") { c.log_level = value; return; }
-  if (key == "log-file") { c.log_file = value; return; }
-}
-
-bool LoadIni(const std::string& path, Config& c) {
-  std::ifstream in(path);
-  if (!in) return false;
-  std::string line;
-  while (std::getline(in, line)) {
-    if (line.empty() || line[0] == '#' || line[0] == ';') continue;
-    auto eq = line.find('=');
-    if (eq == std::string::npos) continue;
-    std::string key = line.substr(0, eq);
-    std::string value = line.substr(eq + 1);
-    while (!key.empty() && (key.back() == ' ' || key.back() == '\t')) key.pop_back();
-    while (!value.empty() && (value.front() == ' ' || value.front() == '\t')) value.erase(value.begin());
-    ApplyKey(c, key, value);
+  auto config=cli.find("config");
+  if(config!=cli.end())out.config_file_path=config->second;
+  else if(const char* v=std::getenv("CONFIG"))out.config_file_path=v;
+  Values file;
+  if(!out.config_file_path.empty()) {
+   std::ifstream in(out.config_file_path);
+   if(!in&&!(cli.count("pair-pin")&&cli.count("write")))throw std::runtime_error("cannot read config: "+out.config_file_path);
+   std::string line;while(std::getline(in,line)) {
+    line=Trim(line);if(line.empty()||line[0]=='#'||line[0]==';')continue;
+    auto eq=line.find('=');if(eq==std::string::npos)throw std::runtime_error("expected key=value");
+    Put(file,Trim(line.substr(0,eq)),Trim(line.substr(eq+1)));
+   }
+   if(in.bad())throw std::runtime_error("config read failed");
   }
+  std::map<std::string,std::function<void(const std::string&)>> setters;
+  auto str=[&](const char* k,std::string& dst){setters[k]=[&dst](const std::string& v){dst=v;};};
+  auto num=[&](const char* k,int& dst){setters[k]=[&dst](const std::string& v){dst=Number(v);};};
+  str("socket",out.socket_path);str("client-id",out.client_id);str("client-key",out.client_key);
+  str("analytics-endpoint",out.endpoint);str("pairing-endpoint",out.pairing_endpoint);str("analytics-ca-file",out.ca_file);
+  str("analytics-ssl-target-name",out.ssl_target_name_override);str("gateway",out.gateway_id);
+  str("gateway-eid",out.gateway_eid);str("gateway-eui",out.gateway_eui);str("gateway-name",out.gateway_name);
+  str("gateway-location",out.gateway_location);str("gateway-radios",out.gateway_radios);
+  str("log-level",out.log_level);str("log-file",out.log_file);str("pair-pin",out.pair_pin);str("config",out.config_file_path);
+  num("analytics-connect-timeout",out.connect_timeout);num("analytics-request-timeout",out.request_timeout);
+  num("analytics-max-backoff",out.max_reconnect_backoff);num("batch-sec",out.batch_sec);num("max-batches",out.max_batches);
+  num("max-messages",out.max_messages_per_batch);num("max-buffer-bytes",out.max_buffer_bytes);
+  num("pre-identity-max-messages",out.pre_identity_max_messages);num("socket-rcvbuf-bytes",out.socket_rcvbuf_bytes);
+  num("poll-max-datagrams",out.poll_max_datagrams);num("shutdown-deadline-ms",out.shutdown_deadline_ms);
+  setters["socket-mode"]=[&](const std::string& v){int n=Number(v,8);if(n<0||n>0777)throw std::runtime_error("invalid socket-mode");out.socket_mode=n;};
+  setters["gauge-stat"]=[&](const std::string& v){out.gauge_stat=Boolean(v);};
+  setters["write"]=[&](const std::string& v){out.write_config=Boolean(v);};
+  auto apply=[&](const Values& values){for(const auto& p:values){auto it=setters.find(p.first);if(it==setters.end())throw std::runtime_error("unknown option: "+p.first);it->second(p.second);}};
+  apply(file);
+  Values env;
+  for(const auto& p:setters) {
+   std::string key=p.first;for(auto& c:key)c=c=='-'?'_':static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+   if(p.first=="socket")key="ANALYTICS_SOCK";
+   if(const char* v=std::getenv(key.c_str()))Put(env,p.first,v);
+  }
+  if(const char* v=std::getenv("FLUSH_INTERVAL"))Put(env,"batch-sec",v);
+  apply(env);apply(cli);
+  if(out.batch_sec<1||out.max_batches<1||out.max_messages_per_batch<1||out.max_buffer_bytes<1024||out.pre_identity_max_messages<0||out.socket_rcvbuf_bytes<1024||out.poll_max_datagrams<1||out.shutdown_deadline_ms<0||out.connect_timeout<1||out.request_timeout<1||out.max_reconnect_backoff<1)throw std::runtime_error("invalid resource limits");
+  if(out.log_level!="debug"&&out.log_level!="info"&&out.log_level!="warn"&&out.log_level!="error")throw std::runtime_error("invalid log-level");
+  if(!out.pair_pin.empty()) {if(out.write_config&&out.config_file_path.empty())throw std::runtime_error("--write requires --config");return true;}
+  if(out.socket_path.empty()||out.client_id.empty()||out.client_key.empty())throw std::runtime_error("Missing required --socket/-s, --client-id/-i, or --client-key/-k");
+  if(out.gateway_id.empty())throw std::runtime_error("--gateway is required (Kudzu ObjectID)");
+  ParsedGatewaySync parsed;std::string sync_error;
+  if(!ParseGatewaySyncConfig(out,parsed,sync_error)&&!sync_error.empty())throw std::runtime_error(sync_error);
   return true;
+ } catch(const std::exception& e) {if(error)*error=e.what();return false;}
 }
-
-void ApplyEnv(Config& c) {
-  c.socket_path = GetEnv("ANALYTICS_SOCK", c.socket_path);
-  c.client_id = GetEnv("CLIENT_ID", c.client_id);
-  c.client_key = GetEnv("CLIENT_KEY", c.client_key);
-  c.endpoint = GetEnv("ANALYTICS_ENDPOINT", c.endpoint);
-  c.pairing_endpoint = GetEnv("PAIRING_ENDPOINT", c.pairing_endpoint);
-  c.ca_file = GetEnv("ANALYTICS_CA_FILE", c.ca_file);
-  c.ssl_target_name_override = GetEnv("ANALYTICS_SSL_TARGET_NAME", c.ssl_target_name_override);
-  c.connect_timeout = GetEnvInt("ANALYTICS_CONNECT_TIMEOUT", c.connect_timeout);
-  c.request_timeout = GetEnvInt("ANALYTICS_REQUEST_TIMEOUT", c.request_timeout);
-  c.max_reconnect_backoff = GetEnvInt("ANALYTICS_MAX_BACKOFF", c.max_reconnect_backoff);
-  c.batch_sec = GetEnvInt("BATCH_SEC", c.batch_sec);
-  c.max_batches = GetEnvInt("MAX_BATCHES", c.max_batches);
-  c.gateway_id = GetEnv("GATEWAY", c.gateway_id);
-  c.gateway_eid = GetEnv("GATEWAY_EID", c.gateway_eid);
-  c.gateway_eui = GetEnv("GATEWAY_EUI", c.gateway_eui);
-  c.gateway_name = GetEnv("GATEWAY_NAME", c.gateway_name);
-  c.gateway_location = GetEnv("GATEWAY_LOCATION", c.gateway_location);
-  c.gateway_radios = GetEnv("GATEWAY_RADIOS", c.gateway_radios);
-  c.log_level = GetEnv("LOG_LEVEL", c.log_level);
-  c.log_file = GetEnv("LOG_FILE", c.log_file);
-}
-
-}  // namespace
-
-bool ParseConfig(int argc, char* argv[], Config& out, std::string* validation_error) {
-  out = Config{};
-  std::string ini_path;
-  bool endpoint_set_by_cli = false;
-  bool pairing_endpoint_set_by_cli = false;
-
-  for (int i = 1; i < argc; ++i) {
-    const char* a = argv[i];
-    auto take = [&](const char* short_opt, const char* long_opt) -> const char* {
-      if (short_opt && (std::strcmp(a, short_opt) == 0 || std::strcmp(a, long_opt) == 0)) {
-        if (i + 1 < argc) return argv[++i];
-      }
-      if (long_opt && std::strcmp(a, long_opt) == 0) {
-        if (i + 1 < argc) return argv[++i];
-      }
-      if (long_opt) {
-        const size_t n = std::strlen(long_opt);
-        if (std::strncmp(a, long_opt, n) == 0 && a[n] == '=') return a + n + 1;
-      }
-      return nullptr;
-    };
-
-    if (std::strcmp(a, "-h") == 0 || std::strcmp(a, "--help") == 0) {
-      out.show_help = true;
-      return false;
-    }
-    if (std::strcmp(a, "--version") == 0) {
-      out.show_version = true;
-      return false;
-    }
-    if (std::strcmp(a, "--write") == 0) {
-      out.write_config = true;
-      continue;
-    }
-    if (std::strcmp(a, "--gauge-stat") == 0) {
-      out.gauge_stat = true;
-      continue;
-    }
-    if (const char* v = take("-c", "--config")) {
-      ini_path = v;
-      out.config_file_path = v;
-      continue;
-    }
-    if (const char* v = take("-s", "--socket")) { out.socket_path = v; continue; }
-    if (const char* v = take("-i", "--client-id")) { out.client_id = v; continue; }
-    if (const char* v = take("-k", "--client-key")) { out.client_key = v; continue; }
-    if (const char* v = take("-e", "--endpoint")) {
-      out.endpoint = v;
-      endpoint_set_by_cli = true;
-      continue;
-    }
-    if (const char* v = take(nullptr, "--analytics-endpoint")) {
-      out.endpoint = v;
-      endpoint_set_by_cli = true;
-      continue;
-    }
-    if (const char* v = take(nullptr, "--pairing-endpoint")) {
-      out.pairing_endpoint = v;
-      pairing_endpoint_set_by_cli = true;
-      continue;
-    }
-    if (const char* v = take("-b", "--batch-sec")) {
-      out.batch_sec = std::atoi(v);
-      continue;
-    }
-    if (const char* v = take(nullptr, "--ca-file")) { out.ca_file = v; continue; }
-    if (const char* v = take(nullptr, "--ssl-target-name")) {
-      out.ssl_target_name_override = v;
-      continue;
-    }
-    if (const char* v = take(nullptr, "--gateway")) { out.gateway_id = v; continue; }
-    if (const char* v = take(nullptr, "--gateway-eid")) { out.gateway_eid = v; continue; }
-    if (const char* v = take(nullptr, "--gateway-eui")) { out.gateway_eui = v; continue; }
-    if (const char* v = take(nullptr, "--gateway-name")) { out.gateway_name = v; continue; }
-    if (const char* v = take(nullptr, "--gateway-location")) { out.gateway_location = v; continue; }
-    if (const char* v = take(nullptr, "--gateway-radios")) { out.gateway_radios = v; continue; }
-    if (const char* v = take(nullptr, "--pair-pin")) { out.pair_pin = v; continue; }
-    if (const char* v = take(nullptr, "--log-level")) { out.log_level = v; continue; }
-    if (const char* v = take(nullptr, "--log-file")) { out.log_file = v; continue; }
-    if (const char* v = take(nullptr, "--max-batches")) {
-      out.max_batches = std::atoi(v);
-      continue;
-    }
-    if (const char* v = take(nullptr, "--connect-timeout")) {
-      out.connect_timeout = std::atoi(v);
-      continue;
-    }
-    if (const char* v = take(nullptr, "--request-timeout")) {
-      out.request_timeout = std::atoi(v);
-      continue;
-    }
-    if (const char* v = take(nullptr, "--max-backoff")) {
-      out.max_reconnect_backoff = std::atoi(v);
-      continue;
-    }
-    if (const char* v = take(nullptr, "--shutdown-deadline-ms")) {
-      out.shutdown_deadline_ms = std::atoi(v);
-      continue;
-    }
-
-    // Fallback key=value style
-    const char* eq = std::strchr(a, '=');
-    if (eq && a[0] == '-' && a[1] == '-') {
-      ApplyKey(out, std::string(a + 2, eq), std::string(eq + 1));
-      continue;
-    }
-  }
-
-  // Precedence inside Apply*: CLI already applied; reload file+env underneath carefully.
-  // Plan: defaults → INI → env → CLI. Rebuild from defaults then layer.
-  Config layered;
-  if (!ini_path.empty()) LoadIni(ini_path, layered);
-  else if (!out.config_file_path.empty()) LoadIni(out.config_file_path, layered);
-  ApplyEnv(layered);
-
-  // Overlay CLI/non-default fields from first pass stored in `out`.
-  auto overlay = [](std::string& dst, const std::string& src) {
-    if (!src.empty()) dst = src;
-  };
-  overlay(layered.socket_path, out.socket_path);
-  overlay(layered.client_id, out.client_id);
-  overlay(layered.client_key, out.client_key);
-  if (endpoint_set_by_cli) layered.endpoint = out.endpoint;
-  if (pairing_endpoint_set_by_cli) layered.pairing_endpoint = out.pairing_endpoint;
-  overlay(layered.ca_file, out.ca_file);
-  overlay(layered.ssl_target_name_override, out.ssl_target_name_override);
-  overlay(layered.gateway_id, out.gateway_id);
-  overlay(layered.gateway_eid, out.gateway_eid);
-  overlay(layered.gateway_eui, out.gateway_eui);
-  overlay(layered.gateway_name, out.gateway_name);
-  overlay(layered.gateway_location, out.gateway_location);
-  overlay(layered.gateway_radios, out.gateway_radios);
-  overlay(layered.log_level, out.log_level);
-  overlay(layered.log_file, out.log_file);
-  overlay(layered.pair_pin, out.pair_pin);
-  overlay(layered.config_file_path, out.config_file_path);
-  if (out.batch_sec != Config{}.batch_sec) layered.batch_sec = out.batch_sec;
-  if (out.max_batches != Config{}.max_batches) layered.max_batches = out.max_batches;
-  if (out.connect_timeout != Config{}.connect_timeout) layered.connect_timeout = out.connect_timeout;
-  if (out.request_timeout != Config{}.request_timeout) layered.request_timeout = out.request_timeout;
-  if (out.max_reconnect_backoff != Config{}.max_reconnect_backoff)
-    layered.max_reconnect_backoff = out.max_reconnect_backoff;
-  if (out.shutdown_deadline_ms != Config{}.shutdown_deadline_ms)
-    layered.shutdown_deadline_ms = out.shutdown_deadline_ms;
-  if (out.socket_mode != Config{}.socket_mode) layered.socket_mode = out.socket_mode;
-  layered.gauge_stat = out.gauge_stat || layered.gauge_stat;
-  layered.write_config = out.write_config;
-  out = layered;
-
-  if (out.batch_sec < 1) out.batch_sec = 1;
-  if (out.max_batches < 1) out.max_batches = 1;
-
-  if (!out.pair_pin.empty()) return true;
-
-  if (out.socket_path.empty() || out.client_id.empty() || out.client_key.empty()) {
-    if (validation_error) {
-      *validation_error = "Missing required --socket/-s, --client-id/-i, or --client-key/-k";
-    }
-    return false;
-  }
-  if (out.gateway_id.empty()) {
-    if (validation_error) {
-      *validation_error = "--gateway is required (Kudzu ObjectID)";
-    }
-    return false;
-  }
-
-  ParsedGatewaySync parsed;
-  std::string sync_err;
-  if (!ParseGatewaySyncConfig(out, parsed, sync_err) && !sync_err.empty()) {
-    if (validation_error) *validation_error = sync_err;
-    return false;
-  }
-  return true;
-}
-
-}  // namespace basicstation_analytics
+} // namespace basicstation_analytics

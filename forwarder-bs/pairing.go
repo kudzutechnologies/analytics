@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 
 	"github.com/kudzutechnologies/analytics/client"
 )
@@ -47,7 +48,13 @@ func renderPairConfig(config ForwarderConfig, pairConfig *client.PairingConfig) 
 
 	defaultConfig := toFlatMap(defaultConf)
 	iniConfig := ""
-	for k, v := range configMap {
+	keys := make([]string, 0, len(configMap))
+	for k := range configMap {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		v := configMap[k]
 		if dv, ok := defaultConfig[k]; ok && dv == v {
 			continue
 		}

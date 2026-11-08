@@ -1,18 +1,24 @@
 package main
 
 import (
-	"encoding/json"
+	"bufio"
+	"errors"
+	"flag"
 	"fmt"
+	"io"
+	"net"
+	"net/url"
 	"os"
+	"reflect"
 	"runtime/debug"
+	"strconv"
 	"strings"
 
 	"github.com/kudzutechnologies/analytics/client"
-	"github.com/namsral/flag"
 	log "github.com/sirupsen/logrus"
 )
 
-const MajorVersion = "0.1.0"
+var MajorVersion = "dev"
 
 type ForwarderConfig struct {
 	// WebSocket proxy
@@ -47,12 +53,28 @@ type ForwarderConfig struct {
 	MaxReconnectBackoff int    `json:"analytics-max-backoff,omitempty"`
 
 	// Forwarder behavior
-	FlushInterval int    `json:"flush-interval,omitempty"`
+	FlushInterval int    `json:"batch-sec,omitempty"`
 	GatewayId     string `json:"gateway,omitempty"`
 	GaugeStat     bool   `json:"gauge-stat,omitempty"`
 	ServerSide    bool   `json:"server-side,omitempty"`
 	MaxWSStreams  int    `json:"max-ws-streams,omitempty"`
 
+	MaxBatches              int    `json:"max-batches,omitempty"`
+	MaxMessages             int    `json:"max-messages,omitempty"`
+	MaxBufferBytes          int    `json:"max-buffer-bytes,omitempty"`
+	PreIdentityMaxMessages  int    `json:"pre-identity-max-messages,omitempty"`
+	ShutdownDeadlineMS      int    `json:"shutdown-deadline-ms,omitempty"`
+	ProxyMode               string `json:"proxy-mode,omitempty"`
+	PublicURI               string `json:"public-uri,omitempty"`
+	GatewayAuthFile         string `json:"gateway-auth-file,omitempty"`
+	UpstreamAllowedOrigins  string `json:"upstream-allowed-origins,omitempty"`
+	CUPSMode                string `json:"cups-mode,omitempty"`
+	InjectRouterIntoVersion bool   `json:"inject-router-into-version,omitempty"`
+	ConfigPath              string `json:"-"`
+	PairPin                 string `json:"-"`
+	WriteConfig             bool   `json:"-"`
+	ShowVersion             bool   `json:"-"`
+	LogFile                 string `json:"log-file,omitempty"`
 	// Debug
 	DebugDump string `json:"debug-dump,omitempty"`
 	LogLevel  string `json:"log-level,omitempty"`
@@ -60,203 +82,337 @@ type ForwarderConfig struct {
 }
 
 var defaultConf = ForwarderConfig{
-	ListenHost:               "0.0.0.0",
-	ListenPort:               8090,
-	ConnectURI:               "",
-	ConnectDiscoveryURI:      "",
-	ConnectDiscoveryPath:     "",
-	ConnectDataPath:          "",
-	ConnectDataURI:           "",
-	ListenTLSCert:            "",
-	ListenTLSKey:             "",
-	ConnectTLSCA:             "",
-	ConnectTLSInsecure:       false,
-	ConnectDataTLSServerName: "",
-	ConnectDataTLSCA:         "",
-	ConnectDataTLSInsecure:   false,
-	CertsDir:                 "./certs",
-	CertsCACert:              "",
-	CertsCAKey:               "",
-	CertsUpstreamClientCert:  false,
-	ClientId:                 "",
-	ClientKey:                "",
-	Endpoint:                 client.DefaultEndpoint,
-	PairingEndpoint:          client.DefaultPairingEndpoint,
-	CAFile:                   "",
-	ConnectTimeout:           0,
-	RequestTimeout:           0,
-	MaxReconnectBackoff:      0,
-	FlushInterval:            0,
-	GatewayId:                "",
-	GaugeStat:                false,
-	ServerSide:               false,
-	MaxWSStreams:             0,
-	DebugDump:                "",
-	LogLevel:                 "info",
-	Verbose:                  false,
+	ListenHost: "127.0.0.1", ListenPort: 8090,
+	Endpoint: client.DefaultEndpoint, PairingEndpoint: client.DefaultPairingEndpoint,
+	ConnectTimeout: 5, RequestTimeout: 5, MaxReconnectBackoff: 60,
+	FlushInterval: 10, MaxBatches: 2, MaxMessages: 32, MaxBufferBytes: 65536,
+	ShutdownDeadlineMS: 5000, ProxyMode: "local", CUPSMode: "off", LogLevel: "info",
 }
 
 func Version() string {
 	if info, ok := debug.ReadBuildInfo(); ok {
-		for _, setting := range info.Settings {
-			if setting.Key == "vcs.revision" {
-				return setting.Value
+		for _, s := range info.Settings {
+			if s.Key == "vcs.revision" {
+				return s.Value
 			}
 		}
 	}
 	return "unknown"
 }
 
+var configAliases = map[string]string{"flush-interval": "batch-sec", "endpoint": "analytics-endpoint", "ca-file": "analytics-ca-file"}
+
+func canonicalOption(k string) string {
+	if v, ok := configAliases[k]; ok {
+		return v
+	}
+	return k
+}
+
+// ParseForwarderConfig has no global flags or process side effects. Tests and
+// pairing use exactly the same precedence and validation as the daemon.
+func ParseForwarderConfig(args, environ []string) (ForwarderConfig, error) {
+	c := defaultConf
+	fields := map[string]reflect.Value{}
+	rv := reflect.ValueOf(&c).Elem()
+	rt := rv.Type()
+	for i := 0; i < rv.NumField(); i++ {
+		k := strings.Split(rt.Field(i).Tag.Get("json"), ",")[0]
+		if k != "-" && k != "" {
+			fields[k] = rv.Field(i)
+		}
+	}
+	fields["config"] = reflect.ValueOf(&c.ConfigPath).Elem()
+	fields["pair-pin"] = reflect.ValueOf(&c.PairPin).Elem()
+	fields["write"] = reflect.ValueOf(&c.WriteConfig).Elem()
+	fields["version"] = reflect.ValueOf(&c.ShowVersion).Elem()
+	set := func(k, v string) error {
+		k = canonicalOption(k)
+		f, ok := fields[k]
+		if !ok {
+			return fmt.Errorf("unknown option %q", k)
+		}
+		switch f.Kind() {
+		case reflect.String:
+			f.SetString(v)
+		case reflect.Int:
+			n, e := strconv.ParseInt(v, 10, 32)
+			if e != nil {
+				return fmt.Errorf("%s: invalid integer %q", k, v)
+			}
+			f.SetInt(n)
+		case reflect.Bool:
+			b, e := strconv.ParseBool(v)
+			if e != nil {
+				return fmt.Errorf("%s: invalid boolean %q", k, v)
+			}
+			f.SetBool(b)
+		}
+		return nil
+	}
+	env := map[string]string{}
+	for _, entry := range environ {
+		if kv := strings.SplitN(entry, "=", 2); len(kv) == 2 {
+			env[kv[0]] = kv[1]
+		}
+	}
+	c.ConfigPath = env["CONFIG"]
+	for i, a := range args {
+		a = strings.TrimLeft(a, "-")
+		kv := strings.SplitN(a, "=", 2)
+		if kv[0] == "config" {
+			if len(kv) == 2 {
+				c.ConfigPath = kv[1]
+			} else if i+1 < len(args) {
+				c.ConfigPath = args[i+1]
+			}
+		}
+	}
+	// A new pairing destination may not exist yet. Other explicit file failures
+	// are errors, including directories and permission failures.
+	if c.ConfigPath != "" {
+		f, e := os.Open(c.ConfigPath)
+		newPairing := false
+		for _, a := range args {
+			if strings.HasPrefix(a, "--pair-pin") || strings.HasPrefix(a, "-pair-pin") {
+				newPairing = true
+			}
+		}
+		if e != nil {
+			if !(os.IsNotExist(e) && newPairing) {
+				return c, fmt.Errorf("config: %w", e)
+			}
+		} else {
+			defer f.Close()
+			scan := bufio.NewScanner(f)
+			seen := map[string]string{}
+			for scan.Scan() {
+				line := strings.TrimSpace(scan.Text())
+				if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, ";") {
+					continue
+				}
+				kv := strings.SplitN(line, "=", 2)
+				if len(kv) != 2 {
+					return c, fmt.Errorf("config: expected key=value")
+				}
+				k, v := strings.TrimSpace(kv[0]), strings.TrimSpace(kv[1])
+				if len(v) > 0 && (v[0] == '"' || v[0] == '\'') {
+					if len(v) < 2 || v[len(v)-1] != v[0] {
+						return c, fmt.Errorf("config: unclosed quote")
+					}
+					v = v[1 : len(v)-1]
+				}
+				canonical := canonicalOption(k)
+				if old, ok := seen[canonical]; ok && old != v {
+					return c, fmt.Errorf("conflicting config aliases for %s", canonical)
+				}
+				seen[canonical] = v
+				if e := set(k, v); e != nil {
+					return c, e
+				}
+			}
+			if e := scan.Err(); e != nil {
+				return c, e
+			}
+		}
+	}
+	seenEnv := map[string]string{}
+	for k := range fields {
+		ek := strings.ToUpper(strings.ReplaceAll(k, "-", "_"))
+		if v, ok := env[ek]; ok {
+			seenEnv[k] = v
+			if e := set(k, v); e != nil {
+				return c, e
+			}
+		}
+	}
+	for alias, canonical := range configAliases {
+		ek := strings.ToUpper(strings.ReplaceAll(alias, "-", "_"))
+		if v, ok := env[ek]; ok {
+			if old, exists := seenEnv[canonical]; exists && old != v {
+				return c, fmt.Errorf("conflicting environment aliases for %s", canonical)
+			}
+			if e := set(canonical, v); e != nil {
+				return c, e
+			}
+		}
+	}
+	fs := flag.NewFlagSet("kudzu-forwarder-bs", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	for k, f := range fields {
+		switch f.Kind() {
+		case reflect.String:
+			fs.StringVar(f.Addr().Interface().(*string), k, f.String(), k)
+		case reflect.Int:
+			fs.IntVar(f.Addr().Interface().(*int), k, int(f.Int()), k)
+		case reflect.Bool:
+			fs.BoolVar(f.Addr().Interface().(*bool), k, f.Bool(), k)
+		}
+	}
+	normalized := make([]string, 0, len(args))
+	seenCLI := map[string]string{}
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		if !strings.HasPrefix(a, "-") {
+			return c, fmt.Errorf("unexpected argument %q", a)
+		}
+		kv := strings.SplitN(strings.TrimLeft(a, "-"), "=", 2)
+		k := canonicalOption(kv[0])
+		f, ok := fields[k]
+		if !ok {
+			if k == "h" || k == "help" {
+				return c, flag.ErrHelp
+			}
+			return c, fmt.Errorf("unknown option %q", k)
+		}
+		v := "true"
+		if len(kv) == 2 {
+			v = kv[1]
+		} else if f.Kind() != reflect.Bool {
+			i++
+			if i >= len(args) {
+				return c, fmt.Errorf("missing value for %s", k)
+			}
+			v = args[i]
+		}
+		if old, exists := seenCLI[k]; exists && old != v {
+			return c, fmt.Errorf("conflicting CLI values for %s", k)
+		}
+		seenCLI[k] = v
+		normalized = append(normalized, "--"+k+"="+v)
+	}
+	if e := fs.Parse(normalized); e != nil {
+		return c, e
+	}
+	if c.ShowVersion || c.PairPin != "" {
+		return c, nil
+	}
+	return c, ValidateForwarderConfig(&c)
+}
+
+func ValidateForwarderConfig(c *ForwarderConfig) error {
+	rv := reflect.ValueOf(c).Elem()
+	for i := 0; i < rv.NumField(); i++ {
+		if rv.Field(i).Kind() == reflect.Int && rv.Field(i).Int() > 2147483647 {
+			return fmt.Errorf("integer option exceeds portable 32-bit range")
+		}
+	}
+
+	if c.ProxyMode != "local" && c.ProxyMode != "shared" {
+		return fmt.Errorf("proxy-mode must be local or shared")
+	}
+	if c.MaxWSStreams == 0 {
+		c.MaxWSStreams = 1
+		if c.ProxyMode == "shared" {
+			c.MaxWSStreams = 256
+		}
+	}
+	for k, v := range map[string]int{"max-batches": c.MaxBatches, "max-messages": c.MaxMessages, "batch-sec": c.FlushInterval, "max-ws-streams": c.MaxWSStreams, "analytics-connect-timeout": c.ConnectTimeout, "analytics-request-timeout": c.RequestTimeout, "analytics-max-backoff": c.MaxReconnectBackoff} {
+		if v < 1 {
+			return fmt.Errorf("%s must be at least 1", k)
+		}
+	}
+	if c.MaxBufferBytes < 1024 || c.ShutdownDeadlineMS < 0 || c.PreIdentityMaxMessages < 0 {
+		return fmt.Errorf("invalid buffer or shutdown limits")
+	}
+	if c.ListenPort < 0 || c.ListenPort > 65535 {
+		return fmt.Errorf("invalid listen-port")
+	}
+	if c.ClientId == "" || c.ClientKey == "" || (!c.ServerSide && c.GatewayId == "") {
+		return fmt.Errorf("client-id, client-key and client-side gateway are required")
+	}
+	for _, raw := range []string{c.ConnectURI, c.ConnectDataURI, c.ConnectDiscoveryURI} {
+		if raw == "" {
+			continue
+		}
+		u, e := url.Parse(raw)
+		if e != nil || u.Host == "" || (u.Scheme != "ws" && u.Scheme != "wss") || u.User != nil {
+			return fmt.Errorf("invalid upstream WebSocket URI")
+		}
+	}
+	if c.ConnectURI == "" {
+		return fmt.Errorf("connect-uri is required")
+	}
+	if (c.ListenTLSCert == "") != (c.ListenTLSKey == "") {
+		return fmt.Errorf("listen TLS certificate and key must be configured together")
+	}
+	if c.ProxyMode == "local" {
+		ip := net.ParseIP(c.ListenHost)
+		if c.ListenHost != "localhost" && (ip == nil || !ip.IsLoopback()) {
+			return fmt.Errorf("local proxy must bind to loopback")
+		}
+	}
+	if c.ProxyMode == "shared" && (c.ListenTLSCert == "" || c.GatewayAuthFile == "" || c.PublicURI == "") {
+		return fmt.Errorf("shared proxy requires TLS, public-uri and gateway-auth-file")
+	}
+	if c.CUPSMode != "off" && c.CUPSMode != "managed" {
+		return fmt.Errorf("cups-mode must be off or managed")
+	}
+	if c.CUPSMode == "managed" && (c.CertsDir == "" || c.ListenTLSCert == "") {
+		return fmt.Errorf("managed CUPS requires explicit TLS and certs-dir")
+	}
+	if c.PublicURI != "" {
+		u, e := url.Parse(c.PublicURI)
+		if e != nil || u.Host == "" || (u.Scheme != "ws" && u.Scheme != "wss") || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+			return fmt.Errorf("invalid public-uri")
+		}
+		if c.ProxyMode == "shared" && u.Scheme != "wss" {
+			return fmt.Errorf("shared public-uri must use wss")
+		}
+	}
+	switch c.LogLevel {
+	case "debug", "info", "warn", "error":
+	default:
+		return fmt.Errorf("unknown log-level %q", c.LogLevel)
+	}
+	return nil
+}
+
 func ParseConfigFromEnv() ForwarderConfig {
-	var config ForwarderConfig
-	flag.String(flag.DefaultConfigFlagname, "", "path to the configuration file")
-
-	// WebSocket proxy config
-	flag.StringVar(&config.ListenHost, "listen-host", defaultConf.ListenHost, "local bind address for WebSocket server")
-	flag.IntVar(&config.ListenPort, "listen-port", defaultConf.ListenPort, "local port for WebSocket server")
-	flag.StringVar(&config.ConnectURI, "connect-uri", defaultConf.ConnectURI, "upstream LNS WebSocket URI for data (e.g. wss://lns.example.com:8887)")
-	flag.StringVar(&config.ConnectDiscoveryURI, "connect-discovery-uri", defaultConf.ConnectDiscoveryURI, "optional full router-info WebSocket URI (overrides host/port/path)")
-	flag.StringVar(&config.ConnectDiscoveryPath, "connect-discovery-path", defaultConf.ConnectDiscoveryPath, "optional router-info path on connect-uri host (default /router-info); use when LNS is on same port, different path")
-	flag.StringVar(&config.ConnectDataPath, "connect-data-path", defaultConf.ConnectDataPath, "path for LNS data WebSocket on connect-uri host (e.g. /tpe/lns for ThingPark); when empty, data URI is connect-uri as-is")
-	flag.StringVar(&config.ConnectDataURI, "connect-data-uri", defaultConf.ConnectDataURI, "optional full LNS data WebSocket URI (overrides connect-uri + connect-data-path); use when LNS is on a different host/port/path")
-	flag.StringVar(&config.ConnectWSSubprotocol, "connect-ws-subprotocol", defaultConf.ConnectWSSubprotocol, "optional WebSocket subprotocol for upstream (e.g. lora.v2 for some LNS)")
-	flag.StringVar(&config.ListenTLSCert, "listen-tls-cert", defaultConf.ListenTLSCert, "TLS certificate file for incoming gateway connections")
-	flag.StringVar(&config.ListenTLSKey, "listen-tls-key", defaultConf.ListenTLSKey, "TLS key file for incoming gateway connections")
-	flag.StringVar(&config.ConnectTLSCA, "connect-tls-ca", defaultConf.ConnectTLSCA, "CA certificate file for verifying upstream LNS")
-	flag.BoolVar(&config.ConnectTLSInsecure, "connect-tls-insecure", defaultConf.ConnectTLSInsecure, "skip TLS verification for upstream LNS")
-	flag.StringVar(&config.ConnectDataTLSServerName, "connect-data-tls-server-name", defaultConf.ConnectDataTLSServerName, "override TLS ServerName for data connection when server cert hostname differs (e.g. lns-tpw.thingpark.com)")
-	flag.StringVar(&config.ConnectDataTLSCA, "connect-data-tls-ca", defaultConf.ConnectDataTLSCA, "CA file for data connection TLS when LNS uses a different CA than connect-uri")
-	flag.BoolVar(&config.ConnectDataTLSInsecure, "connect-data-tls-insecure", defaultConf.ConnectDataTLSInsecure, "skip server certificate verification for data connection only (client cert still sent)")
-	flag.StringVar(&config.CertsDir, "certs-dir", defaultConf.CertsDir, "directory for CA, bootstrap and per-gateway certs")
-	flag.StringVar(&config.CertsCACert, "certs-ca-cert", defaultConf.CertsCACert, "path to existing CA cert (default: generate in certs-dir)")
-	flag.StringVar(&config.CertsCAKey, "certs-ca-key", defaultConf.CertsCAKey, "path to existing CA key (use with --certs-ca-cert)")
-	flag.BoolVar(&config.CertsUpstreamClientCert, "certs-upstream-client-cert", defaultConf.CertsUpstreamClientCert, "use proxy-issued client cert for CUPS when no server-issued cert; set true only if upstream LNS/CUPS trusts proxy CA (e.g. your own LNS)")
-
-	// Analytics client config
-	flag.StringVar(&config.ClientId, "client-id", defaultConf.ClientId, "the client ID to use for connecting to Kudzu Analytics")
-	flag.StringVar(&config.ClientKey, "client-key", defaultConf.ClientKey, "the private client key to use for connecting to Kudzu Analytics")
-	flag.StringVar(&config.Endpoint, "analytics-endpoint", defaultConf.Endpoint, "the analytics endpoint to push the data to")
-	flag.StringVar(&config.PairingEndpoint, "pairing-endpoint", defaultConf.PairingEndpoint, "the HTTPS base URL used for pairing")
-	flag.StringVar(&config.CAFile, "analytics-ca-file", defaultConf.CAFile, "optional CA certificate file appended to the system trust store for analytics TLS")
-	flag.IntVar(&config.ConnectTimeout, "analytics-connect-timeout", defaultConf.ConnectTimeout, "how long to wait for analytics connection")
-	flag.IntVar(&config.RequestTimeout, "analytics-request-timeout", defaultConf.RequestTimeout, "how long to wait for analytics to be pushed")
-	flag.IntVar(&config.MaxReconnectBackoff, "analytics-max-backoff", defaultConf.MaxReconnectBackoff, "the maximum time to wait for reconnecting")
-
-	// Forwarder component config
-	flag.IntVar(&config.FlushInterval, "flush-interval", defaultConf.FlushInterval, "how frequently to flush collected metrics to analytics")
-	flag.StringVar(&config.GatewayId, "gateway", defaultConf.GatewayId, "the ID of the gateway the forwarder is pushing data for")
-	flag.BoolVar(&config.GaugeStat, "gauge-stat", defaultConf.GaugeStat, "the statistics are gauge values")
-	flag.BoolVar(&config.ServerSide, "server-side", defaultConf.ServerSide, "the forwarder runs on the server-side")
-	flag.IntVar(&config.MaxWSStreams, "max-ws-streams", defaultConf.MaxWSStreams, "max concurrent WebSocket gateway sessions (server-side)")
-
-	flag.StringVar(&config.DebugDump, "debug-dump", defaultConf.DebugDump, "the filename where to write the traffic for debugging")
-	flag.StringVar(&config.LogLevel, "log-level", defaultConf.LogLevel, "selects the verbosity of logging, can be 'error', 'warn', 'info', 'debug'")
-	flag.BoolVar(&config.Verbose, "verbose", defaultConf.Verbose, "enable debug log level and hexdump of incoming/outgoing traffic (HTTP and WebSocket)")
-
-	// Local flags
-	var version bool
-	var writeConfig bool
-	var logFile string
-	var pairPin string
-	flag.BoolVar(&version, "version", false, "show the package version and exit")
-	flag.BoolVar(&writeConfig, "write", false, "write any changes to the configuration file")
-	flag.StringVar(&logFile, "log-file", "", "writes the program output to the specified logfile")
-	flag.StringVar(&pairPin, "pair-pin", "", "if specified, tries to download a configuration from the server using this PIN and exits")
-
-	flag.Parse()
-
-	// Normalize URI fields: trim whitespace and surrounding double quotes (e.g. from config file or env)
-	config.ConnectURI = strings.TrimSpace(config.ConnectURI)
-	config.ConnectURI = strings.Trim(config.ConnectURI, `"`)
-	config.ConnectDiscoveryURI = strings.TrimSpace(config.ConnectDiscoveryURI)
-	config.ConnectDiscoveryURI = strings.Trim(config.ConnectDiscoveryURI, `"`)
-	config.ConnectDataPath = strings.TrimSpace(config.ConnectDataPath)
-	config.ConnectDataURI = strings.TrimSpace(config.ConnectDataURI)
-	config.ConnectDataTLSServerName = strings.TrimSpace(config.ConnectDataTLSServerName)
-	config.ConnectDataTLSCA = strings.TrimSpace(config.ConnectDataTLSCA)
-
-	if version {
+	c, e := ParseForwarderConfig(os.Args[1:], os.Environ())
+	if errors.Is(e, flag.ErrHelp) {
+		fmt.Println("Kudzu Basic Station proxy: --config FILE --connect-uri URI --client-id ID --client-key KEY --gateway ID; resource controls: MAX_BATCHES, MAX_MESSAGES, MAX_BUFFER_BYTES, SHUTDOWN_DEADLINE_MS; see README.md for all options")
+		os.Exit(0)
+	}
+	if e != nil {
+		log.Fatal(e)
+	}
+	if c.ShowVersion {
 		fmt.Printf("Kudzu Analytics Basic Station Forwarder v%s (Git %s)\n", MajorVersion, Version())
 		os.Exit(0)
 	}
-
-	if pairPin != "" {
-		rendered, err := getRenderedPairConfig(pairPin, config)
-		if err != nil {
-			log.Fatalf("Could not pair with server: %s", err.Error())
+	if c.PairPin != "" {
+		rendered, e := getRenderedPairConfig(c.PairPin, c)
+		if e != nil {
+			log.Fatal(e)
 		}
-		if writeConfig {
-			configPath := flag.DefaultConfigFlagname
-			if f := flag.Lookup(flag.DefaultConfigFlagname); f != nil && f.Value.String() != "" {
-				configPath = f.Value.String()
+		if c.WriteConfig {
+			if c.ConfigPath == "" {
+				log.Fatal("--write requires --config")
 			}
-			log.Infof("Writing changes to configuration file: %s", configPath)
-			err = os.WriteFile(configPath, []byte(rendered), 0644)
-			if err != nil {
-				log.Fatalf("Could not write configuration file: %s", err.Error())
+			if e = os.WriteFile(c.ConfigPath, []byte(rendered), 0600); e != nil {
+				log.Fatal(e)
+			}
+			if e = os.Chmod(c.ConfigPath, 0600); e != nil {
+				log.Fatal(e)
 			}
 		} else {
-			fmt.Println(rendered)
+			fmt.Print(rendered)
 		}
 		os.Exit(0)
 	}
-
-	if config.ConnectURI == "" {
-		log.Fatalf("You must specify an upstream LNS WebSocket URI (--connect-uri)")
+	if c.Verbose {
+		c.LogLevel = "debug"
 	}
-	if config.ClientId == "" {
-		log.Fatalf("You must specify a client ID (--client-id=)")
-	}
-	if config.ClientKey == "" {
-		log.Fatalf("You must specify a client Key (--client-key=)")
-	}
-	if config.GatewayId == "" && !config.ServerSide {
-		log.Fatalf("You must specify a gateway ID (--gateway=) when running on the client-side")
-	}
-
-	if config.MaxWSStreams == 0 {
-		if config.ServerSide {
-			config.MaxWSStreams = 256
-		} else {
-			config.MaxWSStreams = 2
-		}
-	}
-
-	if config.FlushInterval == 0 {
-		if config.ServerSide {
-			config.FlushInterval = 5
-		} else {
-			config.FlushInterval = 10
-		}
-	}
-
-	if config.Verbose {
-		config.LogLevel = "debug"
-	}
-
-	switch config.LogLevel {
-	case "debug":
-		log.SetLevel(log.DebugLevel)
-	case "info":
-		log.SetLevel(log.InfoLevel)
-	case "error":
-		log.SetLevel(log.ErrorLevel)
-	case "warn":
-		log.SetLevel(log.WarnLevel)
-	default:
-		log.Fatalf("Unknown log level: %s", config.LogLevel)
-	}
-
-	if logFile != "" {
-		f, err := os.OpenFile(logFile, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0755)
-		if err != nil {
-			log.Fatalf("Could not open logfile %s for writing: %s", logFile, err.Error())
+	level, _ := log.ParseLevel(c.LogLevel)
+	log.SetLevel(level)
+	if c.LogFile != "" {
+		f, e := os.OpenFile(c.LogFile, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+		if e != nil {
+			log.Fatal(e)
 		}
 		log.SetOutput(f)
 	}
-
-	b, _ := json.Marshal(config)
-	log.Debugf("Debug configuration: %s", string(b))
-
-	return config
+	log.Debugf("proxy mode=%s batches=%d messages=%d telemetry-byte-budget=%d", c.ProxyMode, c.MaxBatches, c.MaxMessages, c.MaxBufferBytes)
+	return c
 }
