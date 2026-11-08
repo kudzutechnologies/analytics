@@ -1,14 +1,19 @@
 package main
 
 import (
+	"context"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/kudzutechnologies/analytics/client"
 	log "github.com/sirupsen/logrus"
 )
 
-func main() {
+func main() { os.Exit(runMain()) }
+func runMain() int {
 	config := ParseConfigFromEnv()
 
 	analyticsClient := client.CreateAnalyticsClient(client.AnalyticsClientConfig{
@@ -88,11 +93,27 @@ func main() {
 	forwarder := CreateAnalyticsForwarder(config, analyticsClient, proxy)
 	proxy.SetEvents(forwarder)
 
-	go func() {
-		if err := proxy.Start(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("WebSocket proxy: %v", err)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	serverErrors := make(chan error, 1)
+	go func() { serverErrors <- proxy.Start() }()
+	forwarder.Start()
+	code := 0
+	select {
+	case <-ctx.Done():
+	case err := <-serverErrors:
+		if err != nil && err != http.ErrServerClosed {
+			log.Error(err)
+			code = 1
 		}
-	}()
-
-	forwarder.StartAndWait()
+	}
+	shutdown, cancel := context.WithTimeout(context.Background(), time.Duration(config.ShutdownDeadlineMS)*time.Millisecond)
+	defer cancel()
+	_ = proxy.Shutdown(shutdown)
+	if !forwarder.Stop(shutdown) && code == 0 {
+		code = 2
+	}
+	stats := forwarder.DeliveryStats()
+	log.Infof("stopped retained_messages=%d retained_bytes=%d dropped_messages=%d push_failures=%d", stats.Messages, stats.Bytes, stats.DroppedMessages, stats.PushFailures)
+	return code
 }

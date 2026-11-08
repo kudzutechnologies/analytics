@@ -25,14 +25,14 @@ import (
 )
 
 const (
-	writeWait           = 10 * time.Second
-	pongWait            = 60 * time.Second
-	pingPeriod          = (pongWait * 9) / 10
-	maxMessageSize      = 65536
-	maxDialRedirect     = 5
-	httpClientTimeout   = 30 * time.Second
-	wsHandshakeTimeout  = 10 * time.Second
-	httpServerTimeout   = 15 * time.Second
+	writeWait          = 10 * time.Second
+	pongWait           = 60 * time.Second
+	pingPeriod         = (pongWait * 9) / 10
+	maxMessageSize     = 65536
+	maxDialRedirect    = 5
+	httpClientTimeout  = 30 * time.Second
+	wsHandshakeTimeout = 10 * time.Second
+	httpServerTimeout  = 15 * time.Second
 )
 
 // WSProxyEvents is the interface for analytics extraction on proxied messages.
@@ -44,27 +44,27 @@ type WSProxyEvents interface {
 
 // WSProxyConfig holds configuration for the WebSocket proxy.
 type WSProxyConfig struct {
-	ListenHost             string
-	ListenPort             int
-	ConnectURI             string
-	ConnectDiscoveryURI    string // optional; full router-info WebSocket URI
-	ConnectDiscoveryPath   string // optional; router-info path on connect-uri host (default /router-info)
-	ConnectDataPath        string // optional; path for LNS data WebSocket (e.g. /tpe/lns when root returns HTML)
-	ConnectDataURI         string // optional; full LNS data WebSocket URI (overrides connect-uri + connect-data-path when set)
-	ConnectWSSubprotocol   string // optional, e.g. "lora.v2" for some LNS
-	ListenTLSCert          string
-	ListenTLSKey           string
+	ListenHost               string
+	ListenPort               int
+	ConnectURI               string
+	ConnectDiscoveryURI      string // optional; full router-info WebSocket URI
+	ConnectDiscoveryPath     string // optional; router-info path on connect-uri host (default /router-info)
+	ConnectDataPath          string // optional; path for LNS data WebSocket (e.g. /tpe/lns when root returns HTML)
+	ConnectDataURI           string // optional; full LNS data WebSocket URI (overrides connect-uri + connect-data-path when set)
+	ConnectWSSubprotocol     string // optional, e.g. "lora.v2" for some LNS
+	ListenTLSCert            string
+	ListenTLSKey             string
 	ConnectTLSCA             string
 	ConnectTLSInsecure       bool
 	ConnectDataTLSServerName string // optional; override TLS ServerName for data connection when server cert uses a different hostname (e.g. lns-tpw.thingpark.com)
 	ConnectDataTLSCA         string // optional; CA file for data connection TLS (when LNS uses a different CA than connect-uri)
 	ConnectDataTLSInsecure   bool   // if true, skip server certificate verification for data connection only (client cert still sent; use when LNS uses an internal/unknown CA)
 	MaxStreams               int
-	Events                 WSProxyEvents
-	DebugDump              *DebugDumpWriter
-	CertStore               *CertStore // optional: per-gateway client certs for CUPS upstream
-	CertsUpstreamClientCert bool       // if true, use proxy-issued client cert for CUPS when no server-issued; only when upstream trusts proxy CA
-	Verbose                bool       // if true, hexdump incoming/outgoing traffic (implies debug)
+	Events                   WSProxyEvents
+	DebugDump                *DebugDumpWriter
+	CertStore                *CertStore // optional: per-gateway client certs for CUPS upstream
+	CertsUpstreamClientCert  bool       // if true, use proxy-issued client cert for CUPS when no server-issued; only when upstream trusts proxy CA
+	Verbose                  bool       // if true, hexdump incoming/outgoing traffic (implies debug)
 }
 
 // WSProxy is the WebSocket man-in-the-middle proxy.
@@ -1270,4 +1270,12 @@ func (d *DebugDumpWriter) Write(direction, key string, payload []byte, binary bo
 	}
 	b.WriteString("\n")
 	_, _ = d.w.Write(b.Bytes())
+}
+
+// Shutdown closes hijacked WebSockets as well as ordinary HTTP connections.
+func (p *WSProxy) Shutdown(ctx context.Context) error {
+	for _, s := range p.sessions.Values() {
+		s.close()
+	}
+	return p.server.Shutdown(ctx)
 }

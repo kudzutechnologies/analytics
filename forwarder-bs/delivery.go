@@ -216,6 +216,12 @@ func (f *AnalyticsForwarder) sendLoop(ctx context.Context) {
 		if ctx.Err() != nil {
 			return
 		}
+		f.queue.mu.Lock()
+		finishedEmpty := f.queue.closed && len(f.queue.items) == 0
+		f.queue.mu.Unlock()
+		if finishedEmpty {
+			return
+		}
 		if !connected {
 			attempt, cancel := context.WithTimeout(ctx, time.Duration(f.config.ConnectTimeout)*time.Second)
 			err := f.backend.ConnectContext(attempt)
