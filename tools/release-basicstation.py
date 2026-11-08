@@ -9,6 +9,7 @@ import re
 import shutil
 import subprocess
 import sys
+from build_ipk import archive
 
 ROOT=Path(__file__).resolve().parent.parent
 TARGETS={'corecell':'arm-linux-gnueabihf','rpi':'arm-linux-gnueabihf','kerlink':'arm-klk-linux-gnueabi'}
@@ -63,6 +64,10 @@ def main():
             digest=hashlib.sha256(binary.read_bytes()).hexdigest()
             if digest!=evidence[name]['binary_sha256']:raise ValueError(f'{name}: compiled binary differs from hardware-tested candidate')
             destination=output/('basicstation-analytics-'+name);shutil.copy2(binary,destination)
+            bundle=[(destination.name,binary.read_bytes(),0o755),('README.md',(ROOT/'basicstation-analytics/README.md').read_bytes(),0o644),('LICENSE',(ROOT/'LICENSE').read_bytes(),0o644)]
+            for asset in sorted((ROOT/'basicstation-analytics/packaging/systemd').iterdir()):
+                bundle.append(('systemd/'+asset.name,asset.read_bytes(),0o600 if asset.name.endswith('.conf') else 0o644))
+            (output/(destination.name+'.tgz')).write_bytes(archive(bundle))
             records.append({'target':name,'binary':destination.name,'sha256':digest,'bytes':destination.stat().st_size,'sdk':entry})
             if name=='kerlink':subprocess.run([sys.executable,str(ROOT/'tools/build_ipk.py'),'--binary',str(binary),'--assets',str(ROOT/'basicstation-analytics/packaging/kerlink'),'--version',version,'--depends',entry['runtime_dependencies'],'--output',str(output/f'kudzu-bs-analytics_{version}_klkgw.ipk')],check=True)
         for component in ['udp','bs']:subprocess.run([sys.executable,str(ROOT/'tools/build-go-forwarders.py'),'--component',component,'--version',version,'--output-dir',str(output)],cwd=ROOT,check=True)
