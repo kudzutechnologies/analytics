@@ -28,28 +28,8 @@ inline void ExpectEq(const std::string& got, const std::string& want, const char
   }
 }
 
-inline void ExpectEq(int got, int want, const char* msg) {
-  if (got != want) {
-    std::cerr << "FAIL: " << msg << " got=" << got << " want=" << want << "\n";
-    ++Failures();
-  }
-}
-
-inline void ExpectEq(size_t got, size_t want, const char* msg) {
-  if (got != want) {
-    std::cerr << "FAIL: " << msg << " got=" << got << " want=" << want << "\n";
-    ++Failures();
-  }
-}
-
-inline void ExpectEq(int64_t got, int64_t want, const char* msg) {
-  if (got != want) {
-    std::cerr << "FAIL: " << msg << " got=" << got << " want=" << want << "\n";
-    ++Failures();
-  }
-}
-
-inline void ExpectEq(uint64_t got, uint64_t want, const char* msg) {
+template <typename A, typename B>
+inline void ExpectEq(A got, B want, const char* msg) {
   if (got != want) {
     std::cerr << "FAIL: " << msg << " got=" << got << " want=" << want << "\n";
     ++Failures();
