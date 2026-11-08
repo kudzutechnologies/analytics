@@ -4,7 +4,7 @@ C++ gRPC Client for pushing analytics data to Kudzu Analytics platform.
 
 ## Overview
 
-This package implements a gRPC analytics client in C++ that can be used for embedding analytics forwarders to the Kudzu Analytics platform. It uses protobuf and gRPC, and expects the generated protobuf and gRPC stubs to be available in `src/protobuf`.
+This package implements a gRPC analytics client in C++ for embedding analytics forwarders. CMake 3.24+ generates protobuf/gRPC bindings into the build tree with host tools matching the target runtime. Historical bindings in `src/protobuf` are not compiled. Cross builds require explicit `CLIENT_CC_HOST_PROTOC` and `CLIENT_CC_HOST_GRPC_PLUGIN` executable paths.
 
 It also provides a shared **pairing** API (`AnalyticsPairing.h`) used by forwarders to download edge credentials over HTTPS.
 
