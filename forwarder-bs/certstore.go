@@ -47,7 +47,7 @@ type CertStore struct {
 	dataURIs    map[string]string
 }
 
-// NewCertStore loads or creates the CA (from dir or from caCertPath/caKeyPath if provided), and preloads any existing gateway certs.
+// NewCertStore explicitly enables issuance and loads or creates its CA.
 func NewCertStore(dir, caCertPath, caKeyPath string) (*CertStore, error) {
 	return openCertStore(dir, caCertPath, caKeyPath, true)
 }
@@ -55,6 +55,9 @@ func NewCertStore(dir, caCertPath, caKeyPath string) (*CertStore, error) {
 // OpenCredentialStore reads imported keys without creating a CA or writing files.
 func OpenCredentialStore(dir string) (*CertStore, error) { return openCertStore(dir, "", "", false) }
 func openCertStore(dir, caCertPath, caKeyPath string, writable bool) (*CertStore, error) {
+	if (caCertPath == "") != (caKeyPath == "") {
+		return nil, fmt.Errorf("CA certificate and key must be configured together")
+	}
 	if writable {
 		if err := os.MkdirAll(dir, 0750); err != nil {
 			return nil, fmt.Errorf("certs-dir: %w", err)
@@ -110,6 +113,14 @@ func loadCAFromPaths(caCertPath, caKeyPath string) (*x509.Certificate, crypto.Si
 	if err != nil {
 		return nil, nil, fmt.Errorf("parse CA key: %w", err)
 	}
+	now := time.Now()
+	if !caCert.IsCA || !caCert.BasicConstraintsValid || caCert.KeyUsage&x509.KeyUsageCertSign == 0 || now.Before(caCert.NotBefore) || now.After(caCert.NotAfter) {
+		return nil, nil, fmt.Errorf("CA is not valid for certificate issuance")
+	}
+	public, err := x509.MarshalPKIXPublicKey(caKey.Public())
+	if err != nil || !bytes.Equal(public, caCert.RawSubjectPublicKeyInfo) {
+		return nil, nil, fmt.Errorf("CA certificate and private key do not match")
+	}
 	return caCert, caKey, nil
 }
 
@@ -160,8 +171,13 @@ func parsePrivateKey(block *pem.Block) (crypto.Signer, error) {
 func loadOrCreateCA(dir string) (*x509.Certificate, crypto.Signer, error) {
 	caPath := filepath.Join(dir, caCertFile)
 	keyPath := filepath.Join(dir, caKeyFile)
-	if _, err := os.ReadFile(caPath); err == nil {
+	_, certErr := os.Stat(caPath)
+	_, keyErr := os.Stat(keyPath)
+	if certErr == nil || keyErr == nil {
 		return loadCAFromPaths(caPath, keyPath)
+	}
+	if !os.IsNotExist(certErr) || !os.IsNotExist(keyErr) {
+		return nil, nil, fmt.Errorf("cannot inspect existing CA state")
 	}
 	caKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {

@@ -140,3 +140,33 @@ func TestCertStore_GetOrCreateBootstrap(t *testing.T) {
 		t.Error("second bootstrap cert should be same as first")
 	}
 }
+
+func TestCARejectsMismatchedAndPartialState(t *testing.T) {
+	a, b := t.TempDir(), t.TempDir()
+	if _, err := NewCertStore(a, "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewCertStore(b, "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := loadCAFromPaths(filepath.Join(a, "ca.crt"), filepath.Join(b, "ca.key")); err == nil {
+		t.Fatal("mismatched CA key accepted")
+	}
+	before, err := os.ReadFile(filepath.Join(a, "ca.key"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(a, "ca.crt")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewCertStore(a, "", ""); err == nil {
+		t.Fatal("partial CA state silently replaced")
+	}
+	after, _ := os.ReadFile(filepath.Join(a, "ca.key"))
+	if string(before) != string(after) {
+		t.Fatal("existing key overwritten")
+	}
+	if _, err := NewCertStore(t.TempDir(), "only-cert", ""); err == nil {
+		t.Fatal("unpaired CA paths accepted")
+	}
+}

@@ -54,12 +54,12 @@ func runMain() int {
 			log.Warnf("Could not open debug dump %s: %v", config.DebugDump, err)
 		} else {
 			defer f.Close()
-			if err := f.Chmod(0600); err != nil {
-				log.Fatal("Could not restrict debug dump permissions")
-			}
 			st, err := f.Stat()
 			if err != nil || !st.Mode().IsRegular() {
 				log.Fatal("Debug dump requires a regular file")
+			}
+			if err := f.Chmod(0600); err != nil {
+				log.Fatal("Could not restrict debug dump permissions")
 			}
 			dump = NewDebugDumpWriter(f, int64(config.DebugDumpMaxBytes)-st.Size())
 			log.Infof("Writing bounded diagnostic traffic to %s", config.DebugDump)

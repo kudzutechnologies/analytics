@@ -95,6 +95,9 @@ func loadGatewayRegistry(path string) (*gatewayRegistry, error) {
 	}
 	r := &gatewayRegistry{gateways: make(map[string]*gatewayAccess), pins: make(map[string]string)}
 	for _, entry := range input.Gateways {
+		if entry == nil {
+			return nil, fmt.Errorf("null gateway authorization entry")
+		}
 		id, e := ParseGatewayID(entry.Router)
 		if e != nil {
 			return nil, e

@@ -114,3 +114,13 @@ func TestOriginNormalization(t *testing.T) {
 		t.Fatal("upstream origin comparison must normalize default ports and isolate hosts/ports")
 	}
 }
+
+func TestRegistryRejectsNullEntry(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "gateways.json")
+	if err := os.WriteFile(path, []byte(`{"version":1,"gateways":[null]}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loadGatewayRegistry(path); err == nil {
+		t.Fatal("null registry entry accepted")
+	}
+}
