@@ -3,6 +3,9 @@
 #include "gateway_sync.h"
 
 #include <cctype>
+#include <cmath>
+#include <cerrno>
+#include <climits>
 #include <cstdlib>
 #include <sstream>
 #include <unordered_set>
@@ -71,12 +74,12 @@ bool ParseGatewayLocation(const std::string& raw, api::GatewayLocation& out, std
   }
   char* end = nullptr;
   double lat = std::strtod(parts[0].c_str(), &end);
-  if (!end || *end != '\0') {
+  if (!end || end==parts[0].c_str() || *end != '\0' || !std::isfinite(lat)) {
     error = "gateway-location latitude: invalid number";
     return false;
   }
   double lon = std::strtod(parts[1].c_str(), &end);
-  if (!end || *end != '\0') {
+  if (!end || end==parts[1].c_str() || *end != '\0' || !std::isfinite(lon)) {
     error = "gateway-location longitude: invalid number";
     return false;
   }
@@ -92,7 +95,7 @@ bool ParseGatewayLocation(const std::string& raw, api::GatewayLocation& out, std
   out.set_longitude(lon);
   if (parts.size() == 3) {
     double alt = std::strtod(parts[2].c_str(), &end);
-    if (!end || *end != '\0') {
+    if (!end || end==parts[2].c_str() || *end != '\0' || !std::isfinite(alt)) {
       error = "gateway-location altitude: invalid number";
       return false;
     }
@@ -124,12 +127,12 @@ bool ParseGatewayRadios(const std::string& raw,
     }
     char* end = nullptr;
     long chain = std::strtol(parts[0].c_str(), &end, 10);
-    if (!end || *end != '\0') {
+    if (!end || end==parts[0].c_str() || *end != '\0' || chain<0 || chain>INT_MAX) {
       error = "gateway-radios rf_chain_id: invalid number";
       return false;
     }
     float power = static_cast<float>(std::strtod(parts[1].c_str(), &end));
-    if (!end || *end != '\0') {
+    if (!end || end==parts[1].c_str() || *end != '\0' || !std::isfinite(power)) {
       error = "gateway-radios max_tx_power: invalid number";
       return false;
     }
@@ -144,7 +147,7 @@ bool ParseGatewayRadios(const std::string& raw,
     radio.set_max_tx_power(power);
     if (parts.size() == 3) {
       float sens = static_cast<float>(std::strtod(parts[2].c_str(), &end));
-      if (!end || *end != '\0') {
+      if (!end || end==parts[2].c_str() || *end != '\0' || !std::isfinite(sens)) {
         error = "gateway-radios tx_sensitivity: invalid number";
         return false;
       }

@@ -107,3 +107,10 @@ func TestSharedGatewayProofCannotSelectAnotherIdentity(t *testing.T) {
 	}
 	c2.Close()
 }
+
+func TestOriginNormalization(t *testing.T) {
+	c := WSProxyConfig{ConnectURI: "wss://example.test"}
+	if !c.allowedUpstream("https://example.test:443/update-info") || c.allowedUpstream("wss://example.test:444") || c.allowedUpstream("wss://other.test") {
+		t.Fatal("upstream origin comparison must normalize default ports and isolate hosts/ports")
+	}
+}

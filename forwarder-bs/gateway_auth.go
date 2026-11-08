@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -73,6 +74,9 @@ func loadGatewayRegistry(path string) (*gatewayRegistry, error) {
 		return nil, e
 	}
 	defer f.Close()
+	if st, err := f.Stat(); err != nil || !st.Mode().IsRegular() || st.Size() > 1<<20 {
+		return nil, fmt.Errorf("authorization manifest must be a regular file of at most 1 MiB")
+	}
 	var input struct {
 		Version  int              `json:"version"`
 		Gateways []*gatewayAccess `json:"gateways"`
@@ -256,7 +260,14 @@ func upstreamOrigin(raw string) string {
 	default:
 		return ""
 	}
-	return u.Scheme + "://" + strings.ToLower(u.Host)
+	port := u.Port()
+	if port == "" {
+		port = "80"
+		if u.Scheme == "wss" {
+			port = "443"
+		}
+	}
+	return u.Scheme + "://" + net.JoinHostPort(strings.ToLower(u.Hostname()), port)
 }
 func (c *WSProxyConfig) allowedUpstream(raw string) bool {
 	origin := upstreamOrigin(raw)

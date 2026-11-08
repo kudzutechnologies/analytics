@@ -41,3 +41,9 @@ func TestConfigRejectsInvalidAndConflictingLimits(t *testing.T) {
 		t.Fatal("accepted conflicting env aliases")
 	}
 }
+
+func TestPublicURIRequiresRoot(t *testing.T) {
+	if _, err := ParseForwarderConfig(append(configArgs(), "--public-uri=ws://localhost:8090/unsupported"), nil); err == nil {
+		t.Fatal("accepted public path which has no ingress handler")
+	}
+}

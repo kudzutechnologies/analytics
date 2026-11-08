@@ -28,5 +28,11 @@ int main() {
   auto req = ToUpsertRequest(parsed);
   Expect(req.gateway_id() == c.gateway_id, "upsert gateway_id");
   Expect(req.has_location(), "upsert location");
+  for (const auto* raw : {"nan,9", "45,inf", ",9", "45,9,nan"}) {
+    api::GatewayLocation location;
+    Expect(!ParseGatewayLocation(raw, location, err), "reject nonfinite/empty coordinates");
+  }
+  std::vector<api::GatewayRadio> radios;
+  Expect(!ParseGatewayRadios("-1:868100000", radios, err), "reject negative RF chain");
   return Summary();
 }

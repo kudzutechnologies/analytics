@@ -211,7 +211,7 @@ int Receiver::ParseDatagram(const char* buf, size_t n, api::AnalyticsMetrics* me
                 return 0;
             }
             const auto* hello = reinterpret_cast<const struct ana_hello*>(buf);
-            if(hello->gateway_eui==0||(!gateway_eui_bytes_.empty()&&hello->gateway_eui!=gateway_eui_)){++rejected_;return 0;}
+            if((!expected_eui_bytes_.empty()&&EuiToBytes(hello->gateway_eui)!=expected_eui_bytes_)||hello->gateway_eui==0||(!gateway_eui_bytes_.empty()&&hello->gateway_eui!=gateway_eui_)){++rejected_;return 0;}
             gateway_eui_ = hello->gateway_eui;
             gateway_eui_hex_ = EuiToHex(gateway_eui_);
             gateway_eui_bytes_ = EuiToBytes(gateway_eui_);

@@ -34,6 +34,7 @@ public:
 
     // Optional Kudzu ObjectID (from config/pairing). Never synthesized from EUI.
     void SetGatewayId(const std::string& gateway_id) { gateway_id_ = gateway_id; }
+    void SetExpectedEui(const std::string& bytes){expected_eui_bytes_=bytes;}
 
     // Non-blocking: read available datagrams and append to metrics.
     PollStats Poll(api::AnalyticsMetrics* metrics);
@@ -62,6 +63,7 @@ private:
     std::string socket_path_;
     mode_t socket_mode_ = 0660;
     std::string gateway_id_;
+    std::string expected_eui_bytes_;
     std::string gateway_eui_hex_;
     std::string gateway_eui_bytes_;
     uint64_t gateway_eui_ = 0;

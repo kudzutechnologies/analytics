@@ -25,6 +25,11 @@ int main(){
  hello.gateway_eui=2;first.ParseDatagram(reinterpret_cast<const char*>(&hello),sizeof(hello),&m);
  ExpectEq(first.GatewayEuiHex(),std::string("0000000000000001"),"identity cannot switch mid-stream");
  ExpectEq(first.Rejected(),uint64_t(1),"conflicting identity rejected");
+ Receiver bound;bound.SetGatewayId("fixture");bound.SetExpectedEui(std::string(7,'\0')+std::string(1,'\3'));
+ bound.ParseDatagram(reinterpret_cast<const char*>(&hello),sizeof(hello),&m);
+ Expect(!bound.HasIdentity(),"HELLO cannot override configured EUI");
+ hello.gateway_eui=3;bound.ParseDatagram(reinterpret_cast<const char*>(&hello),sizeof(hello),&m);
+ Expect(bound.HasIdentity(),"matching configured EUI accepted");
  unlink(regular.c_str());unlink((regular+".lock").c_str());unlink((path+".lock").c_str());rmdir(directory);
  return Summary();
 }

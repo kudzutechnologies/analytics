@@ -65,7 +65,8 @@ bool ParseConfig(int argc,char* argv[],Config& out,std::string* error) {
   Values file;
   if(!out.config_file_path.empty()) {
    std::ifstream in(out.config_file_path);
-   if(!in&&!(cli.count("pair-pin")&&cli.count("write")))throw std::runtime_error("cannot read config: "+out.config_file_path);
+   const bool new_pairing_file = !in && errno == ENOENT && cli.count("pair-pin") && cli.count("write");
+   if(!in&&!new_pairing_file)throw std::runtime_error("cannot read config: "+out.config_file_path);
    std::string line;while(std::getline(in,line)) {
     line=Trim(line);if(line.empty()||line[0]=='#'||line[0]==';')continue;
     auto eq=line.find('=');if(eq==std::string::npos)throw std::runtime_error("expected key=value");
