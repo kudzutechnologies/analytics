@@ -14,9 +14,11 @@ int main() {
   ExpectEq(sizeof(struct ana_downlink), size_t{40}, "ana_downlink size");
   ExpectEq(sizeof(struct ana_stat), size_t{56}, "ana_stat size");
 
-  ExpectEq(ANA_UPLINK_LEN(0), sizeof(struct ana_uplink), "empty uplink datagram");
+  ExpectEq(ANA_UPLINK_LEN(0), sizeof(struct ana_uplink),
+           "empty uplink datagram");
   ExpectEq(ANA_UPLINK_LEN(20), sizeof(struct ana_uplink) + 20, "uplink+20");
-  ExpectEq(ANA_DOWNLINK_LEN(30), sizeof(struct ana_downlink) + 30, "downlink+30");
+  ExpectEq(ANA_DOWNLINK_LEN(30), sizeof(struct ana_downlink) + 30,
+           "downlink+30");
 
   struct ana_hdr h = {};
   h.magic = ANA_MAGIC;

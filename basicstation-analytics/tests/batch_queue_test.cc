@@ -1,8 +1,8 @@
 /* SPDX-License-Identifier: MIT */
 /* Copyright 2026 Kudzu Technologies */
 #include "batch_queue.h"
-#include "tests/test_harness.h"
 #include "protobuf/analytics.pb.h"
+#include "tests/test_harness.h"
 
 using namespace bs_analytics_test;
 using namespace basicstation_analytics;

@@ -2,27 +2,27 @@
 /* Copyright 2026 Kudzu Technologies */
 #include "dedupe.h"
 #include "protobuf/analytics.pb.h"
-#include <openssl/sha.h>
 #include <cstring>
+#include <openssl/sha.h>
 
 namespace basicstation_analytics {
 
 namespace {
 
-void PutUint32LE(unsigned char* p, uint32_t v) {
+void PutUint32LE(unsigned char *p, uint32_t v) {
   p[0] = static_cast<unsigned char>(v);
   p[1] = static_cast<unsigned char>(v >> 8);
   p[2] = static_cast<unsigned char>(v >> 16);
   p[3] = static_cast<unsigned char>(v >> 24);
 }
 
-void PutUint16LE(unsigned char* p, uint16_t v) {
+void PutUint16LE(unsigned char *p, uint16_t v) {
   p[0] = static_cast<unsigned char>(v);
   p[1] = static_cast<unsigned char>(v >> 8);
 }
 
-void Sha1(const unsigned char* a, size_t alen, const unsigned char* b, size_t blen,
-          unsigned char out[SHA_DIGEST_LENGTH]) {
+void Sha1(const unsigned char *a, size_t alen, const unsigned char *b,
+          size_t blen, unsigned char out[SHA_DIGEST_LENGTH]) {
 #if defined(__GNUC__) || defined(__clang__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
@@ -37,9 +37,10 @@ void Sha1(const unsigned char* a, size_t alen, const unsigned char* b, size_t bl
 #endif
 }
 
-}  // namespace
+} // namespace
 
-void ComputeUniqueIdUp(api::AnalyticsUplink* up, const unsigned char* full_payload, size_t len) {
+void ComputeUniqueIdUp(api::AnalyticsUplink *up,
+                       const unsigned char *full_payload, size_t len) {
   unsigned char extra[6 + 5];
   size_t extra_len = 6;
   std::memset(extra, 0, sizeof(extra));
@@ -47,7 +48,7 @@ void ComputeUniqueIdUp(api::AnalyticsUplink* up, const unsigned char* full_paylo
   PutUint16LE(extra + 4, static_cast<uint16_t>(up->codingrate()));
 
   if (up->has_dataratelora()) {
-    const auto* lora = &up->dataratelora();
+    const auto *lora = &up->dataratelora();
     extra[6] = 1;
     PutUint16LE(extra + 7, static_cast<uint16_t>(lora->bandwidth()));
     PutUint16LE(extra + 9, static_cast<uint16_t>(lora->spreadingfactor()));
@@ -63,7 +64,8 @@ void ComputeUniqueIdUp(api::AnalyticsUplink* up, const unsigned char* full_paylo
   up->set_uniqueid(hash, SHA_DIGEST_LENGTH);
 }
 
-void ComputeUniqueIdDown(api::AnalyticsDownlink* down, const unsigned char* full_payload, size_t len) {
+void ComputeUniqueIdDown(api::AnalyticsDownlink *down,
+                         const unsigned char *full_payload, size_t len) {
   unsigned char extra[6 + 5];
   size_t extra_len = 6;
   std::memset(extra, 0, sizeof(extra));
@@ -71,7 +73,7 @@ void ComputeUniqueIdDown(api::AnalyticsDownlink* down, const unsigned char* full
   PutUint16LE(extra + 4, static_cast<uint16_t>(down->codingrate()));
 
   if (down->has_dataratelora()) {
-    const auto* lora = &down->dataratelora();
+    const auto *lora = &down->dataratelora();
     extra[6] = 1;
     PutUint16LE(extra + 7, static_cast<uint16_t>(lora->bandwidth()));
     PutUint16LE(extra + 9, static_cast<uint16_t>(lora->spreadingfactor()));
@@ -87,4 +89,4 @@ void ComputeUniqueIdDown(api::AnalyticsDownlink* down, const unsigned char* full
   down->set_uniqueid(hash, SHA_DIGEST_LENGTH);
 }
 
-}  // namespace basicstation_analytics
+} // namespace basicstation_analytics

@@ -56,6 +56,7 @@ struct Config {
 
 // Returns false on help/version (caller exits 0) or parse abort.
 // validation_error non-empty => exit 1.
-bool ParseConfig(int argc, char* argv[], Config& out, std::string* validation_error = nullptr);
+bool ParseConfig(int argc, char *argv[], Config &out,
+                 std::string *validation_error = nullptr);
 
-}  // namespace basicstation_analytics
+} // namespace basicstation_analytics

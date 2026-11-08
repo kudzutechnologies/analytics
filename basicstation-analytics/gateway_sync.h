@@ -23,10 +23,15 @@ struct ParsedGatewaySync {
   bool has_any = false;
 };
 
-bool ParseGatewaySyncConfig(const Config& c, ParsedGatewaySync& parsed, std::string& error);
-bool ParseGatewayEUI(const std::string& raw, std::vector<uint8_t>& out, std::string& error);
-bool ParseGatewayLocation(const std::string& raw, api::GatewayLocation& out, std::string& error);
-bool ParseGatewayRadios(const std::string& raw, std::vector<api::GatewayRadio>& out, std::string& error);
-api::ReqGatewayUpsert ToUpsertRequest(const ParsedGatewaySync& parsed);
+bool ParseGatewaySyncConfig(const Config &c, ParsedGatewaySync &parsed,
+                            std::string &error);
+bool ParseGatewayEUI(const std::string &raw, std::vector<uint8_t> &out,
+                     std::string &error);
+bool ParseGatewayLocation(const std::string &raw, api::GatewayLocation &out,
+                          std::string &error);
+bool ParseGatewayRadios(const std::string &raw,
+                        std::vector<api::GatewayRadio> &out,
+                        std::string &error);
+api::ReqGatewayUpsert ToUpsertRequest(const ParsedGatewaySync &parsed);
 
-}  // namespace basicstation_analytics
+} // namespace basicstation_analytics

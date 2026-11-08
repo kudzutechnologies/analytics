@@ -9,11 +9,11 @@
 namespace basicstation_analytics {
 
 // Fetch pairing credentials and render an INI snippet. Empty on failure.
-std::string RenderPairConfig(const Config& current_config,
-                             const client_cc::PairingConfig& pair_config);
+std::string RenderPairConfig(const Config &current_config,
+                             const client_cc::PairingConfig &pair_config);
 
-std::string GetRenderedPairConfig(const std::string& pin,
-                                  const Config& current_config,
-                                  std::string& error_msg);
+std::string GetRenderedPairConfig(const std::string &pin,
+                                  const Config &current_config,
+                                  std::string &error_msg);
 
-}  // namespace basicstation_analytics
+} // namespace basicstation_analytics

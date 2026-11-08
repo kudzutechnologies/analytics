@@ -26,7 +26,7 @@ int main() {
     char pair_pin[] = "--pair-pin=123456";
     char analytics_endpoint[] = "--endpoint=analytics.example.com:50051";
     char pairing_endpoint[] = "--pairing-endpoint=https://console.example.com/";
-    char* argv[] = {arg0, pair_pin, analytics_endpoint, pairing_endpoint};
+    char *argv[] = {arg0, pair_pin, analytics_endpoint, pairing_endpoint};
     Expect(ParseConfig(4, argv, config, &error), "pairing endpoint flags");
     ExpectEq(config.endpoint, "analytics.example.com:50051",
              "custom analytics endpoint");
@@ -35,7 +35,7 @@ int main() {
   }
 
   {
-    const char* path = "/tmp/basicstation-analytics-endpoint-test.conf";
+    const char *path = "/tmp/basicstation-analytics-endpoint-test.conf";
     {
       std::ofstream ini(path);
       ini << "analytics-endpoint=file.example.com:50051\n"
@@ -49,7 +49,7 @@ int main() {
     char env_config_arg[] =
         "--config=/tmp/basicstation-analytics-endpoint-test.conf";
     char env_pair_pin[] = "--pair-pin=123456";
-    char* env_argv[] = {env_arg0, env_config_arg, env_pair_pin};
+    char *env_argv[] = {env_arg0, env_config_arg, env_pair_pin};
     Expect(ParseConfig(3, env_argv, env_config, &env_error),
            "environment endpoint precedence");
     ExpectEq(env_config.endpoint, "env.example.com:50051",
@@ -60,13 +60,15 @@ int main() {
     Config config;
     std::string error;
     char arg0[] = "basicstation-analytics";
-    char config_arg[] = "--config=/tmp/basicstation-analytics-endpoint-test.conf";
+    char config_arg[] =
+        "--config=/tmp/basicstation-analytics-endpoint-test.conf";
     char pair_pin[] = "--pair-pin=123456";
     char analytics_endpoint[] =
         "--analytics-endpoint=ingress.eu1.cluster.kudzu.gr:443";
     char pairing_endpoint[] =
         "--pairing-endpoint=https://console.eu1.cluster.kudzu.gr/";
-    char* argv[] = {arg0, config_arg, pair_pin, analytics_endpoint, pairing_endpoint};
+    char *argv[] = {arg0, config_arg, pair_pin, analytics_endpoint,
+                    pairing_endpoint};
     Expect(ParseConfig(5, argv, config, &error), "CLI endpoint precedence");
     ExpectEq(config.endpoint, "ingress.eu1.cluster.kudzu.gr:443",
              "CLI analytics default overrides environment");
@@ -84,7 +86,7 @@ int main() {
     char socket_opt[] = "--socket=/tmp/analytics.sock";
     char client_id[] = "--client-id=0011";
     char client_key[] = "--client-key=2233";
-    char* argv[] = {arg0, socket_opt, client_id, client_key};
+    char *argv[] = {arg0, socket_opt, client_id, client_key};
 
     Expect(!ParseConfig(4, argv, config, &error),
            "gateway ObjectID is required");
@@ -95,18 +97,24 @@ int main() {
   {
     setenv("BATCH_SEC", "30", 1);
     setenv("LOG_LEVEL", "debug", 1);
-    Config c; std::string error;
-    char a[]="test", b[]="--pair-pin=123456", d[]="--batch-sec=10", e[]="--max-messages=1", f[]="--max-buffer-bytes=1024", g[]="--max-batches=1";
-    char* args[]={a,b,d,e,f,g};
-    Expect(ParseConfig(6,args,c,&error), "minimum resource profile parses");
-    ExpectEq(c.batch_sec,10,"explicit default overrides env");
-    ExpectEq(c.log_level,std::string("debug"),"env log level retained");
-    ExpectEq(c.max_messages_per_batch,1,"message limit applied");
-    unsetenv("BATCH_SEC"); unsetenv("LOG_LEVEL");
-    char invalid[]="--max-batches=0"; char* bad[]={a,b,invalid};
-    Expect(!ParseConfig(3,bad,c,&error),"reject zero batches");
-    char unknown[]="--mxa-batches=1"; char* typo[]={a,b,unknown};
-    Expect(!ParseConfig(3,typo,c,&error),"reject typo");
+    Config c;
+    std::string error;
+    char a[] = "test", b[] = "--pair-pin=123456", d[] = "--batch-sec=10",
+         e[] = "--max-messages=1", f[] = "--max-buffer-bytes=1024",
+         g[] = "--max-batches=1";
+    char *args[] = {a, b, d, e, f, g};
+    Expect(ParseConfig(6, args, c, &error), "minimum resource profile parses");
+    ExpectEq(c.batch_sec, 10, "explicit default overrides env");
+    ExpectEq(c.log_level, std::string("debug"), "env log level retained");
+    ExpectEq(c.max_messages_per_batch, 1, "message limit applied");
+    unsetenv("BATCH_SEC");
+    unsetenv("LOG_LEVEL");
+    char invalid[] = "--max-batches=0";
+    char *bad[] = {a, b, invalid};
+    Expect(!ParseConfig(3, bad, c, &error), "reject zero batches");
+    char unknown[] = "--mxa-batches=1";
+    char *typo[] = {a, b, unknown};
+    Expect(!ParseConfig(3, typo, c, &error), "reject typo");
   }
   return Summary();
 }

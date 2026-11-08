@@ -1,26 +1,26 @@
 /* SPDX-License-Identifier: MIT */
 /* Copyright 2026 Kudzu Technologies */
+#include "Client.h"
 #include "batch_queue.h"
 #include "config.h"
 #include "gateway_sync.h"
 #include "logging.h"
 #include "pairing.h"
+#include "protobuf/analytics.pb.h"
 #include "receiver.h"
 #include "sender.h"
-#include "Client.h"
-#include "protobuf/analytics.pb.h"
 
 #include <atomic>
 #include <chrono>
 #include <csignal>
+#include <fcntl.h>
 #include <fstream>
 #include <iostream>
 #include <poll.h>
 #include <string>
-#include <thread>
-#include <fcntl.h>
-#include <unistd.h>
 #include <sys/stat.h>
+#include <thread>
+#include <unistd.h>
 
 namespace {
 
@@ -28,7 +28,7 @@ std::atomic<int> g_running{1};
 
 void SignalHandler(int) { g_running = 0; }
 
-void Usage(const char* prog) {
+void Usage(const char *prog) {
   std::cerr
       << "Usage: " << prog << " [options]\n"
       << "  -s, --socket PATH           Unix socket path (required)\n"
@@ -36,10 +36,13 @@ void Usage(const char* prog) {
       << "  -k, --client-key KEY        Analytics client key (hex, required)\n"
       << "  -e, --endpoint HOST:PORT    Analytics gRPC endpoint "
          "(alias: --analytics-endpoint)\n"
-      << "  -b, --batch-sec N           Flush batch every N seconds (default: 10)\n"
+      << "  -b, --batch-sec N           Flush batch every N seconds (default: "
+         "10)\n"
       << "  -c, --config FILE           INI config file\n"
       << "      --gateway ID            Kudzu gateway ObjectID (required)\n"
-      << "      --gateway-eid/--gateway-eui/--gateway-name/--gateway-location/--gateway-radios\n"
+      << "      "
+         "--gateway-eid/--gateway-eui/--gateway-name/--gateway-location/"
+         "--gateway-radios\n"
       << "      --ca-file PATH          Extra CA PEM\n"
       << "      --ssl-target-name NAME  TLS SNI override\n"
       << "      --pair-pin PIN          Pair and print/write config\n"
@@ -50,9 +53,9 @@ void Usage(const char* prog) {
       << "  -h, --help\n";
 }
 
-}  // namespace
+} // namespace
 
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[]) {
   using namespace basicstation_analytics;
 
   Config cfg;
@@ -63,8 +66,8 @@ int main(int argc, char* argv[]) {
       return 0;
     }
     if (cfg.show_version) {
-      std::cout << "basicstation-analytics " << BS_ANALYTICS_VERSION << " (" << BS_ANALYTICS_GIT_HASH
-                << ")\n";
+      std::cout << "basicstation-analytics " << BS_ANALYTICS_VERSION << " ("
+                << BS_ANALYTICS_GIT_HASH << ")\n";
       return 0;
     }
     if (!validation_error.empty()) {
@@ -81,14 +84,31 @@ int main(int argc, char* argv[]) {
     std::string error_msg;
     std::string ini = GetRenderedPairConfig(cfg.pair_pin, cfg, error_msg);
     if (ini.empty()) {
-      std::cerr << "basicstation-analytics: Could not pair: " << error_msg << "\n";
+      std::cerr << "basicstation-analytics: Could not pair: " << error_msg
+                << "\n";
       return 1;
     }
     if (cfg.write_config && !cfg.config_file_path.empty()) {
-      int fd=open(cfg.config_file_path.c_str(),O_WRONLY|O_CREAT|O_TRUNC|O_CLOEXEC,0600);
-      if(fd<0||fchmod(fd,0600)!=0){if(fd>=0)close(fd);std::cerr<<"Cannot write private pairing configuration\n";return 1;}
-      size_t written=0;while(written<ini.size()){ssize_t n=write(fd,ini.data()+written,ini.size()-written);if(n<=0){close(fd);std::cerr<<"Pairing write failed\n";return 1;}written+=static_cast<size_t>(n);}
-      if(close(fd)!=0)return 1;
+      int fd = open(cfg.config_file_path.c_str(),
+                    O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0600);
+      if (fd < 0 || fchmod(fd, 0600) != 0) {
+        if (fd >= 0)
+          close(fd);
+        std::cerr << "Cannot write private pairing configuration\n";
+        return 1;
+      }
+      size_t written = 0;
+      while (written < ini.size()) {
+        ssize_t n = write(fd, ini.data() + written, ini.size() - written);
+        if (n <= 0) {
+          close(fd);
+          std::cerr << "Pairing write failed\n";
+          return 1;
+        }
+        written += static_cast<size_t>(n);
+      }
+      if (close(fd) != 0)
+        return 1;
     } else {
       std::cout << ini;
     }
@@ -99,66 +119,117 @@ int main(int argc, char* argv[]) {
   signal(SIGTERM, SignalHandler);
 
   Receiver receiver;
-  receiver.Configure(cfg.socket_rcvbuf_bytes,cfg.poll_max_datagrams);
+  receiver.Configure(cfg.socket_rcvbuf_bytes, cfg.poll_max_datagrams);
   std::string open_err;
   if (!receiver.Open(cfg.socket_path, cfg.socket_mode, &open_err)) {
-    LOG_ERROR() << "Failed to open socket " << cfg.socket_path << ": " << open_err;
+    LOG_ERROR() << "Failed to open socket " << cfg.socket_path << ": "
+                << open_err;
     return 1;
   }
   receiver.SetGatewayId(cfg.gateway_id);
-  if(!cfg.gateway_eui.empty()){std::vector<uint8_t> expected;std::string error;ParseGatewayEUI(cfg.gateway_eui,expected,error);receiver.SetExpectedEui(std::string(expected.begin(),expected.end()));}
-  LOG_INFO() << "Listening on " << cfg.socket_path << " kernel_receive_buffer=" << receiver.EffectiveReceiveBuffer();
+  if (!cfg.gateway_eui.empty()) {
+    std::vector<uint8_t> expected;
+    std::string error;
+    ParseGatewayEUI(cfg.gateway_eui, expected, error);
+    receiver.SetExpectedEui(std::string(expected.begin(), expected.end()));
+  }
+  LOG_INFO() << "Listening on " << cfg.socket_path
+             << " kernel_receive_buffer=" << receiver.EffectiveReceiveBuffer();
 
   client_cc::AnalyticsClientConfig client_cfg;
-  client_cfg.client_id=cfg.client_id;client_cfg.client_key=cfg.client_key;
-  client_cfg.endpoint=cfg.endpoint;client_cfg.ca_file=cfg.ca_file;
-  client_cfg.ssl_target_name_override=cfg.ssl_target_name_override;
-  client_cfg.connect_timeout=cfg.connect_timeout;client_cfg.request_timeout=cfg.request_timeout;
-  client_cfg.max_reconnect_backoff=cfg.max_reconnect_backoff;client_cfg.auto_reconnect=false;
+  client_cfg.client_id = cfg.client_id;
+  client_cfg.client_key = cfg.client_key;
+  client_cfg.endpoint = cfg.endpoint;
+  client_cfg.ca_file = cfg.ca_file;
+  client_cfg.ssl_target_name_override = cfg.ssl_target_name_override;
+  client_cfg.connect_timeout = cfg.connect_timeout;
+  client_cfg.request_timeout = cfg.request_timeout;
+  client_cfg.max_reconnect_backoff = cfg.max_reconnect_backoff;
+  client_cfg.auto_reconnect = false;
   client_cc::Client client(client_cfg);
-  BatchQueue queue(cfg.max_batches,cfg.max_messages_per_batch,cfg.max_buffer_bytes,true,cfg.pre_identity_max_messages);
-  ParsedGatewaySync parsed;std::string sync_error;
-  const bool do_sync=ParseGatewaySyncConfig(cfg,parsed,sync_error)&&parsed.has_any;
+  BatchQueue queue(cfg.max_batches, cfg.max_messages_per_batch,
+                   cfg.max_buffer_bytes, true, cfg.pre_identity_max_messages);
+  ParsedGatewaySync parsed;
+  std::string sync_error;
+  const bool do_sync =
+      ParseGatewaySyncConfig(cfg, parsed, sync_error) && parsed.has_any;
   std::unique_ptr<client_cc::Client> sync_client;
-  if(do_sync)sync_client=std::make_unique<client_cc::Client>(client_cfg);
-  std::thread sync_thread;std::atomic<bool> sync_started{false};
-  Sender sender(&client,&queue,cfg.connect_timeout,cfg.request_timeout,cfg.max_reconnect_backoff,[&]{
-    if(!do_sync||sync_started.exchange(true))return;
-    sync_thread=std::thread([&]{
-      auto deadline=std::chrono::system_clock::now()+std::chrono::seconds(cfg.connect_timeout)+std::chrono::seconds(cfg.request_timeout);
-      auto status=sync_client->ConnectOnce(deadline);
-      if(status.ok())status=sync_client->GatewayUpsertOnce(ToUpsertRequest(parsed),deadline);
-      if(!status.ok())LOG_WARN()<<"GatewayUpsert failed: "<<status.error_message();
-      sync_client->Disconnect();
-    });
-  });
+  if (do_sync)
+    sync_client = std::make_unique<client_cc::Client>(client_cfg);
+  std::thread sync_thread;
+  std::atomic<bool> sync_started{false};
+  Sender sender(&client, &queue, cfg.connect_timeout, cfg.request_timeout,
+                cfg.max_reconnect_backoff, [&] {
+                  if (!do_sync || sync_started.exchange(true))
+                    return;
+                  sync_thread = std::thread([&] {
+                    auto deadline = std::chrono::system_clock::now() +
+                                    std::chrono::seconds(cfg.connect_timeout) +
+                                    std::chrono::seconds(cfg.request_timeout);
+                    auto status = sync_client->ConnectOnce(deadline);
+                    if (status.ok())
+                      status = sync_client->GatewayUpsertOnce(
+                          ToUpsertRequest(parsed), deadline);
+                    if (!status.ok())
+                      LOG_WARN()
+                          << "GatewayUpsert failed: " << status.error_message();
+                    sync_client->Disconnect();
+                  });
+                });
   sender.Start();
-  auto last_flush=std::chrono::steady_clock::now();
-  auto last_report=last_flush;
-  const auto report=[&](const char* state){
-    auto loss=queue.DropReasons();
-    LOG_INFO()<<state<<" rejected="<<receiver.Rejected()<<" dropped_messages="<<queue.DroppedMessages()<<" retained_messages="<<queue.Messages()<<" retained_bytes="<<queue.Bytes()<<" capacity_drops="<<loss.capacity<<" oversize_drops="<<loss.oversize<<" pre_identity_drops="<<loss.pre_identity<<" invalid_drops="<<loss.invalid<<" connect_failures="<<sender.Reconnects()<<" push_failures="<<sender.PushFailures();
+  auto last_flush = std::chrono::steady_clock::now();
+  auto last_report = last_flush;
+  const auto report = [&](const char *state) {
+    auto loss = queue.DropReasons();
+    LOG_INFO() << state << " rejected=" << receiver.Rejected()
+               << " dropped_messages=" << queue.DroppedMessages()
+               << " retained_messages=" << queue.Messages()
+               << " retained_bytes=" << queue.Bytes()
+               << " capacity_drops=" << loss.capacity
+               << " oversize_drops=" << loss.oversize
+               << " pre_identity_drops=" << loss.pre_identity
+               << " invalid_drops=" << loss.invalid
+               << " connect_failures=" << sender.Reconnects()
+               << " push_failures=" << sender.PushFailures();
   };
-  while(g_running.load()){
-    struct pollfd pfd={};pfd.fd=receiver.Fd();pfd.events=POLLIN;
-    int result=poll(&pfd,1,100);
-    if(result>0&&(pfd.revents&POLLIN)){
-      receiver.PollEach([&](api::AnalyticsMetrics&& record){
-        if(receiver.HasIdentity())queue.SetIdentity(cfg.gateway_id,receiver.GatewayEuiBytes());
-        if(cfg.gauge_stat)for(auto& stat:*record.mutable_stats())stat.set_isgauge(true);
+  while (g_running.load()) {
+    struct pollfd pfd = {};
+    pfd.fd = receiver.Fd();
+    pfd.events = POLLIN;
+    int result = poll(&pfd, 1, 100);
+    if (result > 0 && (pfd.revents & POLLIN)) {
+      receiver.PollEach([&](api::AnalyticsMetrics &&record) {
+        if (receiver.HasIdentity())
+          queue.SetIdentity(cfg.gateway_id, receiver.GatewayEuiBytes());
+        if (cfg.gauge_stat)
+          for (auto &stat : *record.mutable_stats())
+            stat.set_isgauge(true);
         queue.Add(std::move(record));
       });
-      if(receiver.HasIdentity())queue.SetIdentity(cfg.gateway_id,receiver.GatewayEuiBytes());
+      if (receiver.HasIdentity())
+        queue.SetIdentity(cfg.gateway_id, receiver.GatewayEuiBytes());
     }
-    auto now=std::chrono::steady_clock::now();
-    if(now-last_flush>=std::chrono::seconds(cfg.batch_sec)){queue.Seal();last_flush=now;}
-    if(now-last_report>=std::chrono::seconds(60)){report("running");last_report=now;}
+    auto now = std::chrono::steady_clock::now();
+    if (now - last_flush >= std::chrono::seconds(cfg.batch_sec)) {
+      queue.Seal();
+      last_flush = now;
+    }
+    if (now - last_report >= std::chrono::seconds(60)) {
+      report("running");
+      last_report = now;
+    }
   }
-  const auto deadline=std::chrono::steady_clock::now()+std::chrono::milliseconds(cfg.shutdown_deadline_ms);
-  if(sync_client)sync_client->CancelPending();
-  bool drained=sender.Shutdown(std::max(0,static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(deadline-std::chrono::steady_clock::now()).count())));
-  if(sync_thread.joinable())sync_thread.join();
+  const auto deadline = std::chrono::steady_clock::now() +
+                        std::chrono::milliseconds(cfg.shutdown_deadline_ms);
+  if (sync_client)
+    sync_client->CancelPending();
+  bool drained = sender.Shutdown(std::max(
+      0, static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(
+                              deadline - std::chrono::steady_clock::now())
+                              .count())));
+  if (sync_thread.joinable())
+    sync_thread.join();
   receiver.Close();
   report("stopped");
-  return drained?0:2;
+  return drained ? 0 : 2;
 }
