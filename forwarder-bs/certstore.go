@@ -36,6 +36,7 @@ const (
 // certs = our issued per-gateway certs (keyed by stable gateway ID, e.g. normalized router or client cert CN);
 // serverCerts = certs issued by upstream CUPS; lnsConfigs = LNS-allocated config per gateway; dataURIs = legacy per-gateway URI (superseded by lnsConfig when set).
 type CertStore struct {
+	writable    bool
 	dir         string
 	caCert      *x509.Certificate
 	caKey       crypto.Signer
@@ -48,13 +49,22 @@ type CertStore struct {
 
 // NewCertStore loads or creates the CA (from dir or from caCertPath/caKeyPath if provided), and preloads any existing gateway certs.
 func NewCertStore(dir, caCertPath, caKeyPath string) (*CertStore, error) {
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return nil, fmt.Errorf("certs-dir: %w", err)
+	return openCertStore(dir, caCertPath, caKeyPath, true)
+}
+
+// OpenCredentialStore reads imported keys without creating a CA or writing files.
+func OpenCredentialStore(dir string) (*CertStore, error) { return openCertStore(dir, "", "", false) }
+func openCertStore(dir, caCertPath, caKeyPath string, writable bool) (*CertStore, error) {
+	if writable {
+		if err := os.MkdirAll(dir, 0750); err != nil {
+			return nil, fmt.Errorf("certs-dir: %w", err)
+		}
 	}
 	var caCert *x509.Certificate
 	var caKey crypto.Signer
 	var err error
-	if caCertPath != "" && caKeyPath != "" {
+	if !writable {
+	} else if caCertPath != "" && caKeyPath != "" {
 		caCert, caKey, err = loadCAFromPaths(caCertPath, caKeyPath)
 	} else {
 		caCert, caKey, err = loadOrCreateCA(dir)
@@ -63,6 +73,7 @@ func NewCertStore(dir, caCertPath, caKeyPath string) (*CertStore, error) {
 		return nil, err
 	}
 	s := &CertStore{
+		writable:    writable,
 		dir:         dir,
 		caCert:      caCert,
 		caKey:       caKey,
@@ -438,6 +449,9 @@ func (s *CertStore) GetServerIssuedCert(gatewayID string) (*tls.Certificate, boo
 // PutServerIssuedCert stores the cert and key (DER from CUPS credentials blob) for the gateway.
 // Used after intercepting the CUPS update-info response; these certs are then used for proxy→upstream auth.
 func (s *CertStore) PutServerIssuedCert(gatewayID string, certDER, keyDER []byte) error {
+	if !s.writable {
+		return fmt.Errorf("credential store is read-only")
+	}
 	tlsCert, err := tls.X509KeyPair(
 		pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER}),
 		pemEncodeKey(keyDER),
@@ -505,6 +519,9 @@ func (s *CertStore) GetOrCreateClientCert(gatewayID string) (*tls.Certificate, e
 }
 
 func (s *CertStore) issueAndSaveClientCert(gatewayID string) (*tls.Certificate, error) {
+	if !s.writable || s.caCert == nil {
+		return nil, fmt.Errorf("credential store does not permit issuing certificates")
+	}
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		return nil, err

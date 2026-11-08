@@ -44,6 +44,9 @@ type WSProxyEvents interface {
 
 // WSProxyConfig holds configuration for the WebSocket proxy.
 type WSProxyConfig struct {
+	ProxyMode, PublicURI, GatewayAuthFile, LocalRouter, UpstreamAllowedOrigins, CUPSMode string
+	InjectRouterIntoVersion                                                              bool
+
 	ListenHost               string
 	ListenPort               int
 	ConnectURI               string
@@ -69,6 +72,8 @@ type WSProxyConfig struct {
 
 // WSProxy is the WebSocket man-in-the-middle proxy.
 type WSProxy struct {
+	auth *gatewayRegistry
+
 	config     *WSProxyConfig
 	server     *http.Server
 	upgrader   websocket.Upgrader
@@ -231,35 +236,17 @@ func (p *WSProxyConfig) clientCertForGateway(gatewayID string) *tls.Certificate 
 	if p.CertStore == nil || gatewayID == "" {
 		return nil
 	}
-	if c, ok := p.CertStore.GetServerIssuedCert(gatewayID); ok {
-		return c
-	}
 	if c, ok := p.CertStore.GetServerIssuedCert(gatewayID + "_tc"); ok {
 		return c
 	}
 	if p.CertsUpstreamClientCert {
-		if c, err := p.CertStore.GetOrCreateClientCert(gatewayID); err == nil {
-			return c
-		}
+		c, _ := p.CertStore.GetOrCreateClientCert(gatewayID)
+		return c
 	}
 	return nil
 }
-
-// clientCertForGatewayWebSocket returns the TLS client cert for upstream WebSocket (router-info / data).
-// Prefers server-issued like clientCertForGateway, but always falls back to our-issued when none are
-// available so we present a client cert. Many LNS (e.g. ThingPark) require client auth for the
-// LNS WebSocket; when upstream returns null CUPS we never get server-issued certs, so we must
-// use our-issued to avoid "bad handshake" from no client cert.
 func (p *WSProxyConfig) clientCertForGatewayWebSocket(gatewayID string) *tls.Certificate {
-	if c := p.clientCertForGateway(gatewayID); c != nil {
-		return c
-	}
-	if p.CertStore != nil && gatewayID != "" {
-		if c, err := p.CertStore.GetOrCreateClientCert(gatewayID); err == nil {
-			return c
-		}
-	}
-	return nil
+	return p.clientCertForGateway(gatewayID)
 }
 
 // buildHTTPClient returns an HTTP client for proxying CUPS and other non-WebSocket requests (same TLS as dialer).
@@ -296,6 +283,9 @@ func (p *WSProxyConfig) dialWithRedirects(dialer *websocket.Dialer, targetURI st
 	u := targetURI
 	for redirect := 0; redirect < maxDialRedirect; redirect++ {
 		var resp *http.Response
+		if !p.allowedUpstream(u) {
+			return nil, fmt.Errorf("upstream origin is not allowed")
+		}
 		conn, resp, err = dialer.Dial(u, reqHeader)
 		if err == nil {
 			return conn, nil
@@ -416,6 +406,18 @@ func (p *WSProxyConfig) dataURIForGateway(gatewayID string) (string, error) {
 
 // NewWSProxy creates a new WebSocket proxy.
 func NewWSProxy(config *WSProxyConfig) (*WSProxy, error) {
+	if config.ProxyMode == "" {
+		config.ProxyMode = "local"
+	}
+	var registry *gatewayRegistry
+	if config.ProxyMode == "shared" {
+		var err error
+		registry, err = loadGatewayRegistry(config.GatewayAuthFile)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	sessions, err := lru.NewWithEvict[string, *session](config.MaxStreams, func(key string, s *session) {
 		s.close()
 	})
@@ -431,6 +433,7 @@ func NewWSProxy(config *WSProxyConfig) (*WSProxy, error) {
 	}
 	p := &WSProxy{
 		config:     config,
+		auth:       registry,
 		upgrader:   upgrader,
 		sessions:   sessions,
 		httpClient: config.buildHTTPClient(nil),
@@ -457,7 +460,8 @@ func (p *WSProxy) Start() error {
 		}
 		tlsConfig := &tls.Config{
 			Certificates: []tls.Certificate{cert},
-			ClientAuth:   tls.VerifyClientCertIfGiven,
+			ClientAuth:   tls.RequestClientCert,
+			MinVersion:   tls.VersionTLS12,
 		}
 		if p.config.CertStore != nil {
 			if pool := p.config.CertStore.ClientCACertPool(); pool != nil {
@@ -526,7 +530,12 @@ func (p *WSProxy) handleRouterInfo(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Debugf("%srouter-info discovery URI: %s", pre, discoveryURI)
 
-	gatewayID := NormalizeGatewayID(req.Router)
+	gatewayID, authErr := p.authorize(r, req.Router)
+	if authErr != nil {
+		log.Warn("router-info authorization rejected")
+		_ = gatewayConn.WriteJSON(map[string]string{"error": "gateway authorization rejected"})
+		return
+	}
 	clientCert := p.config.clientCertForGatewayWebSocket(gatewayID)
 	if clientCert != nil {
 		log.Debugf("%srouter-info upstream using client cert for gateway %s", pre, gatewayID)
@@ -536,7 +545,7 @@ func (p *WSProxy) handleRouterInfo(w http.ResponseWriter, r *http.Request) {
 		log.Warnf("%srouter-info dialer: %v", pre, err)
 		return
 	}
-	reqHeader := make(http.Header)
+	reqHeader := p.upstreamHeaders(gatewayID, "tc", r.Header)
 	upstreamConn, dialResp, lastErr := dialer.Dial(discoveryURI, reqHeader)
 	if lastErr != nil {
 		var dialStatus int
@@ -751,6 +760,11 @@ func toInt64(v interface{}) (int64, bool) {
 // otherwise no client cert (or our issued cert if cups-upstream-client-cert). After a 200 response,
 // parses the CUPS binary response and stores any server-issued credentials for this gateway for future use.
 func (p *WSProxy) handleHTTPProxy(w http.ResponseWriter, r *http.Request) {
+	if p.config.CUPSMode != "managed" || r.Method != http.MethodPost || r.URL.Path != "/update-info" {
+		http.NotFound(w, r)
+		return
+	}
+
 	connectURL, err := url.Parse(p.config.ConnectURI)
 	if err != nil {
 		http.Error(w, "bad upstream URI", http.StatusBadGateway)
@@ -762,7 +776,7 @@ func (p *WSProxy) handleHTTPProxy(w http.ResponseWriter, r *http.Request) {
 	}
 	upstreamURL := fmt.Sprintf("%s://%s%s", upstreamScheme, connectURL.Host, r.URL.RequestURI())
 	log.Debugf("HTTP proxy: %s %s -> %s", r.Method, r.URL.RequestURI(), upstreamURL)
-	body, err := io.ReadAll(r.Body)
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 65536))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -795,6 +809,12 @@ func (p *WSProxy) handleHTTPProxy(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	var authErr error
+	gatewayID, authErr = p.authorize(r, gatewayID)
+	if authErr != nil {
+		http.Error(w, "gateway authorization rejected", http.StatusForbidden)
+		return
+	}
 	httpPre := gatewayLogPrefix(gatewayID)
 	if p.config.Verbose && len(body) > 0 {
 		log.Info(Hexdump(httpPre+"HTTP incoming from gateway ", body, 2048))
@@ -805,10 +825,6 @@ func (p *WSProxy) handleHTTPProxy(w http.ResponseWriter, r *http.Request) {
 		if serverCert, ok := p.config.CertStore.GetServerIssuedCert(gatewayID); ok {
 			client = p.config.buildHTTPClient(serverCert)
 			log.Debugf("%sCUPS upstream using server-issued client cert", httpPre)
-		} else if serverCert, ok := p.config.CertStore.GetServerIssuedCert(gatewayID + "_tc"); ok {
-			// Upstream may have sent only TC credentials; use TC client cert for CUPS (same gateway identity).
-			client = p.config.buildHTTPClient(serverCert)
-			log.Debugf("%sCUPS upstream using server-issued TC client cert", httpPre)
 		} else if p.config.CertsUpstreamClientCert {
 			clientCert, certErr := p.config.CertStore.GetOrCreateClientCert(gatewayID)
 			if certErr != nil {
@@ -841,6 +857,10 @@ func (p *WSProxy) handleHTTPProxy(w http.ResponseWriter, r *http.Request) {
 		case "host", "connection", "upgrade", "sec-websocket-key", "sec-websocket-version", "sec-websocket-extensions", "sec-websocket-protocol":
 			continue
 		}
+		req.Header[k] = v
+	}
+	req.Header.Del("Authorization")
+	for k, v := range p.upstreamHeaders(gatewayID, "cups", r.Header) {
 		req.Header[k] = v
 	}
 	if req.Header.Get("Content-Type") == "" && r.URL.Path == "/update-info" {
@@ -1027,12 +1047,17 @@ func (p *WSProxy) handleDataConnection(w http.ResponseWriter, r *http.Request) {
 		p.handleHTTPProxy(w, r)
 		return
 	}
+	gatewayID, authErr := p.authorize(r, r.URL.Query().Get("router"))
+	if authErr != nil {
+		http.Error(w, "gateway authorization rejected", http.StatusForbidden)
+		return
+	}
 	gatewayConn, err := p.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Warnf("data connection upgrade: %v", err)
 		return
 	}
-	gatewayID := gatewayIDFromDataRequest(r)
+	// Identity was authorized before upgrading or consulting credential storage.
 	// If no router/CN, try to identify gateway by matching the client cert against our stored certs (LNS- or proxy-issued).
 	if gatewayID == "" && r.TLS != nil && len(r.TLS.PeerCertificates) > 0 && p.config.CertStore != nil {
 		gatewayID = p.config.CertStore.GatewayIDForClientCert(r.TLS.PeerCertificates[0])
@@ -1052,7 +1077,7 @@ func (p *WSProxy) handleDataConnection(w http.ResponseWriter, r *http.Request) {
 		gatewayConn.Close()
 		return
 	}
-	reqHeader := make(http.Header)
+	reqHeader := p.upstreamHeaders(gatewayID, "tc", r.Header)
 	if p.config.ConnectWSSubprotocol != "" {
 		reqHeader.Set("Sec-WebSocket-Protocol", p.config.ConnectWSSubprotocol)
 	}

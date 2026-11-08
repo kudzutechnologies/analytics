@@ -30,19 +30,15 @@ func runMain() int {
 	var certStore *CertStore
 	if config.CertsDir != "" {
 		var err error
-		certStore, err = NewCertStore(config.CertsDir, config.CertsCACert, config.CertsCAKey)
+		if config.CUPSMode == "managed" || config.CertsUpstreamClientCert {
+			certStore, err = NewCertStore(config.CertsDir, config.CertsCACert, config.CertsCAKey)
+		} else {
+			certStore, err = OpenCredentialStore(config.CertsDir)
+		}
 		if err != nil {
 			log.Fatalf("Cert store: %v", err)
 		}
-		// When no explicit listen TLS cert is provided, use bootstrap server cert from certs-dir.
-		if config.ListenTLSCert == "" && config.ListenTLSKey == "" {
-			if _, err := certStore.GetOrCreateBootstrap(); err != nil {
-				log.Fatalf("Bootstrap cert: %v", err)
-			}
-			config.ListenTLSCert = certStore.BootstrapCertPath()
-			config.ListenTLSKey = certStore.BootstrapKeyPath()
-			log.Infof("Using bootstrap server cert from %s", config.CertsDir)
-		}
+
 	}
 
 	if config.ListenTLSCert != "" && log.IsLevelEnabled(log.DebugLevel) {
@@ -63,6 +59,9 @@ func runMain() int {
 	}
 
 	proxyConfig := &WSProxyConfig{
+		ProxyMode: config.ProxyMode, PublicURI: config.PublicURI, GatewayAuthFile: config.GatewayAuthFile,
+		LocalRouter: config.GatewayEUI, UpstreamAllowedOrigins: config.UpstreamAllowedOrigins, CUPSMode: config.CUPSMode,
+		InjectRouterIntoVersion:  config.InjectRouterIntoVersion,
 		ListenHost:               config.ListenHost,
 		ListenPort:               config.ListenPort,
 		ConnectURI:               config.ConnectURI,

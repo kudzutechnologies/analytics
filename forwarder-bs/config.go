@@ -59,6 +59,7 @@ type ForwarderConfig struct {
 	ServerSide    bool   `json:"server-side,omitempty"`
 	MaxWSStreams  int    `json:"max-ws-streams,omitempty"`
 
+	GatewayEUI              string `json:"gateway-eui,omitempty"`
 	MaxBatches              int    `json:"max-batches,omitempty"`
 	MaxMessages             int    `json:"max-messages,omitempty"`
 	MaxBufferBytes          int    `json:"max-buffer-bytes,omitempty"`
