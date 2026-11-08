@@ -12,6 +12,7 @@
 #include <cstring>
 #include <fcntl.h>
 #include <sys/socket.h>
+#include <sys/file.h>
 #include <sys/stat.h>
 #include <sys/un.h>
 #include <unistd.h>
@@ -147,64 +148,44 @@ void FillStat(const struct ana_stat* w, api::AnalyticsStat* p) {
 
 Receiver::~Receiver() { Close(); }
 
-bool Receiver::Open(const std::string& socket_path, mode_t mode, std::string* err) {
-    if (fd_ >= 0) return true;
-    int fd = socket(AF_UNIX, SOCK_DGRAM, 0);
-    if (fd < 0) {
-        if (err) *err = std::string("socket: ") + strerror(errno);
-        return false;
-    }
-    struct sockaddr_un addr = {};
-    addr.sun_family = AF_UNIX;
-    if (socket_path.size() >= sizeof(addr.sun_path)) {
-        close(fd);
-        if (err) *err = "socket path too long";
-        return false;
-    }
-    std::memcpy(addr.sun_path, socket_path.c_str(), socket_path.size() + 1);
-
-    struct stat st;
-    if (stat(socket_path.c_str(), &st) == 0) {
-        if (!S_ISSOCK(st.st_mode)) {
-            close(fd);
-            if (err) *err = "path exists and is not a socket";
-            return false;
-        }
-        unlink(socket_path.c_str());
-    }
-
-    if (bind(fd, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr)) != 0) {
-        if (err) *err = std::string("bind: ") + strerror(errno);
-        close(fd);
-        return false;
-    }
-    chmod(socket_path.c_str(), mode);
-    int flags = fcntl(fd, F_GETFL, 0);
-    if (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) != 0) {
-        if (err) *err = std::string("fcntl: ") + strerror(errno);
-        unlink(socket_path.c_str());
-        close(fd);
-        return false;
-    }
-    int rcv = receive_buffer_;
-    setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &rcv, sizeof(rcv));
-
-    fd_ = fd;
-    socket_path_ = socket_path;
-    socket_mode_ = mode;
-    bound_path_owned_ = true;
-    return true;
+bool Receiver::Open(const std::string& path,mode_t mode,std::string* err){
+ if(fd_>=0){if(err)*err="receiver is already open";return false;}
+ auto fail=[&](const std::string& reason){if(err)*err=reason;return false;};
+ if(path.empty()||path.size()>=sizeof(sockaddr_un{}.sun_path))return fail("socket path is empty or too long");
+ auto slash=path.find_last_of('/');std::string parent=slash==std::string::npos?".":(slash==0?"/":path.substr(0,slash));
+ struct stat parent_stat{};
+ if(stat(parent.c_str(),&parent_stat)!=0||!S_ISDIR(parent_stat.st_mode)||(parent_stat.st_mode&0007)!=0)return fail("socket directory must exist and deny access to other users (0750 or stricter)");
+ if((mode&0007)!=0)return fail("socket mode must deny access to other users");
+ int lockfd=open((path+".lock").c_str(),O_CREAT|O_RDWR|O_CLOEXEC|O_NOFOLLOW,0600);
+ if(lockfd<0)return fail(std::string("lock open: ")+strerror(errno));
+ struct stat lock_stat{};
+ if(fstat(lockfd,&lock_stat)!=0||!S_ISREG(lock_stat.st_mode)||lock_stat.st_uid!=geteuid()||flock(lockfd,LOCK_EX|LOCK_NB)!=0){close(lockfd);return fail("socket already owned or invalid lock file");}
+ int fd=socket(AF_UNIX,SOCK_DGRAM,0);
+ if(fd<0){close(lockfd);return fail(std::string("socket: ")+strerror(errno));}
+ auto cleanup=[&](const std::string& reason){close(fd);close(lockfd);return fail(reason);};
+ struct stat st{};
+ if(lstat(path.c_str(),&st)==0){if(!S_ISSOCK(st.st_mode)||st.st_uid!=geteuid())return cleanup("path exists and is not an owned socket");sockaddr_un probe_addr{};probe_addr.sun_family=AF_UNIX;std::memcpy(probe_addr.sun_path,path.c_str(),path.size()+1);
+ int probe=socket(AF_UNIX,SOCK_DGRAM,0);if(probe<0)return cleanup("cannot inspect existing socket");
+ int result=connect(probe,reinterpret_cast<sockaddr*>(&probe_addr),sizeof(probe_addr));int reason=errno;close(probe);
+ if(result==0)return cleanup("existing socket has a live owner");if(reason!=ECONNREFUSED&&reason!=ENOENT)return cleanup("cannot verify stale socket");
+ if(unlink(path.c_str())!=0)return cleanup("cannot remove stale socket");}
+ sockaddr_un addr{};addr.sun_family=AF_UNIX;std::memcpy(addr.sun_path,path.c_str(),path.size()+1);
+ if(bind(fd,reinterpret_cast<sockaddr*>(&addr),sizeof(addr))!=0)return cleanup(std::string("bind: ")+strerror(errno));
+ if(chmod(path.c_str(),mode)!=0){unlink(path.c_str());return cleanup("cannot set socket permissions");}
+ int flags=fcntl(fd,F_GETFL,0);
+ if(flags<0||fcntl(fd,F_SETFL,flags|O_NONBLOCK)!=0||fcntl(fd,F_SETFD,FD_CLOEXEC)!=0||setsockopt(fd,SOL_SOCKET,SO_RCVBUF,&receive_buffer_,sizeof(receive_buffer_))!=0){unlink(path.c_str());return cleanup("cannot configure socket limits");}
+ if(lstat(path.c_str(),&st)!=0){unlink(path.c_str());return cleanup("cannot inspect bound socket");}
+ socklen_t option_size=sizeof(effective_buffer_);getsockopt(fd,SOL_SOCKET,SO_RCVBUF,&effective_buffer_,&option_size);
+ fd_=fd;lock_fd_=lockfd;socket_dev_=st.st_dev;socket_ino_=st.st_ino;socket_path_=path;socket_mode_=mode;bound_path_owned_=true;
+ return true;
 }
-
-void Receiver::Close() {
-    if (fd_ >= 0) {
-        close(fd_);
-        fd_ = -1;
-    }
-    if (bound_path_owned_ && !socket_path_.empty()) {
-        unlink(socket_path_.c_str());
-        bound_path_owned_ = false;
-    }
+void Receiver::Close(){
+ if(fd_>=0){close(fd_);fd_=-1;}
+ if(bound_path_owned_&&!socket_path_.empty()){
+  struct stat st{};if(lstat(socket_path_.c_str(),&st)==0&&st.st_dev==socket_dev_&&st.st_ino==socket_ino_)unlink(socket_path_.c_str());
+  bound_path_owned_=false;
+ }
+ if(lock_fd_>=0){close(lock_fd_);lock_fd_=-1;}
 }
 
 void Receiver::ApplyGatewayFields(api::AnalyticsMetrics* metrics) const {
@@ -230,6 +211,7 @@ int Receiver::ParseDatagram(const char* buf, size_t n, api::AnalyticsMetrics* me
                 return 0;
             }
             const auto* hello = reinterpret_cast<const struct ana_hello*>(buf);
+            if(hello->gateway_eui==0||(!gateway_eui_bytes_.empty()&&hello->gateway_eui!=gateway_eui_)){++rejected_;return 0;}
             gateway_eui_ = hello->gateway_eui;
             gateway_eui_hex_ = EuiToHex(gateway_eui_);
             gateway_eui_bytes_ = EuiToBytes(gateway_eui_);

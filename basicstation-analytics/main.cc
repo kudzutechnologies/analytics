@@ -18,6 +18,9 @@
 #include <poll.h>
 #include <string>
 #include <thread>
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/stat.h>
 
 namespace {
 
@@ -82,12 +85,10 @@ int main(int argc, char* argv[]) {
       return 1;
     }
     if (cfg.write_config && !cfg.config_file_path.empty()) {
-      std::ofstream f(cfg.config_file_path);
-      if (!f) {
-        std::cerr << "basicstation-analytics: Could not write " << cfg.config_file_path << "\n";
-        return 1;
-      }
-      f << ini;
+      int fd=open(cfg.config_file_path.c_str(),O_WRONLY|O_CREAT|O_TRUNC|O_CLOEXEC,0600);
+      if(fd<0||fchmod(fd,0600)!=0){if(fd>=0)close(fd);std::cerr<<"Cannot write private pairing configuration\n";return 1;}
+      size_t written=0;while(written<ini.size()){ssize_t n=write(fd,ini.data()+written,ini.size()-written);if(n<=0){close(fd);std::cerr<<"Pairing write failed\n";return 1;}written+=static_cast<size_t>(n);}
+      if(close(fd)!=0)return 1;
     } else {
       std::cout << ini;
     }
@@ -105,7 +106,7 @@ int main(int argc, char* argv[]) {
     return 1;
   }
   receiver.SetGatewayId(cfg.gateway_id);
-  LOG_INFO() << "Listening on " << cfg.socket_path;
+  LOG_INFO() << "Listening on " << cfg.socket_path << " kernel_receive_buffer=" << receiver.EffectiveReceiveBuffer();
 
   client_cc::AnalyticsClientConfig client_cfg;
   client_cfg.client_id=cfg.client_id;client_cfg.client_key=cfg.client_key;
@@ -138,6 +139,7 @@ int main(int argc, char* argv[]) {
     if(result>0&&(pfd.revents&POLLIN)){
       receiver.PollEach([&](api::AnalyticsMetrics&& record){
         if(receiver.HasIdentity())queue.SetIdentity(cfg.gateway_id,receiver.GatewayEuiBytes());
+        if(cfg.gauge_stat)for(auto& stat:*record.mutable_stats())stat.set_isgauge(true);
         queue.Add(std::move(record));
       });
       if(receiver.HasIdentity())queue.SetIdentity(cfg.gateway_id,receiver.GatewayEuiBytes());

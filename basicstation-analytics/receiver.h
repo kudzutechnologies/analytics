@@ -21,6 +21,8 @@ struct PollStats {
 class Receiver {
 public:
     Receiver() = default;
+    Receiver(const Receiver&)=delete;
+    Receiver& operator=(const Receiver&)=delete;
     ~Receiver();
 
     // err may be null. Returns false on bind/fcntl failure.
@@ -28,6 +30,7 @@ public:
     void Close();
     bool IsOpen() const { return fd_ >= 0; }
     int Fd() const { return fd_; }
+    int EffectiveReceiveBuffer() const {return effective_buffer_;}
 
     // Optional Kudzu ObjectID (from config/pairing). Never synthesized from EUI.
     void SetGatewayId(const std::string& gateway_id) { gateway_id_ = gateway_id; }
@@ -52,7 +55,9 @@ public:
 
 private:
     int fd_ = -1;
-    int receive_buffer_=16384, max_poll_=32;
+    int lock_fd_=-1;
+    dev_t socket_dev_=0;ino_t socket_ino_=0;
+    int receive_buffer_=16384, max_poll_=32, effective_buffer_=0;
     bool bound_path_owned_ = false;
     std::string socket_path_;
     mode_t socket_mode_ = 0660;
