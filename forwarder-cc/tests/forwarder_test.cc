@@ -91,6 +91,16 @@ int main() {
   fwd.TestUpLocalData(dn.data(), dn.size(), ep);
   ExpectEq(fwd.TestDownlinkCount(), 1, "downlink via up path");
 
+  api::AnalyticsMetrics captured;
+  Expect(captured.ParseFromString(fwd.TestFirstFrame()), "capture analytics frame");
+  const auto expected_up = B64Decode("QKydCyYAQwMB7iu5QD6sH5u1C+Yh");
+  const auto expected_down = B64Decode("IG+SBpe5NUo4I8L3iCTsmIgXPEHDL63Eqj6laVmrGKRF");
+  ExpectEq(captured.uplinks(0).phypayload(),
+           std::string(expected_up.begin(), expected_up.end()), "complete uplink includes MIC");
+  ExpectEq(captured.downlinks(0).phypayload(),
+           std::string(expected_down.begin(), expected_down.end()), "complete downlink includes MIC");
+  ExpectEq(captured.uplinks(0).fhdr().size(), size_t{9}, "legacy uplink header retained");
+
   auto with_etime = MakePushWithETime();
   SockAddr4 ep2 = ep;
   ep2.port = htons(40001);  // same IP → same frame key

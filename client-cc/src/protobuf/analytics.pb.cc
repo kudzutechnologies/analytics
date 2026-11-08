@@ -175,6 +175,12 @@ inline constexpr AnalyticsUplink::Impl_::Impl_(
         uniqueid_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
+        phypayload_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        gatewaycontext_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
         rxwalltime_{::int64_t{0}},
         rxgpstime_{::int64_t{0}},
         rxfinishedtime_{::int64_t{0}},
@@ -224,6 +230,12 @@ inline constexpr AnalyticsDownlink::Impl_::Impl_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         uniqueid_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        phypayload_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        gatewaycontext_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         txtime_{::int64_t{0}},
@@ -369,7 +381,7 @@ const ::uint32_t
         0x085, // bitmap
         PROTOBUF_FIELD_OFFSET(::api::AnalyticsUplink, _impl_._has_bits_),
         PROTOBUF_FIELD_OFFSET(::api::AnalyticsUplink, _impl_._oneof_case_[0]),
-        19, // hasbit index offset
+        21, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::api::AnalyticsUplink, _impl_.rxwalltime_),
         PROTOBUF_FIELD_OFFSET(::api::AnalyticsUplink, _impl_.rxgpstime_),
         PROTOBUF_FIELD_OFFSET(::api::AnalyticsUplink, _impl_.rxfinishedtime_),
@@ -384,25 +396,29 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::api::AnalyticsUplink, _impl_.fhdr_),
         PROTOBUF_FIELD_OFFSET(::api::AnalyticsUplink, _impl_.uniqueid_),
         PROTOBUF_FIELD_OFFSET(::api::AnalyticsUplink, _impl_.ant_),
+        PROTOBUF_FIELD_OFFSET(::api::AnalyticsUplink, _impl_.phypayload_),
+        PROTOBUF_FIELD_OFFSET(::api::AnalyticsUplink, _impl_.gatewaycontext_),
         PROTOBUF_FIELD_OFFSET(::api::AnalyticsUplink, _impl_.dataRate_),
-        2,
-        3,
         4,
         5,
         6,
         7,
         8,
         9,
-        ~0u,
-        ~0u,
         10,
+        11,
+        ~0u,
+        ~0u,
+        12,
         0,
         1,
-        11,
+        13,
+        2,
+        3,
         0x085, // bitmap
         PROTOBUF_FIELD_OFFSET(::api::AnalyticsDownlink, _impl_._has_bits_),
         PROTOBUF_FIELD_OFFSET(::api::AnalyticsDownlink, _impl_._oneof_case_[0]),
-        24, // hasbit index offset
+        26, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::api::AnalyticsDownlink, _impl_.txtime_),
         PROTOBUF_FIELD_OFFSET(::api::AnalyticsDownlink, _impl_.txgpstime_),
         PROTOBUF_FIELD_OFFSET(::api::AnalyticsDownlink, _impl_.fskfreqdev_),
@@ -422,9 +438,9 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::api::AnalyticsDownlink, _impl_.nocrc_),
         PROTOBUF_FIELD_OFFSET(::api::AnalyticsDownlink, _impl_.rxwalltime_),
         PROTOBUF_FIELD_OFFSET(::api::AnalyticsDownlink, _impl_.uniqueid_),
+        PROTOBUF_FIELD_OFFSET(::api::AnalyticsDownlink, _impl_.phypayload_),
+        PROTOBUF_FIELD_OFFSET(::api::AnalyticsDownlink, _impl_.gatewaycontext_),
         PROTOBUF_FIELD_OFFSET(::api::AnalyticsDownlink, _impl_.dataRate_),
-        2,
-        3,
         4,
         5,
         6,
@@ -432,16 +448,20 @@ const ::uint32_t
         8,
         9,
         10,
-        ~0u,
-        ~0u,
-        12,
-        13,
         11,
-        15,
-        0,
+        12,
+        ~0u,
+        ~0u,
         14,
+        15,
+        13,
+        17,
+        0,
         16,
+        18,
         1,
+        2,
+        3,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::api::AnalyticsStat, _impl_._has_bits_),
         15, // hasbit index offset
@@ -508,10 +528,10 @@ static const ::_pbi::MigrationSchema
         {0, sizeof(::api::AnalyticsMetrics)},
         {15, sizeof(::api::AnalyticsUplinkAntenna)},
         {36, sizeof(::api::AnalyticsUplink)},
-        {69, sizeof(::api::AnalyticsDownlink)},
-        {112, sizeof(::api::AnalyticsStat)},
-        {139, sizeof(::api::AnalyticsInternalMetrics)},
-        {164, sizeof(::api::LoRaDataRate)},
+        {73, sizeof(::api::AnalyticsDownlink)},
+        {120, sizeof(::api::AnalyticsStat)},
+        {147, sizeof(::api::AnalyticsInternalMetrics)},
+        {172, sizeof(::api::LoRaDataRate)},
 };
 static const ::_pb::Message* PROTOBUF_NONNULL const file_default_instances[] = {
     &::api::_AnalyticsMetrics_default_instance_._instance,
@@ -536,7 +556,7 @@ const char descriptor_table_protodef_analytics_2eproto[] ABSL_ATTRIBUTE_SECTION_
     "\023\n\006RSSISD\030\005 \001(\005H\001\210\001\001\022\014\n\004LSNR\030\006 \001(\002\022\022\n\005ET"
     "ime\030\007 \001(\014H\002\210\001\001\022\022\n\005FTime\030\010 \001(\003H\003\210\001\001\022\021\n\004Fo"
     "ff\030\t \001(\005H\004\210\001\001B\010\n\006_RSSISB\t\n\007_RSSISDB\010\n\006_E"
-    "TimeB\010\n\006_FTimeB\007\n\005_Foff\"\205\003\n\017AnalyticsUpl"
+    "TimeB\010\n\006_FTimeB\007\n\005_Foff\"\261\003\n\017AnalyticsUpl"
     "ink\022\022\n\nrxWallTime\030\001 \001(\003\022\021\n\trxGpsTime\030\002 \001"
     "(\003\022\026\n\016rxFinishedTime\030\003 \001(\003\022\021\n\tfrequency\030"
     "\004 \001(\002\022\017\n\007rfChain\030\006 \001(\r\022\033\n\003crc\030\007 \001(\0162\016.ap"
@@ -546,51 +566,53 @@ const char descriptor_table_protodef_analytics_2eproto[] ABSL_ATTRIBUTE_SECTION_
     "RaDataRateH\000\022\025\n\013dataRateFSK\030\013 \001(\rH\000\022\014\n\004s"
     "ize\030\016 \001(\r\022\014\n\004fhdr\030\017 \001(\014\022\020\n\010uniqueId\030\020 \001("
     "\014\022(\n\003ant\030\021 \003(\0132\033.api.AnalyticsUplinkAnte"
-    "nnaB\n\n\010dataRate\"\274\003\n\021AnalyticsDownlink\022\016\n"
-    "\006txTime\030\001 \001(\003\022\021\n\ttxGpsTime\030\002 \001(\003\022\022\n\nfskF"
-    "reqDev\030\003 \001(\002\022\021\n\tfrequency\030\004 \001(\002\022\017\n\007chann"
-    "el\030\005 \001(\r\022\017\n\007rfChain\030\006 \001(\r\022\r\n\005power\030\007 \001(\002"
-    "\022#\n\nmodulation\030\010 \001(\0162\017.api.Modulation\022\'\n"
-    "\ncodingRate\030\t \001(\0162\023.api.LoRaCodingRate\022)"
-    "\n\014dataRateLoRa\030\n \001(\0132\021.api.LoRaDataRateH"
-    "\000\022\025\n\013dataRateFSK\030\013 \001(\rH\000\022\026\n\016invertPolari"
-    "ty\030\014 \001(\010\022\023\n\013immediately\030\r \001(\010\022\022\n\nrfPream"
-    "ble\030\016 \001(\r\022\014\n\004size\030\017 \001(\r\022\014\n\004fhdr\030\020 \001(\014\022\r\n"
-    "\005noCrc\030\021 \001(\010\022\022\n\nrxWallTime\030\022 \001(\003\022\020\n\010uniq"
-    "ueId\030\023 \001(\014B\n\n\010dataRate\"\207\002\n\rAnalyticsStat"
-    "\022\016\n\006gwTime\030\001 \001(\003\022\022\n\ngwLatitude\030\002 \001(\002\022\023\n\013"
-    "gwLongitude\030\003 \001(\002\022\022\n\ngwAltitude\030\004 \001(\002\022\021\n"
-    "\trxPackets\030\005 \001(\r\022\031\n\021rxWithValidPhyCRC\030\006 "
-    "\001(\r\022\023\n\013rxForwarded\030\007 \001(\r\022\016\n\006rxAckr\030\010 \001(\002"
-    "\022\022\n\ntxReceived\030\t \001(\r\022\021\n\ttxEmitted\030\n \001(\r\022"
-    "\017\n\007isGauge\030\013 \001(\010\022\023\n\006gwTemp\030\014 \001(\002H\000\210\001\001B\t\n"
-    "\007_gwTemp\"\200\002\n\030AnalyticsInternalMetrics\022\021\n"
-    "\tgatewayIp\030\001 \001(\t\022\023\n\013upRxPackets\030\002 \001(\r\022\023\n"
-    "\013upTxPackets\030\003 \001(\r\022\023\n\013dnRxPackets\030\004 \001(\r\022"
-    "\023\n\013dnTxPackets\030\005 \001(\r\022\024\n\014pktPUSH_DATA\030\006 \001"
-    "(\r\022\023\n\013pktPUSH_ACK\030\007 \001(\r\022\024\n\014pktPULL_DATA\030"
-    "\010 \001(\r\022\023\n\013pktPULL_ACK\030\t \001(\r\022\024\n\014pktPULL_RE"
-    "SP\030\n \001(\r\022\021\n\tpktTX_ACK\030\013 \001(\r\"T\n\014LoRaDataR"
-    "ate\022$\n\017spreadingFactor\030\001 \001(\0162\013.api.LoRaS"
-    "F\022\036\n\tbandwidth\030\002 \001(\0162\013.api.LoRaBW**\n\tCRC"
-    "Status\022\013\n\007MISSING\020\000\022\006\n\002OK\020\001\022\010\n\004FAIL\020\002*,\n"
-    "\nModulation\022\013\n\007UNKNOWN\020\000\022\010\n\004LORA\020\001\022\007\n\003FS"
-    "K\020\002*\303\001\n\016LoRaCodingRate\022\n\n\006CR_OFF\020\000\022\016\n\nCR"
-    "_UNKNOWN\020\001\022\n\n\006CR_4_5\020\002\022\n\n\006CR_4_6\020\003\022\n\n\006CR"
-    "_4_7\020\004\022\n\n\006CR_4_8\020\005\022\n\n\006CR_4_9\020\006\022\013\n\007CR_4_1"
-    "0\020\007\022\013\n\007CR_4_11\020\010\022\013\n\007CR_4_12\020\t\022\013\n\007CR_4_13"
-    "\020\n\022\013\n\007CR_4_14\020\013\022\013\n\007CR_4_15\020\014\022\013\n\007CR_4_16\020"
-    "\r*Q\n\006LoRaSF\022\016\n\nSF_UNKNOWN\020\000\022\010\n\004SF12\020\001\022\010\n"
-    "\004SF11\020\002\022\010\n\004SF10\020\003\022\007\n\003SF9\020\004\022\007\n\003SF8\020\005\022\007\n\003S"
-    "F7\020\006*\?\n\006LoRaBW\022\016\n\nBW_UNKNOWN\020\000\022\013\n\007BW_125"
-    "k\020\001\022\013\n\007BW_250k\020\003\022\013\n\007BW_500k\020\002B!Z\037kudzute"
-    "chnologies/analytics/apib\006proto3"
+    "nna\022\022\n\nphyPayload\030\022 \001(\014\022\026\n\016gatewayContex"
+    "t\030\023 \001(\014B\n\n\010dataRate\"\350\003\n\021AnalyticsDownlin"
+    "k\022\016\n\006txTime\030\001 \001(\003\022\021\n\ttxGpsTime\030\002 \001(\003\022\022\n\n"
+    "fskFreqDev\030\003 \001(\002\022\021\n\tfrequency\030\004 \001(\002\022\017\n\007c"
+    "hannel\030\005 \001(\r\022\017\n\007rfChain\030\006 \001(\r\022\r\n\005power\030\007"
+    " \001(\002\022#\n\nmodulation\030\010 \001(\0162\017.api.Modulatio"
+    "n\022\'\n\ncodingRate\030\t \001(\0162\023.api.LoRaCodingRa"
+    "te\022)\n\014dataRateLoRa\030\n \001(\0132\021.api.LoRaDataR"
+    "ateH\000\022\025\n\013dataRateFSK\030\013 \001(\rH\000\022\026\n\016invertPo"
+    "larity\030\014 \001(\010\022\023\n\013immediately\030\r \001(\010\022\022\n\nrfP"
+    "reamble\030\016 \001(\r\022\014\n\004size\030\017 \001(\r\022\014\n\004fhdr\030\020 \001("
+    "\014\022\r\n\005noCrc\030\021 \001(\010\022\022\n\nrxWallTime\030\022 \001(\003\022\020\n\010"
+    "uniqueId\030\023 \001(\014\022\022\n\nphyPayload\030\024 \001(\014\022\026\n\016ga"
+    "tewayContext\030\025 \001(\014B\n\n\010dataRate\"\207\002\n\rAnaly"
+    "ticsStat\022\016\n\006gwTime\030\001 \001(\003\022\022\n\ngwLatitude\030\002"
+    " \001(\002\022\023\n\013gwLongitude\030\003 \001(\002\022\022\n\ngwAltitude\030"
+    "\004 \001(\002\022\021\n\trxPackets\030\005 \001(\r\022\031\n\021rxWithValidP"
+    "hyCRC\030\006 \001(\r\022\023\n\013rxForwarded\030\007 \001(\r\022\016\n\006rxAc"
+    "kr\030\010 \001(\002\022\022\n\ntxReceived\030\t \001(\r\022\021\n\ttxEmitte"
+    "d\030\n \001(\r\022\017\n\007isGauge\030\013 \001(\010\022\023\n\006gwTemp\030\014 \001(\002"
+    "H\000\210\001\001B\t\n\007_gwTemp\"\200\002\n\030AnalyticsInternalMe"
+    "trics\022\021\n\tgatewayIp\030\001 \001(\t\022\023\n\013upRxPackets\030"
+    "\002 \001(\r\022\023\n\013upTxPackets\030\003 \001(\r\022\023\n\013dnRxPacket"
+    "s\030\004 \001(\r\022\023\n\013dnTxPackets\030\005 \001(\r\022\024\n\014pktPUSH_"
+    "DATA\030\006 \001(\r\022\023\n\013pktPUSH_ACK\030\007 \001(\r\022\024\n\014pktPU"
+    "LL_DATA\030\010 \001(\r\022\023\n\013pktPULL_ACK\030\t \001(\r\022\024\n\014pk"
+    "tPULL_RESP\030\n \001(\r\022\021\n\tpktTX_ACK\030\013 \001(\r\"T\n\014L"
+    "oRaDataRate\022$\n\017spreadingFactor\030\001 \001(\0162\013.a"
+    "pi.LoRaSF\022\036\n\tbandwidth\030\002 \001(\0162\013.api.LoRaB"
+    "W**\n\tCRCStatus\022\013\n\007MISSING\020\000\022\006\n\002OK\020\001\022\010\n\004F"
+    "AIL\020\002*,\n\nModulation\022\013\n\007UNKNOWN\020\000\022\010\n\004LORA"
+    "\020\001\022\007\n\003FSK\020\002*\303\001\n\016LoRaCodingRate\022\n\n\006CR_OFF"
+    "\020\000\022\016\n\nCR_UNKNOWN\020\001\022\n\n\006CR_4_5\020\002\022\n\n\006CR_4_6"
+    "\020\003\022\n\n\006CR_4_7\020\004\022\n\n\006CR_4_8\020\005\022\n\n\006CR_4_9\020\006\022\013"
+    "\n\007CR_4_10\020\007\022\013\n\007CR_4_11\020\010\022\013\n\007CR_4_12\020\t\022\013\n"
+    "\007CR_4_13\020\n\022\013\n\007CR_4_14\020\013\022\013\n\007CR_4_15\020\014\022\013\n\007"
+    "CR_4_16\020\r*Q\n\006LoRaSF\022\016\n\nSF_UNKNOWN\020\000\022\010\n\004S"
+    "F12\020\001\022\010\n\004SF11\020\002\022\010\n\004SF10\020\003\022\007\n\003SF9\020\004\022\007\n\003SF"
+    "8\020\005\022\007\n\003SF7\020\006*\?\n\006LoRaBW\022\016\n\nBW_UNKNOWN\020\000\022\013"
+    "\n\007BW_125k\020\001\022\013\n\007BW_250k\020\003\022\013\n\007BW_500k\020\002B!Z"
+    "\037kudzutechnologies/analytics/apib\006proto3"
 };
 static ::absl::once_flag descriptor_table_analytics_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_analytics_2eproto = {
     false,
     false,
-    2432,
+    2520,
     descriptor_table_protodef_analytics_2eproto,
     "analytics.proto",
     &descriptor_table_analytics_2eproto_once,
@@ -1715,6 +1737,8 @@ PROTOBUF_NDEBUG_INLINE AnalyticsUplink::Impl_::Impl_(
         _cached_size_{0},
         fhdr_(arena, from.fhdr_),
         uniqueid_(arena, from.uniqueid_),
+        phypayload_(arena, from.phypayload_),
+        gatewaycontext_(arena, from.gatewaycontext_),
         #ifdef PROTOBUF_INTERNAL_REMOVE_ARENA_PTRS_REPEATED_PTR_FIELD
         ant_{visibility, ::_pbi::InternalMetadataOffset::Build<
             ::api::AnalyticsUplink,
@@ -1766,6 +1790,8 @@ PROTOBUF_NDEBUG_INLINE AnalyticsUplink::Impl_::Impl_(
       : _cached_size_{0},
         fhdr_(arena),
         uniqueid_(arena),
+        phypayload_(arena),
+        gatewaycontext_(arena),
         #ifdef PROTOBUF_INTERNAL_REMOVE_ARENA_PTRS_REPEATED_PTR_FIELD
         ant_{visibility, ::_pbi::InternalMetadataOffset::Build<
             ::api::AnalyticsUplink,
@@ -1800,6 +1826,8 @@ inline void AnalyticsUplink::SharedDtor(MessageLite& self) {
   ABSL_DCHECK(this_.GetArena() == nullptr);
   this_._impl_.fhdr_.Destroy();
   this_._impl_.uniqueid_.Destroy();
+  this_._impl_.phypayload_.Destroy();
+  this_._impl_.gatewaycontext_.Destroy();
   if (this_.has_dataRate()) {
     this_.clear_dataRate();
   }
@@ -1891,16 +1919,16 @@ AnalyticsUplink::GetClassData() const {
   return AnalyticsUplink_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<4, 14, 2, 0, 2>
+const ::_pbi::TcParseTable<5, 16, 2, 0, 2>
 AnalyticsUplink::_table_ = {
   {
     PROTOBUF_FIELD_OFFSET(AnalyticsUplink, _impl_._has_bits_),
     0, // no _extensions_
-    17, 120,  // max_field_number, fast_idx_mask
+    19, 248,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294842384,  // skipmap
+    4294449168,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    14,  // num_field_entries
+    16,  // num_field_entries
     2,  // num_aux_entries
     offsetof(decltype(_table_), aux_entries),
     AnalyticsUplink_class_data_.base(),
@@ -1910,86 +1938,115 @@ AnalyticsUplink::_table_ = {
     ::_pbi::TcParser::GetTable<::api::AnalyticsUplink>(),  // to_prefetch
     #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
   }, {{
-    // bytes uniqueId = 16;
-    {::_pbi::TcParser::FastBS2,
-     {386, 1, 0,
-      PROTOBUF_FIELD_OFFSET(AnalyticsUplink, _impl_.uniqueid_)}},
+    {::_pbi::TcParser::MiniParse, {}},
     // int64 rxWallTime = 1;
-    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AnalyticsUplink, _impl_.rxwalltime_), 2>(),
-     {8, 2, 0,
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AnalyticsUplink, _impl_.rxwalltime_), 4>(),
+     {8, 4, 0,
       PROTOBUF_FIELD_OFFSET(AnalyticsUplink, _impl_.rxwalltime_)}},
     // int64 rxGpsTime = 2;
-    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AnalyticsUplink, _impl_.rxgpstime_), 3>(),
-     {16, 3, 0,
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AnalyticsUplink, _impl_.rxgpstime_), 5>(),
+     {16, 5, 0,
       PROTOBUF_FIELD_OFFSET(AnalyticsUplink, _impl_.rxgpstime_)}},
     // int64 rxFinishedTime = 3;
-    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AnalyticsUplink, _impl_.rxfinishedtime_), 4>(),
-     {24, 4, 0,
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AnalyticsUplink, _impl_.rxfinishedtime_), 6>(),
+     {24, 6, 0,
       PROTOBUF_FIELD_OFFSET(AnalyticsUplink, _impl_.rxfinishedtime_)}},
     // float frequency = 4;
     {::_pbi::TcParser::FastF32S1,
-     {37, 5, 0,
+     {37, 7, 0,
       PROTOBUF_FIELD_OFFSET(AnalyticsUplink, _impl_.frequency_)}},
     {::_pbi::TcParser::MiniParse, {}},
     // uint32 rfChain = 6;
-    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AnalyticsUplink, _impl_.rfchain_), 6>(),
-     {48, 6, 0,
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AnalyticsUplink, _impl_.rfchain_), 8>(),
+     {48, 8, 0,
       PROTOBUF_FIELD_OFFSET(AnalyticsUplink, _impl_.rfchain_)}},
     // .api.CRCStatus crc = 7;
-    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AnalyticsUplink, _impl_.crc_), 7>(),
-     {56, 7, 0,
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AnalyticsUplink, _impl_.crc_), 9>(),
+     {56, 9, 0,
       PROTOBUF_FIELD_OFFSET(AnalyticsUplink, _impl_.crc_)}},
     // .api.Modulation modulation = 8;
-    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AnalyticsUplink, _impl_.modulation_), 8>(),
-     {64, 8, 0,
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AnalyticsUplink, _impl_.modulation_), 10>(),
+     {64, 10, 0,
       PROTOBUF_FIELD_OFFSET(AnalyticsUplink, _impl_.modulation_)}},
     // .api.LoRaCodingRate codingRate = 9;
-    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AnalyticsUplink, _impl_.codingrate_), 9>(),
-     {72, 9, 0,
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AnalyticsUplink, _impl_.codingrate_), 11>(),
+     {72, 11, 0,
       PROTOBUF_FIELD_OFFSET(AnalyticsUplink, _impl_.codingrate_)}},
     {::_pbi::TcParser::MiniParse, {}},
     {::_pbi::TcParser::MiniParse, {}},
     {::_pbi::TcParser::MiniParse, {}},
     {::_pbi::TcParser::MiniParse, {}},
     // uint32 size = 14;
-    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AnalyticsUplink, _impl_.size_), 10>(),
-     {112, 10, 0,
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AnalyticsUplink, _impl_.size_), 12>(),
+     {112, 12, 0,
       PROTOBUF_FIELD_OFFSET(AnalyticsUplink, _impl_.size_)}},
     // bytes fhdr = 15;
     {::_pbi::TcParser::FastBS1,
      {122, 0, 0,
       PROTOBUF_FIELD_OFFSET(AnalyticsUplink, _impl_.fhdr_)}},
+    // bytes uniqueId = 16;
+    {::_pbi::TcParser::FastBS2,
+     {386, 1, 0,
+      PROTOBUF_FIELD_OFFSET(AnalyticsUplink, _impl_.uniqueid_)}},
+    // repeated .api.AnalyticsUplinkAntenna ant = 17;
+    {::_pbi::TcParser::FastMtR2,
+     {394, 13, 1,
+      PROTOBUF_FIELD_OFFSET(AnalyticsUplink, _impl_.ant_)}},
+    // bytes phyPayload = 18;
+    {::_pbi::TcParser::FastBS2,
+     {402, 2, 0,
+      PROTOBUF_FIELD_OFFSET(AnalyticsUplink, _impl_.phypayload_)}},
+    // bytes gatewayContext = 19;
+    {::_pbi::TcParser::FastBS2,
+     {410, 3, 0,
+      PROTOBUF_FIELD_OFFSET(AnalyticsUplink, _impl_.gatewaycontext_)}},
+    {::_pbi::TcParser::MiniParse, {}},
+    {::_pbi::TcParser::MiniParse, {}},
+    {::_pbi::TcParser::MiniParse, {}},
+    {::_pbi::TcParser::MiniParse, {}},
+    {::_pbi::TcParser::MiniParse, {}},
+    {::_pbi::TcParser::MiniParse, {}},
+    {::_pbi::TcParser::MiniParse, {}},
+    {::_pbi::TcParser::MiniParse, {}},
+    {::_pbi::TcParser::MiniParse, {}},
+    {::_pbi::TcParser::MiniParse, {}},
+    {::_pbi::TcParser::MiniParse, {}},
+    {::_pbi::TcParser::MiniParse, {}},
   }}, {{
     65535, 65535
   }}, {{
     // int64 rxWallTime = 1;
-    {PROTOBUF_FIELD_OFFSET(AnalyticsUplink, _impl_.rxwalltime_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
+    {PROTOBUF_FIELD_OFFSET(AnalyticsUplink, _impl_.rxwalltime_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
     // int64 rxGpsTime = 2;
-    {PROTOBUF_FIELD_OFFSET(AnalyticsUplink, _impl_.rxgpstime_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
+    {PROTOBUF_FIELD_OFFSET(AnalyticsUplink, _impl_.rxgpstime_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
     // int64 rxFinishedTime = 3;
-    {PROTOBUF_FIELD_OFFSET(AnalyticsUplink, _impl_.rxfinishedtime_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
+    {PROTOBUF_FIELD_OFFSET(AnalyticsUplink, _impl_.rxfinishedtime_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
     // float frequency = 4;
-    {PROTOBUF_FIELD_OFFSET(AnalyticsUplink, _impl_.frequency_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kFloat)},
+    {PROTOBUF_FIELD_OFFSET(AnalyticsUplink, _impl_.frequency_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kFloat)},
     // uint32 rfChain = 6;
-    {PROTOBUF_FIELD_OFFSET(AnalyticsUplink, _impl_.rfchain_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    {PROTOBUF_FIELD_OFFSET(AnalyticsUplink, _impl_.rfchain_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     // .api.CRCStatus crc = 7;
-    {PROTOBUF_FIELD_OFFSET(AnalyticsUplink, _impl_.crc_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+    {PROTOBUF_FIELD_OFFSET(AnalyticsUplink, _impl_.crc_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
     // .api.Modulation modulation = 8;
-    {PROTOBUF_FIELD_OFFSET(AnalyticsUplink, _impl_.modulation_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+    {PROTOBUF_FIELD_OFFSET(AnalyticsUplink, _impl_.modulation_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
     // .api.LoRaCodingRate codingRate = 9;
-    {PROTOBUF_FIELD_OFFSET(AnalyticsUplink, _impl_.codingrate_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+    {PROTOBUF_FIELD_OFFSET(AnalyticsUplink, _impl_.codingrate_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
     // .api.LoRaDataRate dataRateLoRa = 10;
     {PROTOBUF_FIELD_OFFSET(AnalyticsUplink, _impl_.dataRate_.dataratelora_), _Internal::kOneofCaseOffset + 0, 0, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
     // uint32 dataRateFSK = 11;
     {PROTOBUF_FIELD_OFFSET(AnalyticsUplink, _impl_.dataRate_.dataratefsk_), _Internal::kOneofCaseOffset + 0, 0, (0 | ::_fl::kFcOneof | ::_fl::kUInt32)},
     // uint32 size = 14;
-    {PROTOBUF_FIELD_OFFSET(AnalyticsUplink, _impl_.size_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    {PROTOBUF_FIELD_OFFSET(AnalyticsUplink, _impl_.size_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     // bytes fhdr = 15;
     {PROTOBUF_FIELD_OFFSET(AnalyticsUplink, _impl_.fhdr_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
     // bytes uniqueId = 16;
     {PROTOBUF_FIELD_OFFSET(AnalyticsUplink, _impl_.uniqueid_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
     // repeated .api.AnalyticsUplinkAntenna ant = 17;
-    {PROTOBUF_FIELD_OFFSET(AnalyticsUplink, _impl_.ant_), _Internal::kHasBitsOffset + 11, 1, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+    {PROTOBUF_FIELD_OFFSET(AnalyticsUplink, _impl_.ant_), _Internal::kHasBitsOffset + 13, 1, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+    // bytes phyPayload = 18;
+    {PROTOBUF_FIELD_OFFSET(AnalyticsUplink, _impl_.phypayload_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
+    // bytes gatewayContext = 19;
+    {PROTOBUF_FIELD_OFFSET(AnalyticsUplink, _impl_.gatewaycontext_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
   }},
   {{
       {::_pbi::TcParser::GetTable<::api::LoRaDataRate>()},
@@ -2006,24 +2063,30 @@ PROTOBUF_NOINLINE void AnalyticsUplink::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.fhdr_.ClearNonDefaultToEmpty();
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       _impl_.uniqueid_.ClearNonDefaultToEmpty();
     }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _impl_.phypayload_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      _impl_.gatewaycontext_.ClearNonDefaultToEmpty();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x000000fcU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000f0U)) {
     ::memset(&_impl_.rxwalltime_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.crc_) -
-        reinterpret_cast<char*>(&_impl_.rxwalltime_)) + sizeof(_impl_.crc_));
+        reinterpret_cast<char*>(&_impl_.frequency_) -
+        reinterpret_cast<char*>(&_impl_.rxwalltime_)) + sizeof(_impl_.frequency_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
-    ::memset(&_impl_.modulation_, 0, static_cast<::size_t>(
+  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
+    ::memset(&_impl_.rfchain_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.size_) -
-        reinterpret_cast<char*>(&_impl_.modulation_)) + sizeof(_impl_.size_));
-    if (CheckHasBitForRepeated(cached_has_bits, 0x00000800U)) {
+        reinterpret_cast<char*>(&_impl_.rfchain_)) + sizeof(_impl_.size_));
+    if (CheckHasBitForRepeated(cached_has_bits, 0x00002000U)) {
       _impl_.ant_.Clear();
     }
   }
@@ -2052,7 +2115,7 @@ PROTOBUF_NOINLINE void AnalyticsUplink::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // int64 rxWallTime = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_rxwalltime() != 0) {
       target =
           ::google::protobuf::internal::WireFormatLite::WriteInt64ToArrayWithField<1>(
@@ -2061,7 +2124,7 @@ PROTOBUF_NOINLINE void AnalyticsUplink::Clear() {
   }
 
   // int64 rxGpsTime = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_rxgpstime() != 0) {
       target =
           ::google::protobuf::internal::WireFormatLite::WriteInt64ToArrayWithField<2>(
@@ -2070,7 +2133,7 @@ PROTOBUF_NOINLINE void AnalyticsUplink::Clear() {
   }
 
   // int64 rxFinishedTime = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_rxfinishedtime() != 0) {
       target =
           ::google::protobuf::internal::WireFormatLite::WriteInt64ToArrayWithField<3>(
@@ -2079,7 +2142,7 @@ PROTOBUF_NOINLINE void AnalyticsUplink::Clear() {
   }
 
   // float frequency = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (::absl::bit_cast<::uint32_t>(this_._internal_frequency()) != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteFloatToArray(
@@ -2088,7 +2151,7 @@ PROTOBUF_NOINLINE void AnalyticsUplink::Clear() {
   }
 
   // uint32 rfChain = 6;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_rfchain() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -2097,7 +2160,7 @@ PROTOBUF_NOINLINE void AnalyticsUplink::Clear() {
   }
 
   // .api.CRCStatus crc = 7;
-  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_crc() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteEnumToArray(
@@ -2106,7 +2169,7 @@ PROTOBUF_NOINLINE void AnalyticsUplink::Clear() {
   }
 
   // .api.Modulation modulation = 8;
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
     if (this_._internal_modulation() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteEnumToArray(
@@ -2115,7 +2178,7 @@ PROTOBUF_NOINLINE void AnalyticsUplink::Clear() {
   }
 
   // .api.LoRaCodingRate codingRate = 9;
-  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
     if (this_._internal_codingrate() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteEnumToArray(
@@ -2140,7 +2203,7 @@ PROTOBUF_NOINLINE void AnalyticsUplink::Clear() {
       break;
   }
   // uint32 size = 14;
-  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
     if (this_._internal_size() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -2165,7 +2228,7 @@ PROTOBUF_NOINLINE void AnalyticsUplink::Clear() {
   }
 
   // repeated .api.AnalyticsUplinkAntenna ant = 17;
-  if (CheckHasBitForRepeated(cached_has_bits, 0x00000800U)) {
+  if (CheckHasBitForRepeated(cached_has_bits, 0x00002000U)) {
     for (unsigned i = 0, n = static_cast<unsigned>(
                              this_._internal_ant_size());
          i < n; i++) {
@@ -2174,6 +2237,22 @@ PROTOBUF_NOINLINE void AnalyticsUplink::Clear() {
           ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
               17, repfield, repfield.GetCachedSize(),
               target, stream);
+    }
+  }
+
+  // bytes phyPayload = 18;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (!this_._internal_phypayload().empty()) {
+      const ::std::string& _s = this_._internal_phypayload();
+      target = stream->WriteBytesMaybeAliased(18, _s, target);
+    }
+  }
+
+  // bytes gatewayContext = 19;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (!this_._internal_gatewaycontext().empty()) {
+      const ::std::string& _s = this_._internal_gatewaycontext();
+      target = stream->WriteBytesMaybeAliased(19, _s, target);
     }
   }
 
@@ -2217,72 +2296,86 @@ PROTOBUF_NOINLINE void AnalyticsUplink::Clear() {
                                         this_._internal_uniqueid());
       }
     }
-    // int64 rxWallTime = 1;
+    // bytes phyPayload = 18;
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!this_._internal_phypayload().empty()) {
+        total_size += 2 + ::google::protobuf::internal::WireFormatLite::BytesSize(
+                                        this_._internal_phypayload());
+      }
+    }
+    // bytes gatewayContext = 19;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!this_._internal_gatewaycontext().empty()) {
+        total_size += 2 + ::google::protobuf::internal::WireFormatLite::BytesSize(
+                                        this_._internal_gatewaycontext());
+      }
+    }
+    // int64 rxWallTime = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_rxwalltime() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_rxwalltime());
       }
     }
     // int64 rxGpsTime = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_rxgpstime() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_rxgpstime());
       }
     }
     // int64 rxFinishedTime = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_rxfinishedtime() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_rxfinishedtime());
       }
     }
     // float frequency = 4;
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (::absl::bit_cast<::uint32_t>(this_._internal_frequency()) != 0) {
         total_size += 5;
       }
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
     // uint32 rfChain = 6;
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_rfchain() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_rfchain());
       }
     }
     // .api.CRCStatus crc = 7;
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_crc() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_crc());
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
     // .api.Modulation modulation = 8;
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (this_._internal_modulation() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_modulation());
       }
     }
     // .api.LoRaCodingRate codingRate = 9;
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (this_._internal_codingrate() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_codingrate());
       }
     }
     // uint32 size = 14;
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (this_._internal_size() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_size());
       }
     }
     // repeated .api.AnalyticsUplinkAntenna ant = 17;
-    if (CheckHasBitForRepeated(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBitForRepeated(cached_has_bits, 0x00002000U)) {
       total_size += 2UL * this_._internal_ant_size();
       for (const auto& msg : this_._internal_ant()) {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
@@ -2345,53 +2438,71 @@ void AnalyticsUplink::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!from._internal_phypayload().empty()) {
+        _this->_internal_set_phypayload(from._internal_phypayload());
+      } else {
+        if (_this->_impl_.phypayload_.IsDefault()) {
+          _this->_internal_set_phypayload("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!from._internal_gatewaycontext().empty()) {
+        _this->_internal_set_gatewaycontext(from._internal_gatewaycontext());
+      } else {
+        if (_this->_impl_.gatewaycontext_.IsDefault()) {
+          _this->_internal_set_gatewaycontext("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (from._internal_rxwalltime() != 0) {
         _this->_impl_.rxwalltime_ = from._impl_.rxwalltime_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (from._internal_rxgpstime() != 0) {
         _this->_impl_.rxgpstime_ = from._impl_.rxgpstime_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (from._internal_rxfinishedtime() != 0) {
         _this->_impl_.rxfinishedtime_ = from._impl_.rxfinishedtime_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (::absl::bit_cast<::uint32_t>(from._internal_frequency()) != 0) {
         _this->_impl_.frequency_ = from._impl_.frequency_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_rfchain() != 0) {
         _this->_impl_.rfchain_ = from._impl_.rfchain_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (from._internal_crc() != 0) {
         _this->_impl_.crc_ = from._impl_.crc_;
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (from._internal_modulation() != 0) {
         _this->_impl_.modulation_ = from._impl_.modulation_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (from._internal_codingrate() != 0) {
         _this->_impl_.codingrate_ = from._impl_.codingrate_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (from._internal_size() != 0) {
         _this->_impl_.size_ = from._impl_.size_;
       }
     }
-    if (CheckHasBitForRepeated(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBitForRepeated(cached_has_bits, 0x00002000U)) {
       _this->_internal_mutable_ant()->InternalMergeFromWithArena(
           ::google::protobuf::MessageLite::internal_visibility(), arena,
           from._internal_ant());
@@ -2446,6 +2557,8 @@ void AnalyticsUplink::InternalSwap(AnalyticsUplink* PROTOBUF_RESTRICT PROTOBUF_N
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.fhdr_, &other->_impl_.fhdr_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.uniqueid_, &other->_impl_.uniqueid_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.phypayload_, &other->_impl_.phypayload_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.gatewaycontext_, &other->_impl_.gatewaycontext_, arena);
   ::google::protobuf::internal::memswap<
       PROTOBUF_FIELD_OFFSET(AnalyticsUplink, _impl_.size_)
       + sizeof(AnalyticsUplink::_impl_.size_)
@@ -2502,6 +2615,8 @@ PROTOBUF_NDEBUG_INLINE AnalyticsDownlink::Impl_::Impl_(
         _cached_size_{0},
         fhdr_(arena, from.fhdr_),
         uniqueid_(arena, from.uniqueid_),
+        phypayload_(arena, from.phypayload_),
+        gatewaycontext_(arena, from.gatewaycontext_),
         dataRate_{},
         _oneof_case_{from._oneof_case_[0]} {}
 
@@ -2544,6 +2659,8 @@ PROTOBUF_NDEBUG_INLINE AnalyticsDownlink::Impl_::Impl_(
       : _cached_size_{0},
         fhdr_(arena),
         uniqueid_(arena),
+        phypayload_(arena),
+        gatewaycontext_(arena),
         dataRate_{},
         _oneof_case_{} {}
 
@@ -2569,6 +2686,8 @@ inline void AnalyticsDownlink::SharedDtor(MessageLite& self) {
   ABSL_DCHECK(this_.GetArena() == nullptr);
   this_._impl_.fhdr_.Destroy();
   this_._impl_.uniqueid_.Destroy();
+  this_._impl_.phypayload_.Destroy();
+  this_._impl_.gatewaycontext_.Destroy();
   if (this_.has_dataRate()) {
     this_.clear_dataRate();
   }
@@ -2641,16 +2760,16 @@ AnalyticsDownlink::GetClassData() const {
   return AnalyticsDownlink_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<5, 19, 1, 0, 2>
+const ::_pbi::TcParseTable<5, 21, 1, 0, 2>
 AnalyticsDownlink::_table_ = {
   {
     PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_._has_bits_),
     0, // no _extensions_
-    19, 248,  // max_field_number, fast_idx_mask
+    21, 248,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294443008,  // skipmap
+    4292870144,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    19,  // num_field_entries
+    21,  // num_field_entries
     1,  // num_aux_entries
     offsetof(decltype(_table_), aux_entries),
     AnalyticsDownlink_class_data_.base(),
@@ -2662,58 +2781,58 @@ AnalyticsDownlink::_table_ = {
   }, {{
     {::_pbi::TcParser::MiniParse, {}},
     // int64 txTime = 1;
-    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AnalyticsDownlink, _impl_.txtime_), 2>(),
-     {8, 2, 0,
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AnalyticsDownlink, _impl_.txtime_), 4>(),
+     {8, 4, 0,
       PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.txtime_)}},
     // int64 txGpsTime = 2;
-    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AnalyticsDownlink, _impl_.txgpstime_), 3>(),
-     {16, 3, 0,
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AnalyticsDownlink, _impl_.txgpstime_), 5>(),
+     {16, 5, 0,
       PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.txgpstime_)}},
     // float fskFreqDev = 3;
     {::_pbi::TcParser::FastF32S1,
-     {29, 4, 0,
+     {29, 6, 0,
       PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.fskfreqdev_)}},
     // float frequency = 4;
     {::_pbi::TcParser::FastF32S1,
-     {37, 5, 0,
+     {37, 7, 0,
       PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.frequency_)}},
     // uint32 channel = 5;
-    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AnalyticsDownlink, _impl_.channel_), 6>(),
-     {40, 6, 0,
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AnalyticsDownlink, _impl_.channel_), 8>(),
+     {40, 8, 0,
       PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.channel_)}},
     // uint32 rfChain = 6;
-    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AnalyticsDownlink, _impl_.rfchain_), 7>(),
-     {48, 7, 0,
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AnalyticsDownlink, _impl_.rfchain_), 9>(),
+     {48, 9, 0,
       PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.rfchain_)}},
     // float power = 7;
     {::_pbi::TcParser::FastF32S1,
-     {61, 8, 0,
+     {61, 10, 0,
       PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.power_)}},
     // .api.Modulation modulation = 8;
-    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AnalyticsDownlink, _impl_.modulation_), 9>(),
-     {64, 9, 0,
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AnalyticsDownlink, _impl_.modulation_), 11>(),
+     {64, 11, 0,
       PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.modulation_)}},
     // .api.LoRaCodingRate codingRate = 9;
-    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AnalyticsDownlink, _impl_.codingrate_), 10>(),
-     {72, 10, 0,
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AnalyticsDownlink, _impl_.codingrate_), 12>(),
+     {72, 12, 0,
       PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.codingrate_)}},
     {::_pbi::TcParser::MiniParse, {}},
     {::_pbi::TcParser::MiniParse, {}},
     // bool invertPolarity = 12;
-    {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(AnalyticsDownlink, _impl_.invertpolarity_), 12>(),
-     {96, 12, 0,
+    {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(AnalyticsDownlink, _impl_.invertpolarity_), 14>(),
+     {96, 14, 0,
       PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.invertpolarity_)}},
     // bool immediately = 13;
-    {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(AnalyticsDownlink, _impl_.immediately_), 13>(),
-     {104, 13, 0,
+    {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(AnalyticsDownlink, _impl_.immediately_), 15>(),
+     {104, 15, 0,
       PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.immediately_)}},
     // uint32 rfPreamble = 14;
-    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AnalyticsDownlink, _impl_.rfpreamble_), 11>(),
-     {112, 11, 0,
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AnalyticsDownlink, _impl_.rfpreamble_), 13>(),
+     {112, 13, 0,
       PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.rfpreamble_)}},
     // uint32 size = 15;
-    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AnalyticsDownlink, _impl_.size_), 15>(),
-     {120, 15, 0,
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AnalyticsDownlink, _impl_.size_), 17>(),
+     {120, 17, 0,
       PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.size_)}},
     // bytes fhdr = 16;
     {::_pbi::TcParser::FastBS2,
@@ -2721,18 +2840,24 @@ AnalyticsDownlink::_table_ = {
       PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.fhdr_)}},
     // bool noCrc = 17;
     {::_pbi::TcParser::FastV8S2,
-     {392, 14, 0,
+     {392, 16, 0,
       PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.nocrc_)}},
     // int64 rxWallTime = 18;
     {::_pbi::TcParser::FastV64S2,
-     {400, 16, 0,
+     {400, 18, 0,
       PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.rxwalltime_)}},
     // bytes uniqueId = 19;
     {::_pbi::TcParser::FastBS2,
      {410, 1, 0,
       PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.uniqueid_)}},
-    {::_pbi::TcParser::MiniParse, {}},
-    {::_pbi::TcParser::MiniParse, {}},
+    // bytes phyPayload = 20;
+    {::_pbi::TcParser::FastBS2,
+     {418, 2, 0,
+      PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.phypayload_)}},
+    // bytes gatewayContext = 21;
+    {::_pbi::TcParser::FastBS2,
+     {426, 3, 0,
+      PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.gatewaycontext_)}},
     {::_pbi::TcParser::MiniParse, {}},
     {::_pbi::TcParser::MiniParse, {}},
     {::_pbi::TcParser::MiniParse, {}},
@@ -2747,43 +2872,47 @@ AnalyticsDownlink::_table_ = {
     65535, 65535
   }}, {{
     // int64 txTime = 1;
-    {PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.txtime_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
+    {PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.txtime_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
     // int64 txGpsTime = 2;
-    {PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.txgpstime_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
+    {PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.txgpstime_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
     // float fskFreqDev = 3;
-    {PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.fskfreqdev_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kFloat)},
+    {PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.fskfreqdev_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kFloat)},
     // float frequency = 4;
-    {PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.frequency_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kFloat)},
+    {PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.frequency_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kFloat)},
     // uint32 channel = 5;
-    {PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.channel_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    {PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.channel_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     // uint32 rfChain = 6;
-    {PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.rfchain_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    {PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.rfchain_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     // float power = 7;
-    {PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.power_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kFloat)},
+    {PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.power_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kFloat)},
     // .api.Modulation modulation = 8;
-    {PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.modulation_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+    {PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.modulation_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
     // .api.LoRaCodingRate codingRate = 9;
-    {PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.codingrate_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+    {PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.codingrate_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
     // .api.LoRaDataRate dataRateLoRa = 10;
     {PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.dataRate_.dataratelora_), _Internal::kOneofCaseOffset + 0, 0, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
     // uint32 dataRateFSK = 11;
     {PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.dataRate_.dataratefsk_), _Internal::kOneofCaseOffset + 0, 0, (0 | ::_fl::kFcOneof | ::_fl::kUInt32)},
     // bool invertPolarity = 12;
-    {PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.invertpolarity_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+    {PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.invertpolarity_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     // bool immediately = 13;
-    {PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.immediately_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+    {PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.immediately_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     // uint32 rfPreamble = 14;
-    {PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.rfpreamble_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    {PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.rfpreamble_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     // uint32 size = 15;
-    {PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.size_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    {PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.size_), _Internal::kHasBitsOffset + 17, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     // bytes fhdr = 16;
     {PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.fhdr_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
     // bool noCrc = 17;
-    {PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.nocrc_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+    {PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.nocrc_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     // int64 rxWallTime = 18;
-    {PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.rxwalltime_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
+    {PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.rxwalltime_), _Internal::kHasBitsOffset + 18, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
     // bytes uniqueId = 19;
     {PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.uniqueid_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
+    // bytes phyPayload = 20;
+    {PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.phypayload_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
+    // bytes gatewayContext = 21;
+    {PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.gatewaycontext_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
   }},
   {{
       {::_pbi::TcParser::GetTable<::api::LoRaDataRate>()},
@@ -2799,25 +2928,35 @@ PROTOBUF_NOINLINE void AnalyticsDownlink::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.fhdr_.ClearNonDefaultToEmpty();
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       _impl_.uniqueid_.ClearNonDefaultToEmpty();
     }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _impl_.phypayload_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      _impl_.gatewaycontext_.ClearNonDefaultToEmpty();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x000000fcU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000f0U)) {
     ::memset(&_impl_.txtime_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.rfchain_) -
-        reinterpret_cast<char*>(&_impl_.txtime_)) + sizeof(_impl_.rfchain_));
+        reinterpret_cast<char*>(&_impl_.frequency_) -
+        reinterpret_cast<char*>(&_impl_.txtime_)) + sizeof(_impl_.frequency_));
   }
   if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
-    ::memset(&_impl_.power_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.size_) -
-        reinterpret_cast<char*>(&_impl_.power_)) + sizeof(_impl_.size_));
+    ::memset(&_impl_.channel_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.immediately_) -
+        reinterpret_cast<char*>(&_impl_.channel_)) + sizeof(_impl_.immediately_));
   }
-  _impl_.rxwalltime_ = ::int64_t{0};
+  if (BatchCheckHasBit(cached_has_bits, 0x00070000U)) {
+    ::memset(&_impl_.nocrc_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.rxwalltime_) -
+        reinterpret_cast<char*>(&_impl_.nocrc_)) + sizeof(_impl_.rxwalltime_));
+  }
   clear_dataRate();
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -2843,7 +2982,7 @@ PROTOBUF_NOINLINE void AnalyticsDownlink::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // int64 txTime = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_txtime() != 0) {
       target =
           ::google::protobuf::internal::WireFormatLite::WriteInt64ToArrayWithField<1>(
@@ -2852,7 +2991,7 @@ PROTOBUF_NOINLINE void AnalyticsDownlink::Clear() {
   }
 
   // int64 txGpsTime = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_txgpstime() != 0) {
       target =
           ::google::protobuf::internal::WireFormatLite::WriteInt64ToArrayWithField<2>(
@@ -2861,7 +3000,7 @@ PROTOBUF_NOINLINE void AnalyticsDownlink::Clear() {
   }
 
   // float fskFreqDev = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (::absl::bit_cast<::uint32_t>(this_._internal_fskfreqdev()) != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteFloatToArray(
@@ -2870,7 +3009,7 @@ PROTOBUF_NOINLINE void AnalyticsDownlink::Clear() {
   }
 
   // float frequency = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (::absl::bit_cast<::uint32_t>(this_._internal_frequency()) != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteFloatToArray(
@@ -2879,7 +3018,7 @@ PROTOBUF_NOINLINE void AnalyticsDownlink::Clear() {
   }
 
   // uint32 channel = 5;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_channel() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -2888,7 +3027,7 @@ PROTOBUF_NOINLINE void AnalyticsDownlink::Clear() {
   }
 
   // uint32 rfChain = 6;
-  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_rfchain() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -2897,7 +3036,7 @@ PROTOBUF_NOINLINE void AnalyticsDownlink::Clear() {
   }
 
   // float power = 7;
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
     if (::absl::bit_cast<::uint32_t>(this_._internal_power()) != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteFloatToArray(
@@ -2906,7 +3045,7 @@ PROTOBUF_NOINLINE void AnalyticsDownlink::Clear() {
   }
 
   // .api.Modulation modulation = 8;
-  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
     if (this_._internal_modulation() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteEnumToArray(
@@ -2915,7 +3054,7 @@ PROTOBUF_NOINLINE void AnalyticsDownlink::Clear() {
   }
 
   // .api.LoRaCodingRate codingRate = 9;
-  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
     if (this_._internal_codingrate() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteEnumToArray(
@@ -2940,7 +3079,7 @@ PROTOBUF_NOINLINE void AnalyticsDownlink::Clear() {
       break;
   }
   // bool invertPolarity = 12;
-  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
     if (this_._internal_invertpolarity() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
@@ -2949,7 +3088,7 @@ PROTOBUF_NOINLINE void AnalyticsDownlink::Clear() {
   }
 
   // bool immediately = 13;
-  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
     if (this_._internal_immediately() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
@@ -2958,7 +3097,7 @@ PROTOBUF_NOINLINE void AnalyticsDownlink::Clear() {
   }
 
   // uint32 rfPreamble = 14;
-  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
     if (this_._internal_rfpreamble() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -2967,7 +3106,7 @@ PROTOBUF_NOINLINE void AnalyticsDownlink::Clear() {
   }
 
   // uint32 size = 15;
-  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00020000U)) {
     if (this_._internal_size() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -2984,7 +3123,7 @@ PROTOBUF_NOINLINE void AnalyticsDownlink::Clear() {
   }
 
   // bool noCrc = 17;
-  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
     if (this_._internal_nocrc() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
@@ -2993,7 +3132,7 @@ PROTOBUF_NOINLINE void AnalyticsDownlink::Clear() {
   }
 
   // int64 rxWallTime = 18;
-  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00040000U)) {
     if (this_._internal_rxwalltime() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteInt64ToArray(
@@ -3006,6 +3145,22 @@ PROTOBUF_NOINLINE void AnalyticsDownlink::Clear() {
     if (!this_._internal_uniqueid().empty()) {
       const ::std::string& _s = this_._internal_uniqueid();
       target = stream->WriteBytesMaybeAliased(19, _s, target);
+    }
+  }
+
+  // bytes phyPayload = 20;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (!this_._internal_phypayload().empty()) {
+      const ::std::string& _s = this_._internal_phypayload();
+      target = stream->WriteBytesMaybeAliased(20, _s, target);
+    }
+  }
+
+  // bytes gatewayContext = 21;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (!this_._internal_gatewaycontext().empty()) {
+      const ::std::string& _s = this_._internal_gatewaycontext();
+      target = stream->WriteBytesMaybeAliased(21, _s, target);
     }
   }
 
@@ -3049,104 +3204,118 @@ PROTOBUF_NOINLINE void AnalyticsDownlink::Clear() {
                                         this_._internal_uniqueid());
       }
     }
-    // int64 txTime = 1;
+    // bytes phyPayload = 20;
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!this_._internal_phypayload().empty()) {
+        total_size += 2 + ::google::protobuf::internal::WireFormatLite::BytesSize(
+                                        this_._internal_phypayload());
+      }
+    }
+    // bytes gatewayContext = 21;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!this_._internal_gatewaycontext().empty()) {
+        total_size += 2 + ::google::protobuf::internal::WireFormatLite::BytesSize(
+                                        this_._internal_gatewaycontext());
+      }
+    }
+    // int64 txTime = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_txtime() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_txtime());
       }
     }
     // int64 txGpsTime = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_txgpstime() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_txgpstime());
       }
     }
     // float fskFreqDev = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (::absl::bit_cast<::uint32_t>(this_._internal_fskfreqdev()) != 0) {
         total_size += 5;
       }
     }
     // float frequency = 4;
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (::absl::bit_cast<::uint32_t>(this_._internal_frequency()) != 0) {
         total_size += 5;
       }
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     // uint32 channel = 5;
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_channel() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_channel());
       }
     }
     // uint32 rfChain = 6;
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_rfchain() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_rfchain());
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     // float power = 7;
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (::absl::bit_cast<::uint32_t>(this_._internal_power()) != 0) {
         total_size += 5;
       }
     }
     // .api.Modulation modulation = 8;
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (this_._internal_modulation() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_modulation());
       }
     }
     // .api.LoRaCodingRate codingRate = 9;
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (this_._internal_codingrate() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_codingrate());
       }
     }
     // uint32 rfPreamble = 14;
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (this_._internal_rfpreamble() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_rfpreamble());
       }
     }
     // bool invertPolarity = 12;
-    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (this_._internal_invertpolarity() != 0) {
         total_size += 2;
       }
     }
     // bool immediately = 13;
-    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
       if (this_._internal_immediately() != 0) {
         total_size += 2;
       }
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00070000U)) {
     // bool noCrc = 17;
-    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (this_._internal_nocrc() != 0) {
         total_size += 3;
       }
     }
     // uint32 size = 15;
-    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
       if (this_._internal_size() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_size());
       }
     }
-  }
-   {
     // int64 rxWallTime = 18;
-    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
       if (this_._internal_rxwalltime() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::Int64Size(
                                         this_._internal_rxwalltime());
@@ -3209,81 +3378,101 @@ void AnalyticsDownlink::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!from._internal_phypayload().empty()) {
+        _this->_internal_set_phypayload(from._internal_phypayload());
+      } else {
+        if (_this->_impl_.phypayload_.IsDefault()) {
+          _this->_internal_set_phypayload("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!from._internal_gatewaycontext().empty()) {
+        _this->_internal_set_gatewaycontext(from._internal_gatewaycontext());
+      } else {
+        if (_this->_impl_.gatewaycontext_.IsDefault()) {
+          _this->_internal_set_gatewaycontext("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (from._internal_txtime() != 0) {
         _this->_impl_.txtime_ = from._impl_.txtime_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (from._internal_txgpstime() != 0) {
         _this->_impl_.txgpstime_ = from._impl_.txgpstime_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (::absl::bit_cast<::uint32_t>(from._internal_fskfreqdev()) != 0) {
         _this->_impl_.fskfreqdev_ = from._impl_.fskfreqdev_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (::absl::bit_cast<::uint32_t>(from._internal_frequency()) != 0) {
         _this->_impl_.frequency_ = from._impl_.frequency_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
-      if (from._internal_channel() != 0) {
-        _this->_impl_.channel_ = from._impl_.channel_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
-      if (from._internal_rfchain() != 0) {
-        _this->_impl_.rfchain_ = from._impl_.rfchain_;
       }
     }
   }
   if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_channel() != 0) {
+        _this->_impl_.channel_ = from._impl_.channel_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_rfchain() != 0) {
+        _this->_impl_.rfchain_ = from._impl_.rfchain_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (::absl::bit_cast<::uint32_t>(from._internal_power()) != 0) {
         _this->_impl_.power_ = from._impl_.power_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (from._internal_modulation() != 0) {
         _this->_impl_.modulation_ = from._impl_.modulation_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (from._internal_codingrate() != 0) {
         _this->_impl_.codingrate_ = from._impl_.codingrate_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (from._internal_rfpreamble() != 0) {
         _this->_impl_.rfpreamble_ = from._impl_.rfpreamble_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (from._internal_invertpolarity() != 0) {
         _this->_impl_.invertpolarity_ = from._impl_.invertpolarity_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
       if (from._internal_immediately() != 0) {
         _this->_impl_.immediately_ = from._impl_.immediately_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00070000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (from._internal_nocrc() != 0) {
         _this->_impl_.nocrc_ = from._impl_.nocrc_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
       if (from._internal_size() != 0) {
         _this->_impl_.size_ = from._impl_.size_;
       }
     }
-  }
-  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
-    if (from._internal_rxwalltime() != 0) {
-      _this->_impl_.rxwalltime_ = from._impl_.rxwalltime_;
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+      if (from._internal_rxwalltime() != 0) {
+        _this->_impl_.rxwalltime_ = from._impl_.rxwalltime_;
+      }
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -3335,6 +3524,8 @@ void AnalyticsDownlink::InternalSwap(AnalyticsDownlink* PROTOBUF_RESTRICT PROTOB
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.fhdr_, &other->_impl_.fhdr_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.uniqueid_, &other->_impl_.uniqueid_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.phypayload_, &other->_impl_.phypayload_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.gatewaycontext_, &other->_impl_.gatewaycontext_, arena);
   ::google::protobuf::internal::memswap<
       PROTOBUF_FIELD_OFFSET(AnalyticsDownlink, _impl_.rxwalltime_)
       + sizeof(AnalyticsDownlink::_impl_.rxwalltime_)

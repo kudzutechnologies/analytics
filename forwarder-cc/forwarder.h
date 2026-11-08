@@ -37,6 +37,7 @@ class AnalyticsForwarder {
   int TestDownlinkCount() const;
   api::LoRaSF TestFirstUplinkSF() const;
   std::string TestFirstAntennaETime() const;
+  std::string TestFirstFrame() const;
   void TestUpLocalData(const uint8_t* data, size_t len, const SockAddr4& local_ep) {
     UpLocalData(data, len, local_ep);
   }

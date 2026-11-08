@@ -61,6 +61,10 @@ message AnalyticsUplink {
   bytes fhdr = 15;
   bytes uniqueId = 16;
   repeated AnalyticsUplinkAntenna ant = 17;
+  // Complete encrypted on-air frame, including MIC. Keep fhdr for old receivers.
+  bytes phyPayload = 18;
+  // Opaque gateway context, when provided by the source.
+  bytes gatewayContext = 19;
 }
 
 /**
@@ -89,6 +93,9 @@ message AnalyticsDownlink {
   bool noCrc = 17;
   int64 rxWallTime = 18;
   bytes uniqueId = 19;
+  // Complete encrypted on-air frame, including MIC. Keep fhdr for old receivers.
+  bytes phyPayload = 20;
+  bytes gatewayContext = 21;
 }
 
 /**

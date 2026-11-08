@@ -322,6 +322,7 @@ void AnalyticsForwarder::HandleUplink(const uint8_t* data, size_t len, api::Anal
       int fhdr_len =
           GetLoRaWANHeaderLen(reinterpret_cast<const unsigned char*>(raw.data()), raw.size());
       up->set_fhdr(raw.data(), static_cast<size_t>(fhdr_len));
+      up->set_phypayload(raw.data(), raw.size());
       ComputeUniqueIdUp(up, reinterpret_cast<const unsigned char*>(raw.data()), raw.size());
     }
   }
@@ -385,6 +386,7 @@ void AnalyticsForwarder::HandleDownlink(const uint8_t* data, size_t len,
     int fhdr_len =
         GetLoRaWANHeaderLen(reinterpret_cast<const unsigned char*>(raw.data()), raw.size());
     down->set_fhdr(raw.data(), static_cast<size_t>(fhdr_len));
+    down->set_phypayload(raw.data(), raw.size());
     ComputeUniqueIdDown(down, reinterpret_cast<const unsigned char*>(raw.data()), raw.size());
   }
 }
@@ -502,6 +504,12 @@ api::LoRaSF AnalyticsForwarder::TestFirstUplinkSF() const {
     }
   }
   return api::SF_UNKNOWN;
+}
+
+std::string AnalyticsForwarder::TestFirstFrame() const {
+  std::lock_guard<std::mutex> lock(metrics_mutex_);
+  for (const auto& p : metrics_frames_) return p.second->SerializeAsString();
+  return {};
 }
 
 std::string AnalyticsForwarder::TestFirstAntennaETime() const {

@@ -1661,6 +1661,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AnalyticsUplink final : public ::go
   enum : int {
     kFhdrFieldNumber = 15,
     kUniqueIdFieldNumber = 16,
+    kPhyPayloadFieldNumber = 18,
+    kGatewayContextFieldNumber = 19,
     kRxWallTimeFieldNumber = 1,
     kRxGpsTimeFieldNumber = 2,
     kRxFinishedTimeFieldNumber = 3,
@@ -1702,6 +1704,36 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AnalyticsUplink final : public ::go
   const ::std::string& _internal_uniqueid() const;
   PROTOBUF_ALWAYS_INLINE void _internal_set_uniqueid(const ::std::string& value);
   ::std::string* PROTOBUF_NONNULL _internal_mutable_uniqueid();
+
+  public:
+  // bytes phyPayload = 18;
+  void clear_phypayload() ;
+  [[nodiscard]] const ::std::string& phypayload() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_phypayload(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_phypayload();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_phypayload();
+  void set_allocated_phypayload(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_phypayload() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_phypayload(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_phypayload();
+
+  public:
+  // bytes gatewayContext = 19;
+  void clear_gatewaycontext() ;
+  [[nodiscard]] const ::std::string& gatewaycontext() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_gatewaycontext(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_gatewaycontext();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_gatewaycontext();
+  void set_allocated_gatewaycontext(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_gatewaycontext() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_gatewaycontext(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_gatewaycontext();
 
   public:
   // int64 rxWallTime = 1;
@@ -1856,7 +1888,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AnalyticsUplink final : public ::go
   [[nodiscard]] inline bool has_dataRate() const;
   inline void clear_has_dataRate();
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<4, 14,
+  static const ::google::protobuf::internal::TcParseTable<5, 16,
                                    2, 0,
                                    2>
       _table_;
@@ -1882,6 +1914,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AnalyticsUplink final : public ::go
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr fhdr_;
     ::google::protobuf::internal::ArenaStringPtr uniqueid_;
+    ::google::protobuf::internal::ArenaStringPtr phypayload_;
+    ::google::protobuf::internal::ArenaStringPtr gatewaycontext_;
     ::int64_t rxwalltime_;
     ::int64_t rxgpstime_;
     ::int64_t rxfinishedtime_;
@@ -2061,6 +2095,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AnalyticsDownlink final : public ::
   enum : int {
     kFhdrFieldNumber = 16,
     kUniqueIdFieldNumber = 19,
+    kPhyPayloadFieldNumber = 20,
+    kGatewayContextFieldNumber = 21,
     kTxTimeFieldNumber = 1,
     kTxGpsTimeFieldNumber = 2,
     kFskFreqDevFieldNumber = 3,
@@ -2107,6 +2143,36 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AnalyticsDownlink final : public ::
   const ::std::string& _internal_uniqueid() const;
   PROTOBUF_ALWAYS_INLINE void _internal_set_uniqueid(const ::std::string& value);
   ::std::string* PROTOBUF_NONNULL _internal_mutable_uniqueid();
+
+  public:
+  // bytes phyPayload = 20;
+  void clear_phypayload() ;
+  [[nodiscard]] const ::std::string& phypayload() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_phypayload(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_phypayload();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_phypayload();
+  void set_allocated_phypayload(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_phypayload() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_phypayload(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_phypayload();
+
+  public:
+  // bytes gatewayContext = 21;
+  void clear_gatewaycontext() ;
+  [[nodiscard]] const ::std::string& gatewaycontext() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_gatewaycontext(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_gatewaycontext();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_gatewaycontext();
+  void set_allocated_gatewaycontext(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_gatewaycontext() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_gatewaycontext(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_gatewaycontext();
 
   public:
   // int64 txTime = 1;
@@ -2301,7 +2367,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AnalyticsDownlink final : public ::
   [[nodiscard]] inline bool has_dataRate() const;
   inline void clear_has_dataRate();
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<5, 19,
+  static const ::google::protobuf::internal::TcParseTable<5, 21,
                                    1, 0,
                                    2>
       _table_;
@@ -2327,6 +2393,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AnalyticsDownlink final : public ::
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr fhdr_;
     ::google::protobuf::internal::ArenaStringPtr uniqueid_;
+    ::google::protobuf::internal::ArenaStringPtr phypayload_;
+    ::google::protobuf::internal::ArenaStringPtr gatewaycontext_;
     ::int64_t txtime_;
     ::int64_t txgpstime_;
     float fskfreqdev_;
@@ -3370,7 +3438,7 @@ inline void AnalyticsUplink::clear_rxwalltime() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.rxwalltime_ = ::int64_t{0};
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000004U);
+                  0x00000010U);
 }
 inline ::int64_t AnalyticsUplink::rxwalltime() const {
   // @@protoc_insertion_point(field_get:api.AnalyticsUplink.rxWallTime)
@@ -3378,7 +3446,7 @@ inline ::int64_t AnalyticsUplink::rxwalltime() const {
 }
 inline void AnalyticsUplink::set_rxwalltime(::int64_t value) {
   _internal_set_rxwalltime(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:api.AnalyticsUplink.rxWallTime)
 }
 inline ::int64_t AnalyticsUplink::_internal_rxwalltime() const {
@@ -3395,7 +3463,7 @@ inline void AnalyticsUplink::clear_rxgpstime() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.rxgpstime_ = ::int64_t{0};
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000008U);
+                  0x00000020U);
 }
 inline ::int64_t AnalyticsUplink::rxgpstime() const {
   // @@protoc_insertion_point(field_get:api.AnalyticsUplink.rxGpsTime)
@@ -3403,7 +3471,7 @@ inline ::int64_t AnalyticsUplink::rxgpstime() const {
 }
 inline void AnalyticsUplink::set_rxgpstime(::int64_t value) {
   _internal_set_rxgpstime(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:api.AnalyticsUplink.rxGpsTime)
 }
 inline ::int64_t AnalyticsUplink::_internal_rxgpstime() const {
@@ -3420,7 +3488,7 @@ inline void AnalyticsUplink::clear_rxfinishedtime() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.rxfinishedtime_ = ::int64_t{0};
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000010U);
+                  0x00000040U);
 }
 inline ::int64_t AnalyticsUplink::rxfinishedtime() const {
   // @@protoc_insertion_point(field_get:api.AnalyticsUplink.rxFinishedTime)
@@ -3428,7 +3496,7 @@ inline ::int64_t AnalyticsUplink::rxfinishedtime() const {
 }
 inline void AnalyticsUplink::set_rxfinishedtime(::int64_t value) {
   _internal_set_rxfinishedtime(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:api.AnalyticsUplink.rxFinishedTime)
 }
 inline ::int64_t AnalyticsUplink::_internal_rxfinishedtime() const {
@@ -3445,7 +3513,7 @@ inline void AnalyticsUplink::clear_frequency() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.frequency_ = 0;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000020U);
+                  0x00000080U);
 }
 inline float AnalyticsUplink::frequency() const {
   // @@protoc_insertion_point(field_get:api.AnalyticsUplink.frequency)
@@ -3453,7 +3521,7 @@ inline float AnalyticsUplink::frequency() const {
 }
 inline void AnalyticsUplink::set_frequency(float value) {
   _internal_set_frequency(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:api.AnalyticsUplink.frequency)
 }
 inline float AnalyticsUplink::_internal_frequency() const {
@@ -3470,7 +3538,7 @@ inline void AnalyticsUplink::clear_rfchain() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.rfchain_ = 0u;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000040U);
+                  0x00000100U);
 }
 inline ::uint32_t AnalyticsUplink::rfchain() const {
   // @@protoc_insertion_point(field_get:api.AnalyticsUplink.rfChain)
@@ -3478,7 +3546,7 @@ inline ::uint32_t AnalyticsUplink::rfchain() const {
 }
 inline void AnalyticsUplink::set_rfchain(::uint32_t value) {
   _internal_set_rfchain(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:api.AnalyticsUplink.rfChain)
 }
 inline ::uint32_t AnalyticsUplink::_internal_rfchain() const {
@@ -3495,7 +3563,7 @@ inline void AnalyticsUplink::clear_crc() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.crc_ = 0;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000080U);
+                  0x00000200U);
 }
 inline ::api::CRCStatus AnalyticsUplink::crc() const {
   // @@protoc_insertion_point(field_get:api.AnalyticsUplink.crc)
@@ -3503,7 +3571,7 @@ inline ::api::CRCStatus AnalyticsUplink::crc() const {
 }
 inline void AnalyticsUplink::set_crc(::api::CRCStatus value) {
   _internal_set_crc(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:api.AnalyticsUplink.crc)
 }
 inline ::api::CRCStatus AnalyticsUplink::_internal_crc() const {
@@ -3520,7 +3588,7 @@ inline void AnalyticsUplink::clear_modulation() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.modulation_ = 0;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000100U);
+                  0x00000400U);
 }
 inline ::api::Modulation AnalyticsUplink::modulation() const {
   // @@protoc_insertion_point(field_get:api.AnalyticsUplink.modulation)
@@ -3528,7 +3596,7 @@ inline ::api::Modulation AnalyticsUplink::modulation() const {
 }
 inline void AnalyticsUplink::set_modulation(::api::Modulation value) {
   _internal_set_modulation(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:api.AnalyticsUplink.modulation)
 }
 inline ::api::Modulation AnalyticsUplink::_internal_modulation() const {
@@ -3545,7 +3613,7 @@ inline void AnalyticsUplink::clear_codingrate() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.codingrate_ = 0;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000200U);
+                  0x00000800U);
 }
 inline ::api::LoRaCodingRate AnalyticsUplink::codingrate() const {
   // @@protoc_insertion_point(field_get:api.AnalyticsUplink.codingRate)
@@ -3553,7 +3621,7 @@ inline ::api::LoRaCodingRate AnalyticsUplink::codingrate() const {
 }
 inline void AnalyticsUplink::set_codingrate(::api::LoRaCodingRate value) {
   _internal_set_codingrate(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:api.AnalyticsUplink.codingRate)
 }
 inline ::api::LoRaCodingRate AnalyticsUplink::_internal_codingrate() const {
@@ -3685,7 +3753,7 @@ inline void AnalyticsUplink::clear_size() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.size_ = 0u;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000400U);
+                  0x00001000U);
 }
 inline ::uint32_t AnalyticsUplink::size() const {
   // @@protoc_insertion_point(field_get:api.AnalyticsUplink.size)
@@ -3693,7 +3761,7 @@ inline ::uint32_t AnalyticsUplink::size() const {
 }
 inline void AnalyticsUplink::set_size(::uint32_t value) {
   _internal_set_size(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:api.AnalyticsUplink.size)
 }
 inline ::uint32_t AnalyticsUplink::_internal_size() const {
@@ -3846,7 +3914,7 @@ inline void AnalyticsUplink::clear_ant() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.ant_.Clear();
   ClearHasBitForRepeated(_impl_._has_bits_[0],
-                  0x00000800U);
+                  0x00002000U);
 }
 inline ::api::AnalyticsUplinkAntenna* PROTOBUF_NONNULL AnalyticsUplink::mutable_ant(int index)
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -3855,7 +3923,7 @@ inline ::api::AnalyticsUplinkAntenna* PROTOBUF_NONNULL AnalyticsUplink::mutable_
 }
 inline ::google::protobuf::RepeatedPtrField<::api::AnalyticsUplinkAntenna>* PROTOBUF_NONNULL AnalyticsUplink::mutable_ant()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBitForRepeated(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBitForRepeated(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_mutable_list:api.AnalyticsUplink.ant)
   ::google::protobuf::internal::TSanWrite(&_impl_);
   return _internal_mutable_ant();
@@ -3871,7 +3939,7 @@ inline ::api::AnalyticsUplinkAntenna* PROTOBUF_NONNULL AnalyticsUplink::add_ant(
   ::api::AnalyticsUplinkAntenna* _add =
       _internal_mutable_ant()->InternalAddWithArena(
           ::google::protobuf::MessageLite::internal_visibility(), GetArena());
-  SetHasBitForRepeated(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBitForRepeated(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_add:api.AnalyticsUplink.ant)
   return _add;
 }
@@ -3889,6 +3957,136 @@ inline ::google::protobuf::RepeatedPtrField<::api::AnalyticsUplinkAntenna>* PROT
 AnalyticsUplink::_internal_mutable_ant() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.ant_;
+}
+
+// bytes phyPayload = 18;
+inline void AnalyticsUplink::clear_phypayload() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.phypayload_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000004U);
+}
+inline const ::std::string& AnalyticsUplink::phypayload() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:api.AnalyticsUplink.phyPayload)
+  return _internal_phypayload();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void AnalyticsUplink::set_phypayload(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.phypayload_.SetBytes(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:api.AnalyticsUplink.phyPayload)
+}
+inline ::std::string* PROTOBUF_NONNULL AnalyticsUplink::mutable_phypayload()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_phypayload();
+  // @@protoc_insertion_point(field_mutable:api.AnalyticsUplink.phyPayload)
+  return _s;
+}
+inline const ::std::string& AnalyticsUplink::_internal_phypayload() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.phypayload_.Get();
+}
+inline void AnalyticsUplink::_internal_set_phypayload(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.phypayload_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL AnalyticsUplink::_internal_mutable_phypayload() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.phypayload_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE AnalyticsUplink::release_phypayload() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:api.AnalyticsUplink.phyPayload)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.phypayload_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.phypayload_.Set("", GetArena());
+  }
+  return released;
+}
+inline void AnalyticsUplink::set_allocated_phypayload(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.phypayload_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.phypayload_.IsDefault()) {
+    _impl_.phypayload_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:api.AnalyticsUplink.phyPayload)
+}
+
+// bytes gatewayContext = 19;
+inline void AnalyticsUplink::clear_gatewaycontext() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.gatewaycontext_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000008U);
+}
+inline const ::std::string& AnalyticsUplink::gatewaycontext() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:api.AnalyticsUplink.gatewayContext)
+  return _internal_gatewaycontext();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void AnalyticsUplink::set_gatewaycontext(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  _impl_.gatewaycontext_.SetBytes(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:api.AnalyticsUplink.gatewayContext)
+}
+inline ::std::string* PROTOBUF_NONNULL AnalyticsUplink::mutable_gatewaycontext()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::std::string* _s = _internal_mutable_gatewaycontext();
+  // @@protoc_insertion_point(field_mutable:api.AnalyticsUplink.gatewayContext)
+  return _s;
+}
+inline const ::std::string& AnalyticsUplink::_internal_gatewaycontext() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.gatewaycontext_.Get();
+}
+inline void AnalyticsUplink::_internal_set_gatewaycontext(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.gatewaycontext_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL AnalyticsUplink::_internal_mutable_gatewaycontext() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.gatewaycontext_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE AnalyticsUplink::release_gatewaycontext() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:api.AnalyticsUplink.gatewayContext)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  auto* released = _impl_.gatewaycontext_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.gatewaycontext_.Set("", GetArena());
+  }
+  return released;
+}
+inline void AnalyticsUplink::set_allocated_gatewaycontext(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  _impl_.gatewaycontext_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.gatewaycontext_.IsDefault()) {
+    _impl_.gatewaycontext_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:api.AnalyticsUplink.gatewayContext)
 }
 
 inline bool AnalyticsUplink::has_dataRate() const {
@@ -3909,7 +4107,7 @@ inline void AnalyticsDownlink::clear_txtime() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.txtime_ = ::int64_t{0};
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000004U);
+                  0x00000010U);
 }
 inline ::int64_t AnalyticsDownlink::txtime() const {
   // @@protoc_insertion_point(field_get:api.AnalyticsDownlink.txTime)
@@ -3917,7 +4115,7 @@ inline ::int64_t AnalyticsDownlink::txtime() const {
 }
 inline void AnalyticsDownlink::set_txtime(::int64_t value) {
   _internal_set_txtime(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:api.AnalyticsDownlink.txTime)
 }
 inline ::int64_t AnalyticsDownlink::_internal_txtime() const {
@@ -3934,7 +4132,7 @@ inline void AnalyticsDownlink::clear_txgpstime() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.txgpstime_ = ::int64_t{0};
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000008U);
+                  0x00000020U);
 }
 inline ::int64_t AnalyticsDownlink::txgpstime() const {
   // @@protoc_insertion_point(field_get:api.AnalyticsDownlink.txGpsTime)
@@ -3942,7 +4140,7 @@ inline ::int64_t AnalyticsDownlink::txgpstime() const {
 }
 inline void AnalyticsDownlink::set_txgpstime(::int64_t value) {
   _internal_set_txgpstime(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:api.AnalyticsDownlink.txGpsTime)
 }
 inline ::int64_t AnalyticsDownlink::_internal_txgpstime() const {
@@ -3959,7 +4157,7 @@ inline void AnalyticsDownlink::clear_fskfreqdev() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.fskfreqdev_ = 0;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000010U);
+                  0x00000040U);
 }
 inline float AnalyticsDownlink::fskfreqdev() const {
   // @@protoc_insertion_point(field_get:api.AnalyticsDownlink.fskFreqDev)
@@ -3967,7 +4165,7 @@ inline float AnalyticsDownlink::fskfreqdev() const {
 }
 inline void AnalyticsDownlink::set_fskfreqdev(float value) {
   _internal_set_fskfreqdev(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:api.AnalyticsDownlink.fskFreqDev)
 }
 inline float AnalyticsDownlink::_internal_fskfreqdev() const {
@@ -3984,7 +4182,7 @@ inline void AnalyticsDownlink::clear_frequency() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.frequency_ = 0;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000020U);
+                  0x00000080U);
 }
 inline float AnalyticsDownlink::frequency() const {
   // @@protoc_insertion_point(field_get:api.AnalyticsDownlink.frequency)
@@ -3992,7 +4190,7 @@ inline float AnalyticsDownlink::frequency() const {
 }
 inline void AnalyticsDownlink::set_frequency(float value) {
   _internal_set_frequency(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:api.AnalyticsDownlink.frequency)
 }
 inline float AnalyticsDownlink::_internal_frequency() const {
@@ -4009,7 +4207,7 @@ inline void AnalyticsDownlink::clear_channel() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.channel_ = 0u;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000040U);
+                  0x00000100U);
 }
 inline ::uint32_t AnalyticsDownlink::channel() const {
   // @@protoc_insertion_point(field_get:api.AnalyticsDownlink.channel)
@@ -4017,7 +4215,7 @@ inline ::uint32_t AnalyticsDownlink::channel() const {
 }
 inline void AnalyticsDownlink::set_channel(::uint32_t value) {
   _internal_set_channel(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:api.AnalyticsDownlink.channel)
 }
 inline ::uint32_t AnalyticsDownlink::_internal_channel() const {
@@ -4034,7 +4232,7 @@ inline void AnalyticsDownlink::clear_rfchain() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.rfchain_ = 0u;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000080U);
+                  0x00000200U);
 }
 inline ::uint32_t AnalyticsDownlink::rfchain() const {
   // @@protoc_insertion_point(field_get:api.AnalyticsDownlink.rfChain)
@@ -4042,7 +4240,7 @@ inline ::uint32_t AnalyticsDownlink::rfchain() const {
 }
 inline void AnalyticsDownlink::set_rfchain(::uint32_t value) {
   _internal_set_rfchain(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:api.AnalyticsDownlink.rfChain)
 }
 inline ::uint32_t AnalyticsDownlink::_internal_rfchain() const {
@@ -4059,7 +4257,7 @@ inline void AnalyticsDownlink::clear_power() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.power_ = 0;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000100U);
+                  0x00000400U);
 }
 inline float AnalyticsDownlink::power() const {
   // @@protoc_insertion_point(field_get:api.AnalyticsDownlink.power)
@@ -4067,7 +4265,7 @@ inline float AnalyticsDownlink::power() const {
 }
 inline void AnalyticsDownlink::set_power(float value) {
   _internal_set_power(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:api.AnalyticsDownlink.power)
 }
 inline float AnalyticsDownlink::_internal_power() const {
@@ -4084,7 +4282,7 @@ inline void AnalyticsDownlink::clear_modulation() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.modulation_ = 0;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000200U);
+                  0x00000800U);
 }
 inline ::api::Modulation AnalyticsDownlink::modulation() const {
   // @@protoc_insertion_point(field_get:api.AnalyticsDownlink.modulation)
@@ -4092,7 +4290,7 @@ inline ::api::Modulation AnalyticsDownlink::modulation() const {
 }
 inline void AnalyticsDownlink::set_modulation(::api::Modulation value) {
   _internal_set_modulation(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:api.AnalyticsDownlink.modulation)
 }
 inline ::api::Modulation AnalyticsDownlink::_internal_modulation() const {
@@ -4109,7 +4307,7 @@ inline void AnalyticsDownlink::clear_codingrate() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.codingrate_ = 0;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000400U);
+                  0x00001000U);
 }
 inline ::api::LoRaCodingRate AnalyticsDownlink::codingrate() const {
   // @@protoc_insertion_point(field_get:api.AnalyticsDownlink.codingRate)
@@ -4117,7 +4315,7 @@ inline ::api::LoRaCodingRate AnalyticsDownlink::codingrate() const {
 }
 inline void AnalyticsDownlink::set_codingrate(::api::LoRaCodingRate value) {
   _internal_set_codingrate(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:api.AnalyticsDownlink.codingRate)
 }
 inline ::api::LoRaCodingRate AnalyticsDownlink::_internal_codingrate() const {
@@ -4249,7 +4447,7 @@ inline void AnalyticsDownlink::clear_invertpolarity() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.invertpolarity_ = false;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00001000U);
+                  0x00004000U);
 }
 inline bool AnalyticsDownlink::invertpolarity() const {
   // @@protoc_insertion_point(field_get:api.AnalyticsDownlink.invertPolarity)
@@ -4257,7 +4455,7 @@ inline bool AnalyticsDownlink::invertpolarity() const {
 }
 inline void AnalyticsDownlink::set_invertpolarity(bool value) {
   _internal_set_invertpolarity(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
   // @@protoc_insertion_point(field_set:api.AnalyticsDownlink.invertPolarity)
 }
 inline bool AnalyticsDownlink::_internal_invertpolarity() const {
@@ -4274,7 +4472,7 @@ inline void AnalyticsDownlink::clear_immediately() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.immediately_ = false;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00002000U);
+                  0x00008000U);
 }
 inline bool AnalyticsDownlink::immediately() const {
   // @@protoc_insertion_point(field_get:api.AnalyticsDownlink.immediately)
@@ -4282,7 +4480,7 @@ inline bool AnalyticsDownlink::immediately() const {
 }
 inline void AnalyticsDownlink::set_immediately(bool value) {
   _internal_set_immediately(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
   // @@protoc_insertion_point(field_set:api.AnalyticsDownlink.immediately)
 }
 inline bool AnalyticsDownlink::_internal_immediately() const {
@@ -4299,7 +4497,7 @@ inline void AnalyticsDownlink::clear_rfpreamble() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.rfpreamble_ = 0u;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000800U);
+                  0x00002000U);
 }
 inline ::uint32_t AnalyticsDownlink::rfpreamble() const {
   // @@protoc_insertion_point(field_get:api.AnalyticsDownlink.rfPreamble)
@@ -4307,7 +4505,7 @@ inline ::uint32_t AnalyticsDownlink::rfpreamble() const {
 }
 inline void AnalyticsDownlink::set_rfpreamble(::uint32_t value) {
   _internal_set_rfpreamble(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:api.AnalyticsDownlink.rfPreamble)
 }
 inline ::uint32_t AnalyticsDownlink::_internal_rfpreamble() const {
@@ -4324,7 +4522,7 @@ inline void AnalyticsDownlink::clear_size() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.size_ = 0u;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00008000U);
+                  0x00020000U);
 }
 inline ::uint32_t AnalyticsDownlink::size() const {
   // @@protoc_insertion_point(field_get:api.AnalyticsDownlink.size)
@@ -4332,7 +4530,7 @@ inline ::uint32_t AnalyticsDownlink::size() const {
 }
 inline void AnalyticsDownlink::set_size(::uint32_t value) {
   _internal_set_size(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
   // @@protoc_insertion_point(field_set:api.AnalyticsDownlink.size)
 }
 inline ::uint32_t AnalyticsDownlink::_internal_size() const {
@@ -4414,7 +4612,7 @@ inline void AnalyticsDownlink::clear_nocrc() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.nocrc_ = false;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00004000U);
+                  0x00010000U);
 }
 inline bool AnalyticsDownlink::nocrc() const {
   // @@protoc_insertion_point(field_get:api.AnalyticsDownlink.noCrc)
@@ -4422,7 +4620,7 @@ inline bool AnalyticsDownlink::nocrc() const {
 }
 inline void AnalyticsDownlink::set_nocrc(bool value) {
   _internal_set_nocrc(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
   // @@protoc_insertion_point(field_set:api.AnalyticsDownlink.noCrc)
 }
 inline bool AnalyticsDownlink::_internal_nocrc() const {
@@ -4439,7 +4637,7 @@ inline void AnalyticsDownlink::clear_rxwalltime() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.rxwalltime_ = ::int64_t{0};
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00010000U);
+                  0x00040000U);
 }
 inline ::int64_t AnalyticsDownlink::rxwalltime() const {
   // @@protoc_insertion_point(field_get:api.AnalyticsDownlink.rxWallTime)
@@ -4447,7 +4645,7 @@ inline ::int64_t AnalyticsDownlink::rxwalltime() const {
 }
 inline void AnalyticsDownlink::set_rxwalltime(::int64_t value) {
   _internal_set_rxwalltime(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
   // @@protoc_insertion_point(field_set:api.AnalyticsDownlink.rxWallTime)
 }
 inline ::int64_t AnalyticsDownlink::_internal_rxwalltime() const {
@@ -4522,6 +4720,136 @@ inline void AnalyticsDownlink::set_allocated_uniqueid(::std::string* PROTOBUF_NU
     _impl_.uniqueid_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:api.AnalyticsDownlink.uniqueId)
+}
+
+// bytes phyPayload = 20;
+inline void AnalyticsDownlink::clear_phypayload() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.phypayload_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000004U);
+}
+inline const ::std::string& AnalyticsDownlink::phypayload() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:api.AnalyticsDownlink.phyPayload)
+  return _internal_phypayload();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void AnalyticsDownlink::set_phypayload(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.phypayload_.SetBytes(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:api.AnalyticsDownlink.phyPayload)
+}
+inline ::std::string* PROTOBUF_NONNULL AnalyticsDownlink::mutable_phypayload()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_phypayload();
+  // @@protoc_insertion_point(field_mutable:api.AnalyticsDownlink.phyPayload)
+  return _s;
+}
+inline const ::std::string& AnalyticsDownlink::_internal_phypayload() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.phypayload_.Get();
+}
+inline void AnalyticsDownlink::_internal_set_phypayload(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.phypayload_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL AnalyticsDownlink::_internal_mutable_phypayload() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.phypayload_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE AnalyticsDownlink::release_phypayload() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:api.AnalyticsDownlink.phyPayload)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.phypayload_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.phypayload_.Set("", GetArena());
+  }
+  return released;
+}
+inline void AnalyticsDownlink::set_allocated_phypayload(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.phypayload_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.phypayload_.IsDefault()) {
+    _impl_.phypayload_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:api.AnalyticsDownlink.phyPayload)
+}
+
+// bytes gatewayContext = 21;
+inline void AnalyticsDownlink::clear_gatewaycontext() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.gatewaycontext_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000008U);
+}
+inline const ::std::string& AnalyticsDownlink::gatewaycontext() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:api.AnalyticsDownlink.gatewayContext)
+  return _internal_gatewaycontext();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void AnalyticsDownlink::set_gatewaycontext(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  _impl_.gatewaycontext_.SetBytes(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:api.AnalyticsDownlink.gatewayContext)
+}
+inline ::std::string* PROTOBUF_NONNULL AnalyticsDownlink::mutable_gatewaycontext()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::std::string* _s = _internal_mutable_gatewaycontext();
+  // @@protoc_insertion_point(field_mutable:api.AnalyticsDownlink.gatewayContext)
+  return _s;
+}
+inline const ::std::string& AnalyticsDownlink::_internal_gatewaycontext() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.gatewaycontext_.Get();
+}
+inline void AnalyticsDownlink::_internal_set_gatewaycontext(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.gatewaycontext_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL AnalyticsDownlink::_internal_mutable_gatewaycontext() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.gatewaycontext_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE AnalyticsDownlink::release_gatewaycontext() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:api.AnalyticsDownlink.gatewayContext)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  auto* released = _impl_.gatewaycontext_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.gatewaycontext_.Set("", GetArena());
+  }
+  return released;
+}
+inline void AnalyticsDownlink::set_allocated_gatewaycontext(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  _impl_.gatewaycontext_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.gatewaycontext_.IsDefault()) {
+    _impl_.gatewaycontext_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:api.AnalyticsDownlink.gatewayContext)
 }
 
 inline bool AnalyticsDownlink::has_dataRate() const {

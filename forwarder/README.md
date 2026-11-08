@@ -196,3 +196,6 @@ available in your current environment you can use:
 ```
 go tool dist list
 ```
+## Complete radio frames
+
+Analytics now includes optional complete encrypted LoRaWAN frame bytes (`phyPayload`), including the on-air MIC. The existing header (`fhdr`) remains populated for older servers. This is an additive wire change: servers and forwarders can be upgraded independently, and gateway traffic forwarding remains unchanged. Header-only senders remain supported, but cannot supply bytes required for MIC verification.

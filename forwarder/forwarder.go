@@ -493,6 +493,7 @@ func (f *AnalyticsForwarder) convertRxPkt(in *SemtechUDPRxPkt) *api.AnalyticsUpl
 	if err == nil {
 		fhdrLen := GetLoRaWANHeaderLen(data)
 		out.Fhdr = data[0:fhdrLen]
+		out.PhyPayload = append([]byte(nil), data...)
 		api.ComputeUniqueIdUp(&out, data)
 	}
 
@@ -561,6 +562,7 @@ func (f *AnalyticsForwarder) convertTxPkt(in *SemtechUDPTxPkt) *api.AnalyticsDow
 	if err == nil {
 		fhdrLen := GetLoRaWANHeaderLen(data)
 		out.Fhdr = data[0:fhdrLen]
+		out.PhyPayload = append([]byte(nil), data...)
 		api.ComputeUniqueIdDown(&out, data)
 	}
 

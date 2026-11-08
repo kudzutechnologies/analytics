@@ -124,3 +124,7 @@ from the independent `analytics-endpoint` gRPC setting.
 ## License
 
 Same as the analytics repository.
+
+## Complete radio frames
+
+Analytics now includes optional complete encrypted LoRaWAN frame bytes (`phyPayload`), including the on-air MIC. The existing header (`fhdr`) remains populated for older servers. This is an additive wire change: servers and forwarders can be upgraded independently, and gateway traffic forwarding remains unchanged. Header-only senders remain supported, but cannot supply bytes required for MIC verification.
