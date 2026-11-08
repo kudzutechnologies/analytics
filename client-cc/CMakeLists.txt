@@ -72,14 +72,65 @@ if(NOT TARGET nlohmann_json::nlohmann_json)
   FetchContent_Declare(
     json
     URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz
+    URL_HASH SHA256=d6c65aca6b1ed68e7a182f4757257b107ae403032760ed6ef121c9d55e81757d
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
   )
   set(JSON_BuildTests OFF CACHE BOOL "" FORCE)
   FetchContent_MakeAvailable(json)
 endif()
 
+# Generate with a host tool compatible with the target protobuf runtime. Never
+# compile the checked-in gencode against an arbitrary system runtime.
+set(CLIENT_CC_HOST_PROTOC "" CACHE FILEPATH "Host protoc matching target protobuf")
+set(CLIENT_CC_HOST_GRPC_PLUGIN "" CACHE FILEPATH "Host grpc_cpp_plugin")
+if(CMAKE_CROSSCOMPILING)
+  if(NOT CLIENT_CC_HOST_PROTOC OR NOT CLIENT_CC_HOST_GRPC_PLUGIN)
+    message(FATAL_ERROR "Cross builds require CLIENT_CC_HOST_PROTOC and CLIENT_CC_HOST_GRPC_PLUGIN; provide host executables matching the target SDK")
+  endif()
+else()
+  if(NOT CLIENT_CC_HOST_PROTOC)
+    find_program(CLIENT_CC_PROTOC_EXECUTABLE protoc REQUIRED)
+    set(CLIENT_CC_HOST_PROTOC "${CLIENT_CC_PROTOC_EXECUTABLE}")
+  endif()
+  if(NOT CLIENT_CC_HOST_GRPC_PLUGIN)
+    find_program(CLIENT_CC_GRPC_PLUGIN_EXECUTABLE grpc_cpp_plugin REQUIRED)
+    set(CLIENT_CC_HOST_GRPC_PLUGIN "${CLIENT_CC_GRPC_PLUGIN_EXECUTABLE}")
+  endif()
+endif()
+execute_process(COMMAND "${CLIENT_CC_HOST_PROTOC}" --version
+  OUTPUT_VARIABLE CLIENT_CC_PROTOC_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE
+  RESULT_VARIABLE CLIENT_CC_PROTOC_RESULT)
+if(NOT CLIENT_CC_PROTOC_RESULT EQUAL 0)
+  message(FATAL_ERROR "CLIENT_CC_HOST_PROTOC must execute on the build host")
+endif()
+message(STATUS "Host ${CLIENT_CC_PROTOC_VERSION}; target protobuf ${Protobuf_VERSION}; compiler ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
+set(CLIENT_CC_GENERATED_ROOT "${CMAKE_CURRENT_BINARY_DIR}/generated")
+set(CLIENT_CC_GENERATED_DIR "${CLIENT_CC_GENERATED_ROOT}/protobuf")
+set(CLIENT_CC_API_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../api")
+file(MAKE_DIRECTORY "${CLIENT_CC_GENERATED_DIR}")
+set(CLIENT_CC_GENERATED)
+foreach(proto api analytics)
+  list(APPEND CLIENT_CC_GENERATED
+    "${CLIENT_CC_GENERATED_DIR}/${proto}.pb.cc"
+    "${CLIENT_CC_GENERATED_DIR}/${proto}.pb.h"
+    "${CLIENT_CC_GENERATED_DIR}/${proto}.grpc.pb.cc"
+    "${CLIENT_CC_GENERATED_DIR}/${proto}.grpc.pb.h")
+endforeach()
+add_custom_command(OUTPUT ${CLIENT_CC_GENERATED}
+  COMMAND "${CLIENT_CC_HOST_PROTOC}"
+    --proto_path=${CLIENT_CC_API_DIR}
+    --cpp_out=${CLIENT_CC_GENERATED_DIR}
+    --grpc_out=${CLIENT_CC_GENERATED_DIR}
+    --plugin=protoc-gen-grpc=${CLIENT_CC_HOST_GRPC_PLUGIN}
+    "${CLIENT_CC_API_DIR}/api.proto" "${CLIENT_CC_API_DIR}/analytics.proto"
+  DEPENDS "${CLIENT_CC_API_DIR}/api.proto" "${CLIENT_CC_API_DIR}/analytics.proto"
+  VERBATIM)
+add_custom_target(client-cc-proto DEPENDS ${CLIENT_CC_GENERATED})
+
 # Include directories (src so that "protobuf/api.pb.h" resolves to src/protobuf/api.pb.h)
 set(CLIENT_CC_INCLUDE_DIRS
+    ${CLIENT_CC_GENERATED_ROOT}
+    ${CLIENT_CC_GENERATED_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/src/protobuf
@@ -95,9 +146,7 @@ set(CLIENT_CC_SOURCES
     src/Client.cc
     src/Pairing.cc
     src/TlsRoots.cc
-    src/protobuf/api.pb.cc
-    src/protobuf/analytics.pb.cc
-    src/protobuf/api.grpc.pb.cc
+    ${CLIENT_CC_GENERATED}
     ${CLIENT_CC_EXTRA_SOURCES}
 )
 
@@ -109,6 +158,7 @@ else()
 endif()
 
 add_library(client-cc ${CLIENT_CC_LIB_TYPE} ${CLIENT_CC_SOURCES})
+add_dependencies(client-cc client-cc-proto)
 
 target_include_directories(client-cc
     PUBLIC
@@ -152,12 +202,10 @@ if(CLIENT_CC_BUILD_TESTS)
     enable_testing()
     add_executable(client_cc_client_test tests/client_test.cc)
     target_link_libraries(client_cc_client_test PRIVATE client-cc)
-    target_include_directories(client_cc_client_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
     add_test(NAME client_cc_client_test COMMAND client_cc_client_test)
 
     add_executable(client_cc_tls_test tests/tls_roots_test.cc)
     target_link_libraries(client_cc_tls_test PRIVATE client-cc)
-    target_include_directories(client_cc_tls_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
     add_test(NAME client_cc_tls_test COMMAND client_cc_tls_test)
 
     add_executable(client_cc_pairing_test tests/pairing_test.cc)
@@ -172,3 +220,5 @@ message(STATUS "Build tests: ${CLIENT_CC_BUILD_TESTS}")
 message(STATUS "Extra sources: ${CLIENT_CC_EXTRA_SOURCES}")
 message(STATUS "Protobuf: ${CLIENT_CC_PROTOBUF_LIBS}")
 message(STATUS "gRPC include: ${gRPC_INCLUDE_DIRS}")
+
+install(DIRECTORY "${CLIENT_CC_GENERATED_DIR}/" DESTINATION include/protobuf FILES_MATCHING PATTERN "*.h")

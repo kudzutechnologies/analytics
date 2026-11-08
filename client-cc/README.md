@@ -91,3 +91,8 @@ ctest --output-on-failure
 ## Notes
 - Requires gRPC and protobuf C++ libraries.
 - Protobuf and gRPC stubs must be generated and available in `src/protobuf`.
+
+CMake generates C++ bindings in the build directory using host `protoc` and
+`grpc_cpp_plugin`. Their versions must match the target protobuf/gRPC SDK.
+Cross builds require `CLIENT_CC_HOST_PROTOC` and `CLIENT_CC_HOST_GRPC_PLUGIN`.
+The legacy checked-in gencode is not a CMake build input.
