@@ -1,0 +1,31 @@
+{
+  "original_wip": "d84cf3f72e4ee8e92493cfcbd0b19e90bb99892d",
+  "reconstructed_tip": "5319e7e6cbffbb6bd446a32a1580a0304d53f3f2",
+  "reconstructed_tree": "4105d6e6c01b087fb05ab5185b9a2054fe7b22b4",
+  "original_refs": [
+    "review-wip-production-219b30f6",
+    "backup/basicstation-wip-d84cf3f"
+  ],
+  "completed_batches": [
+    "history",
+    "build",
+    "configuration"
+  ],
+  "delivery": "bounded memory; retry until acknowledged or explicitly dropped; restart loss permitted",
+  "resource_contract": {
+    "default_batches": 2,
+    "default_messages": 32,
+    "default_payload_bytes": 65536,
+    "minimum_batches": 1,
+    "minimum_messages": 1,
+    "minimum_payload_bytes": 1024,
+    "telemetry_disk_spool": false,
+    "hard_process_RSS_budget": null
+  },
+  "release_ready": false,
+  "external_gates": {
+    "producer_source_and_ABI": "blocked: pinned custom Basic Station producer not supplied",
+    "embedded_cross_builds": "blocked: SDK/sysroots not supplied",
+    "hardware_smoke_tests": "blocked: target devices not supplied"
+  }
+}
