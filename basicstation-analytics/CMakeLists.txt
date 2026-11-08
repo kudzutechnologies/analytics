@@ -50,7 +50,11 @@ add_subdirectory(${CLIENT_CC_DIR} ${CMAKE_BINARY_DIR}/client-cc)
 add_library(bs-analytics-core STATIC
   receiver.cc
   dedupe.cc
+  config.cc
+  gateway_sync.cc
+  pairing.cc
   logging.cc
+  sender.cc
 )
 target_include_directories(bs-analytics-core PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}
@@ -73,6 +77,9 @@ endif()
 # -----------------------------------------------------------------------------
 # Executable
 # -----------------------------------------------------------------------------
+add_executable(basicstation-analytics main.cc)
+target_link_libraries(basicstation-analytics PRIVATE bs-analytics-core)
+install(TARGETS basicstation-analytics RUNTIME DESTINATION bin)
 
 # -----------------------------------------------------------------------------
 # Tests
@@ -86,5 +93,9 @@ if(BS_ANALYTICS_BUILD_TESTS)
   endfunction()
   bs_add_test(protocol_test tests/protocol_test.cc)
   bs_add_test(receiver_test tests/receiver_test.cc)
+  bs_add_test(config_test tests/config_test.cc)
+  bs_add_test(pairing_test tests/pairing_test.cc)
+  bs_add_test(gateway_sync_test tests/gateway_sync_test.cc)
+  bs_add_test(batch_queue_test tests/batch_queue_test.cc)
   bs_add_test(dedupe_test tests/dedupe_test.cc)
 endif()
