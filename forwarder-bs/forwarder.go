@@ -8,56 +8,76 @@ import (
 
 	"github.com/kudzutechnologies/analytics/api"
 	"github.com/kudzutechnologies/analytics/client"
-	lru "github.com/hashicorp/golang-lru/v2"
 	log "github.com/sirupsen/logrus"
-	"google.golang.org/protobuf/proto"
 )
 
 // AnalyticsForwarder implements WSProxyEvents and batches analytics for push.
 // Extraction is best-effort only; parse errors or unknown msgtypes never affect
 // the WebSocket tunnel (the proxy forwards all messages before calling these handlers).
 type AnalyticsForwarder struct {
-	client       *client.Client
-	config       ForwarderConfig
-	proxy        *WSProxy
-	metricsFrame *lru.Cache[string, *api.AnalyticsMetrics]
-	drTables     map[string]DRTable
-	drMu         sync.RWMutex
-	dntxedCounts map[string]uint32 // per-gateway count of dntxed (downlinks put on air)
-	dntxedMu     sync.Mutex
-	isSending    bool
+	config    ForwarderConfig
+	backend   analyticsTransport
+	queue     *deliveryQueue
+	collectMu sync.Mutex
+	stopped   bool
+	drTables  map[string]DRTable
+	drMu      sync.RWMutex
+	counters  map[string]*radioCounters
+	startOnce sync.Once
+	cancel    func()
+	done      chan struct{}
 }
+type radioCounters struct{ up, down, emitted uint32 }
 
-// CreateAnalyticsForwarder creates the forwarder and sets up the metrics cache.
 func CreateAnalyticsForwarder(config ForwarderConfig, c *client.Client, proxy *WSProxy) *AnalyticsForwarder {
-	f := &AnalyticsForwarder{
-		config:       config,
-		client:       c,
-		proxy:        proxy,
-		drTables:     make(map[string]DRTable),
-		dntxedCounts: make(map[string]uint32),
+	if config.MaxBatches < 1 {
+		config.MaxBatches = 2
 	}
-	f.metricsFrame, _ = lru.NewWithEvict(config.MaxWSStreams, f.handleEvict)
+	if config.MaxMessages < 1 {
+		config.MaxMessages = 32
+	}
+	if config.MaxBufferBytes < 1024 {
+		config.MaxBufferBytes = 65536
+	}
+	if config.MaxWSStreams < 1 {
+		config.MaxWSStreams = 1
+	}
+	if config.FlushInterval < 1 {
+		config.FlushInterval = 10
+	}
+	if config.ConnectTimeout < 1 {
+		config.ConnectTimeout = 5
+	}
+	if config.RequestTimeout < 1 {
+		config.RequestTimeout = 5
+	}
+	if config.MaxReconnectBackoff < 1 {
+		config.MaxReconnectBackoff = 60
+	}
+	f := &AnalyticsForwarder{config: config, drTables: make(map[string]DRTable), counters: make(map[string]*radioCounters), done: make(chan struct{})}
+	if c != nil {
+		f.backend = c
+	}
+	f.queue = newDeliveryQueue(config)
 	return f
 }
-
-func (f *AnalyticsForwarder) handleEvict(key string, frame *api.AnalyticsMetrics) {
-	f.flushDataFrame(key, frame)
+func (f *AnalyticsForwarder) frame(key string) *api.AnalyticsMetrics {
+	m := &api.AnalyticsMetrics{GatewayEui: GatewayEUIFromRouter(key)}
+	if !f.config.ServerSide {
+		m.GatewayId = f.config.GatewayId
+	}
+	return m
 }
-
-func (f *AnalyticsForwarder) getMetricsFrame(gatewayKey string) *api.AnalyticsMetrics {
-	if found, ok := f.metricsFrame.Get(gatewayKey); ok {
-		return found
+func (f *AnalyticsForwarder) counter(key string) *radioCounters {
+	if c := f.counters[key]; c != nil {
+		return c
 	}
-	frame := &api.AnalyticsMetrics{}
-	if eui := GatewayEUIFromRouter(gatewayKey); len(eui) == 8 {
-		frame.GatewayEui = eui
+	if len(f.counters) >= f.config.MaxWSStreams {
+		return nil
 	}
-	if f.config.ServerSide {
-		frame.Metrics = &api.AnalyticsInternalMetrics{GatewayIp: gatewayKey}
-	}
-	f.metricsFrame.Add(gatewayKey, frame)
-	return frame
+	c := &radioCounters{}
+	f.counters[key] = c
+	return c
 }
 
 func (f *AnalyticsForwarder) getDRTable(gatewayKey string) DRTable {
@@ -70,84 +90,80 @@ func (f *AnalyticsForwarder) getDRTable(gatewayKey string) DRTable {
 func (f *AnalyticsForwarder) SetDRTable(gatewayKey string, drTable DRTable) {
 	f.drMu.Lock()
 	defer f.drMu.Unlock()
-	if len(drTable) >= 16 {
+	if len(drTable) >= 16 && (f.drTables[gatewayKey] != nil || len(f.drTables) < f.config.MaxWSStreams) {
 		f.drTables[gatewayKey] = drTable[:16]
 	}
 }
 
 // OnUpstreamMessage is called for each message from gateway to LNS.
-func (f *AnalyticsForwarder) OnUpstreamMessage(gatewayKey string, raw []byte, isBinary bool) {
+func (f *AnalyticsForwarder) OnUpstreamMessage(key string, raw []byte, isBinary bool) {
 	if isBinary {
 		return
 	}
-	frame := f.getMetricsFrame(gatewayKey)
-	if frame.Metrics != nil {
-		frame.Metrics.UpTxPackets++
+	f.collectMu.Lock()
+	defer f.collectMu.Unlock()
+	if f.stopped {
+		return
 	}
-	msgtype, err := GetMsgtype(raw)
+	kind, err := GetMsgtype(raw)
 	if err != nil {
 		return
 	}
-	switch msgtype {
-	case "router_config":
-		// Downstream message; we don't update up stats for it (it's LNS->GW). So router_config is not upstream.
-		// So we should not see router_config in OnUpstreamMessage. So ignore.
-		return
-	case "version":
-		return
+	m := f.frame(key)
+	switch kind {
 	case "jreq":
-		f.handleJreq(gatewayKey, raw, frame)
+		f.handleJreq(key, raw, m)
 	case "updf":
-		f.handleUpdf(gatewayKey, raw, frame)
+		f.handleUpdf(key, raw, m)
 	case "propdf":
-		f.handlePropdf(gatewayKey, raw, frame)
+		f.handlePropdf(key, raw, m)
 	case "dntxed":
-		f.dntxedMu.Lock()
-		f.dntxedCounts[gatewayKey]++
-		f.dntxedMu.Unlock()
-		return
-	case "timesync":
+		if _, err := ParseDntxed(raw); err == nil {
+			if c := f.counter(key); c != nil {
+				c.emitted++
+			}
+		}
 		return
 	default:
-		if frame.Metrics != nil {
-			frame.Metrics.PktPUSH_DATA++
+		return
+	}
+	if len(m.Uplinks) > 0 {
+		if c := f.counter(key); c != nil {
+			c.up++
 		}
+		f.queue.add(key, m, true)
 	}
 }
-
-// OnDownstreamMessage is called for each message from LNS to gateway.
-func (f *AnalyticsForwarder) OnDownstreamMessage(gatewayKey string, raw []byte, isBinary bool) {
+func (f *AnalyticsForwarder) OnDownstreamMessage(key string, raw []byte, isBinary bool) {
 	if isBinary {
 		return
 	}
-	frame := f.getMetricsFrame(gatewayKey)
-	if frame.Metrics != nil {
-		frame.Metrics.DnRxPackets++
+	f.collectMu.Lock()
+	defer f.collectMu.Unlock()
+	if f.stopped {
+		return
 	}
-	msgtype, err := GetMsgtype(raw)
+	kind, err := GetMsgtype(raw)
 	if err != nil {
 		return
 	}
-	switch msgtype {
-	case "router_config":
+	if kind == "router_config" {
 		cfg, err := ParseRouterConfig(raw)
-		if err != nil {
-			return
+		if err == nil {
+			f.SetDRTable(key, cfg.GetDRTable())
 		}
-		drTable := cfg.GetDRTable()
-		if drTable != nil {
-			f.SetDRTable(gatewayKey, drTable)
+		return
+	}
+	if kind != "dnmsg" {
+		return
+	}
+	m := f.frame(key)
+	f.handleDnmsg(key, raw, m)
+	if len(m.Downlinks) > 0 {
+		if c := f.counter(key); c != nil {
+			c.down++
 		}
-		// Forward unchanged (no analytics from router_config)
-	case "dnmsg":
-		f.handleDnmsg(gatewayKey, raw, frame)
-		if frame.Metrics != nil {
-			frame.Metrics.PktPULL_RESP++
-		}
-	default:
-		if frame.Metrics != nil {
-			frame.Metrics.PktPULL_ACK++
-		}
+		f.queue.add(key, m, true)
 	}
 }
 
@@ -225,11 +241,11 @@ func (f *AnalyticsForwarder) handlePropdf(gatewayKey string, raw []byte, metrics
 
 func (f *AnalyticsForwarder) bsToUplink(dr int, freq int, upinfo *UpInfo, drTable DRTable, now time.Time) *api.AnalyticsUplink {
 	up := &api.AnalyticsUplink{
-		RxWallTime:     now.UnixMicro(),
-		Crc:            api.CRCStatus_OK,
-		Modulation:     api.Modulation_LORA,
-		CodingRate:     api.LoRaCodingRate_CR_UNKNOWN,
-		RfChain:        0,
+		RxWallTime: now.UnixMicro(),
+		Crc:        api.CRCStatus_OK,
+		Modulation: api.Modulation_LORA,
+		CodingRate: api.LoRaCodingRate_CR_UNKNOWN,
+		RfChain:    0,
 	}
 	if upinfo != nil {
 		up.RxGpsTime = upinfo.Gpstime
@@ -284,14 +300,14 @@ func (f *AnalyticsForwarder) handleDnmsg(gatewayKey string, raw []byte, metricsF
 		freq = m.Freq
 	}
 	down := &api.AnalyticsDownlink{
-		RxWallTime:     time.Now().UnixMilli(),
-		TxGpsTime:      m.Gpstime,
-		Frequency:     float32(freq) / 1e6,
-		Fhdr:          fhdr,
-		Size:          uint32(size),
-		RfChain:       0,
-		Modulation:    api.Modulation_LORA,
-		CodingRate:    api.LoRaCodingRate_CR_UNKNOWN,
+		RxWallTime: time.Now().UnixMilli(),
+		TxGpsTime:  m.Gpstime,
+		Frequency:  float32(freq) / 1e6,
+		Fhdr:       fhdr,
+		Size:       uint32(size),
+		RfChain:    0,
+		Modulation: api.Modulation_LORA,
+		CodingRate: api.LoRaCodingRate_CR_UNKNOWN,
 	}
 	if drTable != nil && dr >= 0 && dr < len(drTable) {
 		sf, bw := drTable[dr][0], drTable[dr][1]
@@ -344,131 +360,31 @@ func drToBW(bw int) api.LoRaBW {
 	return api.LoRaBW_BW_UNKNOWN
 }
 
-func (f *AnalyticsForwarder) connect() {
-	for {
-		log.Debugf("Connecting to: %s", f.config.Endpoint)
-		err := f.client.Connect()
-		if err != nil {
-			log.Warnf("Could not connect to analytics endpoint: %s", err.Error())
-			time.Sleep(10 * time.Second)
+func (f *AnalyticsForwarder) flushData() {
+	f.collectMu.Lock()
+	defer f.collectMu.Unlock()
+	for key, c := range f.counters {
+		if c.up == 0 && c.down == 0 && c.emitted == 0 {
 			continue
 		}
-		go f.main()
-		return
-	}
-}
-
-func (f *AnalyticsForwarder) main() {
-	log.Info("Connected to kudzu analytics")
-	for {
-		time.Sleep(time.Duration(f.config.FlushInterval) * time.Second)
-		if !f.isSending && f.hasData() {
-			f.flushData()
+		m := f.frame(key)
+		m.Stats = []*api.AnalyticsStat{{GwTime: time.Now().UnixMilli(), RxPackets: c.up, RxWithValidPhyCRC: c.up, RxForwarded: c.up, TxReceived: c.down, TxEmitted: c.emitted, IsGauge: f.config.GaugeStat}}
+		if f.queue.add(key, m, false) {
+			*c = radioCounters{}
 		}
 	}
+	f.queue.seal(false)
 }
-
-func (f *AnalyticsForwarder) hasData() bool {
-	return f.queueSize() > 0
-}
-
-func (f *AnalyticsForwarder) queueSize() int {
-	var total int
-	for _, frame := range f.metricsFrame.Values() {
-		total += len(frame.Uplinks) + len(frame.Downlinks) + len(frame.Stats)
-		if frame.Metrics != nil {
-			if frame.Metrics.DnRxPackets > 0 || frame.Metrics.DnTxPackets > 0 ||
-				frame.Metrics.UpRxPackets > 0 || frame.Metrics.UpTxPackets > 0 {
-				if total == 0 {
-					total++
-				}
-			}
-		}
-	}
-	return total
-}
-
-func (f *AnalyticsForwarder) flushDataFrame(gatewayKey string, frame *api.AnalyticsMetrics) {
-	copy := proto.Clone(frame).(*api.AnalyticsMetrics)
-	f.dntxedMu.Lock()
-	dntxed := f.dntxedCounts[gatewayKey]
-	f.dntxedCounts[gatewayKey] = 0
-	f.dntxedMu.Unlock()
-	// Basic Station has no native stat message; derive AnalyticsStat from proxy counters.
-	if copy.Metrics != nil {
-		copy.Stats = append(copy.Stats, f.syntheticStatFromMetrics(frame.Metrics, dntxed))
-	} else if len(copy.Uplinks) > 0 || len(copy.Downlinks) > 0 || dntxed > 0 {
-		copy.Stats = append(copy.Stats, f.syntheticStatFromBatch(len(copy.Uplinks), len(copy.Downlinks), dntxed))
-	}
-	frame.Downlinks = nil
-	frame.Uplinks = nil
-	frame.Stats = nil
-	if frame.Metrics != nil {
-		frame.Metrics.DnRxPackets = 0
-		frame.Metrics.DnTxPackets = 0
-		frame.Metrics.UpRxPackets = 0
-		frame.Metrics.UpTxPackets = 0
-		frame.Metrics.PktPULL_ACK = 0
-		frame.Metrics.PktPULL_DATA = 0
-		frame.Metrics.PktPULL_RESP = 0
-		frame.Metrics.PktPUSH_ACK = 0
-		frame.Metrics.PktPUSH_DATA = 0
-		frame.Metrics.PktTX_ACK = 0
-	}
-	if err := f.client.PushMetrics(copy); err != nil {
-		log.Warnf("Unable to push metrics: %s", err.Error())
-	}
-}
-
-// syntheticStatFromMetrics builds an AnalyticsStat from AnalyticsInternalMetrics (server-side).
-func (f *AnalyticsForwarder) syntheticStatFromMetrics(m *api.AnalyticsInternalMetrics, dntxed uint32) *api.AnalyticsStat {
-	s := &api.AnalyticsStat{
-		GwTime:            time.Now().UnixMilli(),
-		RxPackets:         m.UpTxPackets,
-		RxWithValidPhyCRC: m.UpTxPackets,
-		RxForwarded:       m.UpTxPackets,
-		TxReceived:        m.DnRxPackets,
-		TxEmitted:         dntxed,
-		IsGauge:           f.config.GaugeStat,
-	}
-	if m.DnRxPackets > 0 {
-		s.RxAckr = 100 * float32(dntxed) / float32(m.DnRxPackets)
-	}
-	return s
-}
-
-// syntheticStatFromBatch builds an AnalyticsStat from batch counts (client-side, no Metrics).
-func (f *AnalyticsForwarder) syntheticStatFromBatch(uplinks, downlinks int, dntxed uint32) *api.AnalyticsStat {
-	s := &api.AnalyticsStat{
-		GwTime:            time.Now().UnixMilli(),
-		RxPackets:         uint32(uplinks),
-		RxWithValidPhyCRC: uint32(uplinks),
-		RxForwarded:       uint32(uplinks),
-		TxReceived:        uint32(downlinks),
-		TxEmitted:         dntxed,
-		IsGauge:           f.config.GaugeStat,
-	}
-	if downlinks > 0 {
-		s.RxAckr = 100 * float32(dntxed) / float32(downlinks)
-	}
-	return s
-}
-
-func (f *AnalyticsForwarder) flushData() {
-	f.isSending = true
-	for _, key := range f.metricsFrame.Keys() {
-		if frame, ok := f.metricsFrame.Get(key); ok {
-			f.flushDataFrame(key, frame)
-		}
-	}
-	f.isSending = false
-}
-
-// StartAndWait connects to analytics and runs the flush loop; blocks forever.
-func (f *AnalyticsForwarder) StartAndWait() {
-	go f.connect()
-	ch := make(chan struct{})
-	<-ch
+func (f *AnalyticsForwarder) hasData() bool  { return f.queue.snapshot().Batches > 0 }
+func (f *AnalyticsForwarder) queueSize() int { return f.queue.snapshot().Messages }
+func (f *AnalyticsForwarder) StartAndWait()  { f.Start(); <-f.done }
+func (f *AnalyticsForwarder) OnSessionClosed(key string) {
+	f.collectMu.Lock()
+	delete(f.counters, key)
+	f.collectMu.Unlock()
+	f.drMu.Lock()
+	delete(f.drTables, key)
+	f.drMu.Unlock()
 }
 
 // GatewayEUIFromRouter parses router string (16 hex chars, optional separators) to 8-byte EUI.
