@@ -71,7 +71,7 @@ int main() {
     ExpectEq(static_cast<int64_t>(u.rxfinishedtime()), static_cast<int64_t>(up.xtime),
              "rxFinishedTime uses xtime");
     Expect(u.uniqueid().size() == 20, "uniqueId SHA1 length");
-    ExpectEq(static_cast<int>(u.fhdr().size()), 16, "fhdr prefix 16");
+    ExpectEq(static_cast<int>(u.fhdr().size()), 10, "variable MAC header");
     ExpectEq(static_cast<int>(u.size()), 20, "payload size");
   }
 
@@ -90,7 +90,7 @@ int main() {
     up.bw = 0;
     up.dr = 7;
     up.size = 4;
-    uint8_t payload[4] = {1, 2, 3, 4};
+    uint8_t payload[4] = {0xe0, 2, 3, 4};
     std::vector<uint8_t> dgram(ANA_UPLINK_LEN(4));
     std::memcpy(dgram.data(), &up, sizeof(up));
     std::memcpy(dgram.data() + sizeof(up), payload, 4);

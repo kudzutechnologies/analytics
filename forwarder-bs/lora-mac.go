@@ -34,7 +34,13 @@ func euiToBytes(eui string) ([]byte, error) {
 // Returns fhdr (header only), fullPayload (for uniqueId), and any error.
 func ReconstructUpdfPayload(m *MsgUpdf) (fhdr []byte, fullPayload []byte, err error) {
 	// FHDR: MHdr(1) + DevAddr(4 LE) + FCtrl(1) + FCnt(2 LE) + FOpts
-	fopts, _ := hex.DecodeString(m.FOpts)
+	fopts, err := hex.DecodeString(m.FOpts)
+	if err != nil || len(fopts) > 15 || int(m.FCtrl&15) != len(fopts) || m.FPort < -1 || m.FPort > 255 {
+		return nil, nil, fmt.Errorf("invalid uplink header")
+	}
+	if m.FPort == -1 && m.FRMPayload != "" {
+		return nil, nil, fmt.Errorf("payload without FPort")
+	}
 	fhdrLen := 1 + 4 + 1 + 2 + len(fopts)
 	if m.FPort >= 0 {
 		fhdrLen++ // FPort byte
@@ -60,6 +66,9 @@ func ReconstructUpdfPayload(m *MsgUpdf) (fhdr []byte, fullPayload []byte, err er
 	mic := make([]byte, 4)
 	binary.LittleEndian.PutUint32(mic, uint32(m.MIC))
 	fullPayload = append(append(append([]byte{}, fhdr...), frm...), mic...)
+	if len(fullPayload) > 255 {
+		return nil, nil, fmt.Errorf("PHYPayload exceeds 255 bytes")
+	}
 	return fhdr, fullPayload, nil
 }
 
@@ -77,8 +86,12 @@ func ReconstructJreqPayload(m *MsgJreq) (fhdr []byte, fullPayload []byte, err er
 	// "Header" for analytics we take as first 19 bytes (up to and including DevNonce); MIC is not part of FHDR in same way.
 	fhdr = make([]byte, 0, 19)
 	fhdr = append(fhdr, m.MHdr)
-	fhdr = append(fhdr, joinEui...)
-	fhdr = append(fhdr, devEui...)
+	for i := len(joinEui) - 1; i >= 0; i-- {
+		fhdr = append(fhdr, joinEui[i])
+	}
+	for i := len(devEui) - 1; i >= 0; i-- {
+		fhdr = append(fhdr, devEui[i])
+	}
 	devNonce := make([]byte, 2)
 	binary.LittleEndian.PutUint16(devNonce, m.DevNonce)
 	fhdr = append(fhdr, devNonce...)
@@ -91,6 +104,9 @@ func ReconstructJreqPayload(m *MsgJreq) (fhdr []byte, fullPayload []byte, err er
 // ReconstructPropdfPayload decodes FRMPayload (entire PHYPayload) and returns header length and full payload.
 func ReconstructPropdfPayload(m *MsgPropdf) (fhdr []byte, fullPayload []byte, err error) {
 	fullPayload, err = hex.DecodeString(m.FRMPayload)
+	if len(fullPayload) == 0 || len(fullPayload) > 255 {
+		return nil, nil, fmt.Errorf("invalid proprietary payload size")
+	}
 	if err != nil {
 		return nil, nil, err
 	}
@@ -104,34 +120,54 @@ func ReconstructPropdfPayload(m *MsgPropdf) (fhdr []byte, fullPayload []byte, er
 
 // GetLoRaWANHeaderLen returns the length of the MAC header in a raw PHYPayload.
 func GetLoRaWANHeaderLen(data []byte) int {
-	dlen := len(data)
-	if dlen < 1 {
+	n := len(data)
+	if n == 0 {
 		return 0
 	}
-	mhdr := data[0]
-	mtype := (mhdr & 0xE0) >> 5
-
-	if mtype == MTypeJoinReq || mtype == MTypeRejoinReq {
-		if dlen < 19 {
-			return dlen
+	switch (data[0] & 0xE0) >> 5 {
+	case MTypeJoinReq:
+		if n < 23 {
+			return 0
 		}
 		return 19
+	case MTypeRejoinReq:
+		if n < 2 {
+			return 0
+		}
+		if data[1] == 1 {
+			if n < 24 {
+				return 0
+			}
+			return 20
+		}
+		if data[1] == 0 || data[1] == 2 {
+			if n < 19 {
+				return 0
+			}
+			return 15
+		}
+		return 0
+	case MTypeJoinAccept:
+		if n != 17 && n != 33 {
+			return 0
+		}
+		return n
+	case MTypeProprietary:
+		return n
+	default:
+		if n < 12 {
+			return 0
+		}
+		opts := int(data[5] & 15)
+		if n < 12+opts {
+			return 0
+		}
+		header := 8 + opts
+		if n > 12+opts {
+			header++
+		}
+		return header
 	}
-	if mtype == MTypeJoinAccept {
-		return dlen
-	}
-	if mtype == MTypeProprietary {
-		return dlen
-	}
-	if dlen < 8 {
-		return dlen
-	}
-	fctrl := data[5]
-	foptsLen := int(fctrl & 0x0F)
-	if dlen < 8+foptsLen+1 {
-		return dlen
-	}
-	return 8 + foptsLen + 1
 }
 
 // DecodeDnmsgPdu decodes the pdu hex string from dnmsg and returns raw bytes, fhdr slice, and size.
@@ -139,6 +175,9 @@ func DecodeDnmsgPdu(pduHex string) (raw []byte, fhdr []byte, size int, err error
 	raw, err = hex.DecodeString(pduHex)
 	if err != nil {
 		return nil, nil, 0, err
+	}
+	if len(raw) == 0 || len(raw) > 255 {
+		return nil, nil, 0, fmt.Errorf("invalid PHYPayload size")
 	}
 	size = len(raw)
 	fhdrLen := GetLoRaWANHeaderLen(raw)

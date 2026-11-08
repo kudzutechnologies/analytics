@@ -3,6 +3,7 @@
 #include "receiver.h"
 #include "protocol.h"
 #include "dedupe.h"
+#include "lora_header.h"
 #include "protobuf/analytics.pb.h"
 
 #include <algorithm>
@@ -67,17 +68,17 @@ void FillUplink(const struct ana_uplink* w, const uint8_t* payload, api::Analyti
     p->set_rfchain(0);
     p->set_crc(WireCrcToProto(w->crc_status));
     p->set_size(w->size);
-    const size_t fhdr_n = std::min<size_t>(16, w->size);
+    const size_t fhdr_n = LoRaHeaderLength(payload,w->size);
     if (payload && fhdr_n > 0) {
         p->set_fhdr(payload, fhdr_n);
     }
     if (w->sf == 0) {
         p->set_modulation(api::FSK);
-        p->set_dataratefsk(w->dr);
-        p->set_codingrate(api::CR_UNKNOWN);
+        p->set_dataratefsk(50000);
+        p->set_codingrate(api::CR_OFF);
     } else {
         p->set_modulation(api::LORA);
-        p->set_codingrate(api::CR_UNKNOWN);
+        p->set_codingrate(api::CR_4_5);
         auto* dr = p->mutable_dataratelora();
         dr->set_spreadingfactor(WireSfToProto(w->sf));
         dr->set_bandwidth(WireBwToProto(w->bw));
@@ -100,7 +101,7 @@ void FillDownlink(const struct ana_downlink* w, const uint8_t* payload, api::Ana
     p->set_rfchain(w->txunit);
     p->set_power(w->txpow_x10 / 10.0f);
     p->set_size(w->size);
-    const size_t fhdr_n = std::min<size_t>(16, w->size);
+    const size_t fhdr_n = LoRaHeaderLength(payload,w->size);
     if (payload && fhdr_n > 0) {
         p->set_fhdr(payload, fhdr_n);
     }
@@ -112,11 +113,11 @@ void FillDownlink(const struct ana_downlink* w, const uint8_t* payload, api::Ana
     p->set_rxwalltime(w->tx_time_us / 1000);  // ms wall clock approx
     if (w->sf == 0) {
         p->set_modulation(api::FSK);
-        p->set_dataratefsk(w->dr);
-        p->set_codingrate(api::CR_UNKNOWN);
+        p->set_dataratefsk(50000);
+        p->set_codingrate(api::CR_OFF);
     } else {
         p->set_modulation(api::LORA);
-        p->set_codingrate(api::CR_UNKNOWN);
+        p->set_codingrate(api::CR_4_5);
         auto* dr = p->mutable_dataratelora();
         dr->set_spreadingfactor(WireSfToProto(w->sf));
         dr->set_bandwidth(WireBwToProto(w->bw));

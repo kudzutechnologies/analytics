@@ -238,11 +238,14 @@ func (f *AnalyticsForwarder) handlePropdf(gatewayKey string, raw []byte, metrics
 	metricsFrame.Uplinks = append(metricsFrame.Uplinks, up)
 }
 
-func (f *AnalyticsForwarder) bsToUplink(dr int, freq int, upinfo *UpInfo, drTable DRTable, now time.Time) *api.AnalyticsUplink {
+func (f *AnalyticsForwarder) bsToUplink(dr int, freq int64, upinfo *UpInfo, drTable DRTable, now time.Time) *api.AnalyticsUplink {
+	if dr < 0 || dr > 15 || freq <= 0 || freq > 4294967295 {
+		return nil
+	}
 	up := &api.AnalyticsUplink{
 		RxWallTime: now.UnixMicro(),
 		Crc:        api.CRCStatus_OK,
-		Modulation: api.Modulation_LORA,
+		Modulation: api.Modulation_UNKNOWN,
 		CodingRate: api.LoRaCodingRate_CR_UNKNOWN,
 		RfChain:    0,
 	}
@@ -260,9 +263,11 @@ func (f *AnalyticsForwarder) bsToUplink(dr int, freq int, upinfo *UpInfo, drTabl
 		sf, bw, _ := drTable[dr][0], drTable[dr][1], drTable[dr][2]
 		if sf == 0 {
 			up.Modulation = api.Modulation_FSK
-			up.DataRate = &api.AnalyticsUplink_DataRateFSK{DataRateFSK: uint32(bw)}
-		} else {
+			up.CodingRate = api.LoRaCodingRate_CR_OFF
+			up.DataRate = &api.AnalyticsUplink_DataRateFSK{DataRateFSK: uint32(50000)}
+		} else if sf >= 7 && sf <= 12 && drToBW(bw) != api.LoRaBW_BW_UNKNOWN {
 			up.Modulation = api.Modulation_LORA
+			up.CodingRate = api.LoRaCodingRate_CR_4_5
 			up.DataRate = &api.AnalyticsUplink_DataRateLoRa{
 				DataRateLoRa: &api.LoRaDataRate{
 					SpreadingFactor: drToSF(sf),
@@ -284,12 +289,16 @@ func (f *AnalyticsForwarder) handleDnmsg(gatewayKey string, raw []byte, metricsF
 		return
 	}
 	drTable := f.getDRTable(gatewayKey)
-	dr := m.RX1DR
-	if dr < 0 {
-		dr = m.RX2DR
+	dr := -1
+	if m.RX1DR != nil {
+		dr = *m.RX1DR
+	} else if m.RX2DR != nil {
+		dr = *m.RX2DR
+	} else if m.DR != nil {
+		dr = *m.DR
 	}
-	if dr < 0 {
-		dr = m.DR
+	if dr > 15 || dr < -1 {
+		return
 	}
 	freq := m.RX1Freq
 	if freq == 0 {
@@ -298,6 +307,9 @@ func (f *AnalyticsForwarder) handleDnmsg(gatewayKey string, raw []byte, metricsF
 	if freq == 0 {
 		freq = m.Freq
 	}
+	if freq <= 0 || freq > 4294967295 {
+		return
+	}
 	down := &api.AnalyticsDownlink{
 		RxWallTime: time.Now().UnixMilli(),
 		TxGpsTime:  m.Gpstime,
@@ -305,15 +317,18 @@ func (f *AnalyticsForwarder) handleDnmsg(gatewayKey string, raw []byte, metricsF
 		Fhdr:       fhdr,
 		Size:       uint32(size),
 		RfChain:    0,
-		Modulation: api.Modulation_LORA,
+		Modulation: api.Modulation_UNKNOWN,
 		CodingRate: api.LoRaCodingRate_CR_UNKNOWN,
 	}
 	if drTable != nil && dr >= 0 && dr < len(drTable) {
 		sf, bw := drTable[dr][0], drTable[dr][1]
 		if sf == 0 {
 			down.Modulation = api.Modulation_FSK
-			down.DataRate = &api.AnalyticsDownlink_DataRateFSK{DataRateFSK: uint32(bw)}
-		} else {
+			down.CodingRate = api.LoRaCodingRate_CR_OFF
+			down.DataRate = &api.AnalyticsDownlink_DataRateFSK{DataRateFSK: uint32(50000)}
+		} else if sf >= 7 && sf <= 12 && drToBW(bw) != api.LoRaBW_BW_UNKNOWN {
+			down.Modulation = api.Modulation_LORA
+			down.CodingRate = api.LoRaCodingRate_CR_4_5
 			down.DataRate = &api.AnalyticsDownlink_DataRateLoRa{
 				DataRateLoRa: &api.LoRaDataRate{
 					SpreadingFactor: drToSF(sf),

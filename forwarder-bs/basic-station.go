@@ -34,37 +34,37 @@ type MsgVersion struct {
 
 // MsgRouterConfig is the LNS response to version; contains channel plan and DRs.
 type MsgRouterConfig struct {
-	Msgtype     string        `json:"msgtype"`
-	NetID       []int         `json:"NetID,omitempty"`
-	JoinEui     [][2]int      `json:"JoinEui,omitempty"`
-	Region      string        `json:"region,omitempty"`
-	MaxEirp     float64       `json:"max_eirp,omitempty"`
-	Hwspec      string        `json:"hwspec,omitempty"`
-	FreqRange   [2]int        `json:"freq_range,omitempty"`
-	DRs         []DREntry     `json:"DRs,omitempty"`
-	Sx1301Conf  []interface{} `json:"sx1301_conf,omitempty"`
-	Bcning      interface{}   `json:"bcning,omitempty"`
-	Nocca       bool          `json:"nocca,omitempty"`
-	Nodc        bool          `json:"nodc,omitempty"`
-	Nodwell     bool          `json:"nodwell,omitempty"`
+	Msgtype    string        `json:"msgtype"`
+	NetID      []int         `json:"NetID,omitempty"`
+	JoinEui    [][2]int      `json:"JoinEui,omitempty"`
+	Region     string        `json:"region,omitempty"`
+	MaxEirp    float64       `json:"max_eirp,omitempty"`
+	Hwspec     string        `json:"hwspec,omitempty"`
+	FreqRange  [2]int        `json:"freq_range,omitempty"`
+	DRs        []DREntry     `json:"DRs,omitempty"`
+	Sx1301Conf []interface{} `json:"sx1301_conf,omitempty"`
+	Bcning     interface{}   `json:"bcning,omitempty"`
+	Nocca      bool          `json:"nocca,omitempty"`
+	Nodc       bool          `json:"nodc,omitempty"`
+	Nodwell    bool          `json:"nodwell,omitempty"`
 }
 
 // MsgJreq is a LoRaWAN join request uplink.
 type MsgJreq struct {
 	Msgtype  string  `json:"msgtype"`
-	MHdr    uint8   `json:"MHdr"`
-	JoinEui string  `json:"JoinEui"`
-	DevEui  string  `json:"DevEui"`
-	DevNonce uint16 `json:"DevNonce"`
-	MIC     int32   `json:"MIC"`
-	DR      int     `json:"DR"`
-	Freq    int     `json:"Freq"`
-	Upinfo  *UpInfo `json:"upinfo,omitempty"`
+	MHdr     uint8   `json:"MHdr"`
+	JoinEui  string  `json:"JoinEui"`
+	DevEui   string  `json:"DevEui"`
+	DevNonce uint16  `json:"DevNonce"`
+	MIC      int32   `json:"MIC"`
+	DR       int     `json:"DR"`
+	Freq     int64   `json:"Freq"`
+	Upinfo   *UpInfo `json:"upinfo,omitempty"`
 }
 
 // MsgUpdf is a LoRaWAN data frame uplink.
 type MsgUpdf struct {
-	Msgtype     string  `json:"msgtype"`
+	Msgtype    string  `json:"msgtype"`
 	MHdr       uint8   `json:"MHdr"`
 	DevAddr    int32   `json:"DevAddr"`
 	FCtrl      uint8   `json:"FCtrl"`
@@ -74,48 +74,48 @@ type MsgUpdf struct {
 	FRMPayload string  `json:"FRMPayload"`
 	MIC        int32   `json:"MIC"`
 	DR         int     `json:"DR"`
-	Freq       int     `json:"Freq"`
+	Freq       int64   `json:"Freq"`
 	Upinfo     *UpInfo `json:"upinfo,omitempty"`
 }
 
 // MsgPropdf is a proprietary frame uplink (entire PHYPayload in FRMPayload).
 type MsgPropdf struct {
-	Msgtype     string  `json:"msgtype"`
+	Msgtype    string  `json:"msgtype"`
 	FRMPayload string  `json:"FRMPayload"`
 	DR         int     `json:"DR"`
-	Freq       int     `json:"Freq"`
+	Freq       int64   `json:"Freq"`
 	Upinfo     *UpInfo `json:"upinfo,omitempty"`
 }
 
 // MsgDntxed is transmit confirmation from Station to LNS.
 type MsgDntxed struct {
-	Msgtype string `json:"msgtype"`
-	Diid    int64  `json:"diid"`
-	DevEui  string `json:"DevEui"`
-	Rctx    int64  `json:"rctx"`
-	Xtime   int64  `json:"xtime"`
+	Msgtype string  `json:"msgtype"`
+	Diid    int64   `json:"diid"`
+	DevEui  string  `json:"DevEui"`
+	Rctx    int64   `json:"rctx"`
+	Xtime   int64   `json:"xtime"`
 	Txtime  float64 `json:"txtime"`
-	Gpstime int64  `json:"gpstime"`
+	Gpstime int64   `json:"gpstime"`
 }
 
 // MsgDnmsg is a downlink message (Class A, B, or C).
 type MsgDnmsg struct {
 	Msgtype  string `json:"msgtype"`
-	DevEui  string `json:"DevEui"`
+	DevEui   string `json:"DevEui"`
 	DC       int    `json:"dC"`
-	Diid    int64  `json:"diid"`
-	Pdu     string `json:"pdu"`
-	RxDelay int    `json:"RxDelay,omitempty"`
-	RX1DR   int    `json:"RX1DR,omitempty"`
-	RX1Freq int    `json:"RX1Freq,omitempty"`
-	RX2DR   int    `json:"RX2DR,omitempty"`
-	RX2Freq int    `json:"RX2Freq,omitempty"`
-	Priority int   `json:"priority,omitempty"`
-	Xtime   int64  `json:"xtime,omitempty"`
-	Rctx    int64  `json:"rctx,omitempty"`
-	DR      int    `json:"DR,omitempty"`
-	Freq    int    `json:"Freq,omitempty"`
-	Gpstime int64  `json:"gpstime,omitempty"`
+	Diid     int64  `json:"diid"`
+	Pdu      string `json:"pdu"`
+	RxDelay  int    `json:"RxDelay,omitempty"`
+	RX1DR    *int   `json:"RX1DR,omitempty"`
+	RX1Freq  int64  `json:"RX1Freq,omitempty"`
+	RX2DR    *int   `json:"RX2DR,omitempty"`
+	RX2Freq  int64  `json:"RX2Freq,omitempty"`
+	Priority int    `json:"priority,omitempty"`
+	Xtime    int64  `json:"xtime,omitempty"`
+	Rctx     int64  `json:"rctx,omitempty"`
+	DR       *int   `json:"DR,omitempty"`
+	Freq     int64  `json:"Freq,omitempty"`
+	Gpstime  int64  `json:"gpstime,omitempty"`
 }
 
 // MsgTimesync can be upstream (txtime only) or downstream (gpstime, xtime).
@@ -160,11 +160,13 @@ func GetMsgtype(raw []byte) (string, error) {
 
 // ParseRouterConfig extracts DRs from a router_config message for use in DR resolution.
 func ParseRouterConfig(raw []byte) (*MsgRouterConfig, error) {
-	var m MsgRouterConfig
+	var m struct {
+		DRs []DREntry `json:"DRs"`
+	}
 	if err := json.Unmarshal(raw, &m); err != nil {
 		return nil, err
 	}
-	return &m, nil
+	return &MsgRouterConfig{DRs: m.DRs}, nil
 }
 
 // ParseUplinkMessage parses jreq, updf, or propdf into a generic structure for analytics.
@@ -223,7 +225,7 @@ func ParseDntxed(raw []byte) (*MsgDntxed, error) {
 
 // GetDRTable returns the DR table from router_config (exactly 16 entries).
 func (c *MsgRouterConfig) GetDRTable() DRTable {
-	if len(c.DRs) < 16 {
+	if len(c.DRs) != 16 {
 		return nil
 	}
 	return c.DRs[:16]

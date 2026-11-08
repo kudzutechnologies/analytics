@@ -74,7 +74,7 @@ func TestConcurrentCollectionAndFlush(t *testing.T) {
 			for i := 0; i < 500; i++ {
 				switch n {
 				case 0:
-					f.OnUpstreamMessage("0102030405060708", []byte(`{"msgtype":"propdf","FRMPayload":"e00102"}`), false)
+					f.OnUpstreamMessage("0102030405060708", []byte(`{"msgtype":"propdf","FRMPayload":"e00102","Freq":868100000}`), false)
 				case 1:
 					f.OnDownstreamMessage("0102030405060708", []byte(`{"msgtype":"dnmsg","pdu":"600102030400000001aabbccdd","RX1DR":0,"RX1Freq":868100000}`), false)
 				case 2:
