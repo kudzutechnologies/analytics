@@ -78,9 +78,10 @@ type ForwarderConfig struct {
 	ShowVersion             bool   `json:"-"`
 	LogFile                 string `json:"log-file,omitempty"`
 	// Debug
-	DebugDump string `json:"debug-dump,omitempty"`
-	LogLevel  string `json:"log-level,omitempty"`
-	Verbose   bool   `json:"verbose,omitempty"` // enable debug log level + hexdump of incoming/outgoing traffic
+	DebugDump         string `json:"debug-dump,omitempty"`
+	DebugDumpMaxBytes int    `json:"debug-dump-max-bytes,omitempty"`
+	LogLevel          string `json:"log-level,omitempty"`
+	Verbose           bool   `json:"verbose,omitempty"` // enable debug log level + hexdump of incoming/outgoing traffic
 }
 
 var defaultConf = ForwarderConfig{
@@ -88,7 +89,7 @@ var defaultConf = ForwarderConfig{
 	Endpoint: client.DefaultEndpoint, PairingEndpoint: client.DefaultPairingEndpoint,
 	ConnectTimeout: 5, RequestTimeout: 5, MaxReconnectBackoff: 60,
 	FlushInterval: 10, CUPSMaxCredentialBytes: 16384, MaxBatches: 2, MaxMessages: 32, MaxBufferBytes: 65536,
-	ShutdownDeadlineMS: 5000, ProxyMode: "local", CUPSMode: "off", LogLevel: "info",
+	ShutdownDeadlineMS: 5000, ProxyMode: "local", CUPSMode: "off", LogLevel: "info", DebugDumpMaxBytes: 1048576,
 }
 
 func Version() string {
@@ -317,7 +318,7 @@ func ValidateForwarderConfig(c *ForwarderConfig) error {
 	if c.CUPSMaxCredentialBytes < 1024 || c.CUPSMaxCredentialBytes > 65535 {
 		return fmt.Errorf("invalid CUPS credential limit")
 	}
-	if c.MaxBufferBytes < 1024 || c.ShutdownDeadlineMS < 0 || c.PreIdentityMaxMessages < 0 {
+	if c.MaxBufferBytes < 1024 || c.ShutdownDeadlineMS < 0 || c.PreIdentityMaxMessages < 0 || c.DebugDumpMaxBytes < 0 {
 		return fmt.Errorf("invalid buffer or shutdown limits")
 	}
 	if c.ListenPort < 0 || c.ListenPort > 65535 {
@@ -358,7 +359,7 @@ func ValidateForwarderConfig(c *ForwarderConfig) error {
 	}
 	if c.PublicURI != "" {
 		u, e := url.Parse(c.PublicURI)
-		if e != nil || u.Host == "" || (u.Scheme != "ws" && u.Scheme != "wss") || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+		if e != nil || u.Host == "" || (u.Scheme != "ws" && u.Scheme != "wss") || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Path != "" && u.Path != "/") {
 			return fmt.Errorf("invalid public-uri")
 		}
 		if c.ProxyMode == "shared" && u.Scheme != "wss" {

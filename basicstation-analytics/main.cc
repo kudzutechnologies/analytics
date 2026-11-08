@@ -106,6 +106,7 @@ int main(int argc, char* argv[]) {
     return 1;
   }
   receiver.SetGatewayId(cfg.gateway_id);
+  if(!cfg.gateway_eui.empty()){std::vector<uint8_t> expected;std::string error;ParseGatewayEUI(cfg.gateway_eui,expected,error);receiver.SetExpectedEui(std::string(expected.begin(),expected.end()));}
   LOG_INFO() << "Listening on " << cfg.socket_path << " kernel_receive_buffer=" << receiver.EffectiveReceiveBuffer();
 
   client_cc::AnalyticsClientConfig client_cfg;
@@ -124,7 +125,7 @@ int main(int argc, char* argv[]) {
   Sender sender(&client,&queue,cfg.connect_timeout,cfg.request_timeout,cfg.max_reconnect_backoff,[&]{
     if(!do_sync||sync_started.exchange(true))return;
     sync_thread=std::thread([&]{
-      auto deadline=std::chrono::system_clock::now()+std::chrono::seconds(cfg.connect_timeout+cfg.request_timeout);
+      auto deadline=std::chrono::system_clock::now()+std::chrono::seconds(cfg.connect_timeout)+std::chrono::seconds(cfg.request_timeout);
       auto status=sync_client->ConnectOnce(deadline);
       if(status.ok())status=sync_client->GatewayUpsertOnce(ToUpsertRequest(parsed),deadline);
       if(!status.ok())LOG_WARN()<<"GatewayUpsert failed: "<<status.error_message();
@@ -133,6 +134,11 @@ int main(int argc, char* argv[]) {
   });
   sender.Start();
   auto last_flush=std::chrono::steady_clock::now();
+  auto last_report=last_flush;
+  const auto report=[&](const char* state){
+    auto loss=queue.DropReasons();
+    LOG_INFO()<<state<<" rejected="<<receiver.Rejected()<<" dropped_messages="<<queue.DroppedMessages()<<" retained_messages="<<queue.Messages()<<" retained_bytes="<<queue.Bytes()<<" capacity_drops="<<loss.capacity<<" oversize_drops="<<loss.oversize<<" pre_identity_drops="<<loss.pre_identity<<" invalid_drops="<<loss.invalid<<" connect_failures="<<sender.Reconnects()<<" push_failures="<<sender.PushFailures();
+  };
   while(g_running.load()){
     struct pollfd pfd={};pfd.fd=receiver.Fd();pfd.events=POLLIN;
     int result=poll(&pfd,1,100);
@@ -146,12 +152,13 @@ int main(int argc, char* argv[]) {
     }
     auto now=std::chrono::steady_clock::now();
     if(now-last_flush>=std::chrono::seconds(cfg.batch_sec)){queue.Seal();last_flush=now;}
+    if(now-last_report>=std::chrono::seconds(60)){report("running");last_report=now;}
   }
   const auto deadline=std::chrono::steady_clock::now()+std::chrono::milliseconds(cfg.shutdown_deadline_ms);
   if(sync_client)sync_client->CancelPending();
   bool drained=sender.Shutdown(std::max(0,static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(deadline-std::chrono::steady_clock::now()).count())));
   if(sync_thread.joinable())sync_thread.join();
   receiver.Close();
-  LOG_INFO()<<"stopped rejected="<<receiver.Rejected()<<" dropped_messages="<<queue.DroppedMessages()<<" retained_bytes="<<queue.Bytes()<<" push_failures="<<sender.PushFailures();
+  report("stopped");
   return drained?0:2;
 }

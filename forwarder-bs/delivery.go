@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/kudzutechnologies/analytics/api"
+	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -19,19 +20,21 @@ type queuedMetrics struct {
 }
 
 type DeliveryStats struct {
-	Batches, Messages, Bytes      int
-	DroppedMessages, PushFailures uint64
+	Batches, Messages, Bytes                                                 int
+	DroppedMessages, PushFailures                                            uint64
+	CapacityDrops, OversizeDrops, ClosedDrops, InvalidDrops, ConnectFailures uint64
 }
 
 // The queue owns every admitted object through partial, retry and in-flight
 // states. Wire-size charges are conservative when multiple records are merged.
 type deliveryQueue struct {
-	mu                                       sync.Mutex
-	items                                    []*queuedMetrics
-	maxBatches, maxMessages, maxBytes, bytes int
-	dropped, failures                        uint64
-	closed                                   bool
-	wake                                     chan struct{}
+	mu                                                                       sync.Mutex
+	items                                                                    []*queuedMetrics
+	maxBatches, maxMessages, maxBytes, bytes                                 int
+	dropped, failures                                                        uint64
+	capacityDrops, oversizeDrops, closedDrops, invalidDrops, connectFailures uint64
+	closed                                                                   bool
+	wake                                                                     chan struct{}
 }
 
 func newDeliveryQueue(c ForwarderConfig) *deliveryQueue {
@@ -55,6 +58,11 @@ func (q *deliveryQueue) add(key string, m *api.AnalyticsMetrics, evict bool) boo
 	}
 	if q.closed || n > q.maxMessages || b > q.maxBytes {
 		q.dropped += uint64(n)
+		if q.closed {
+			q.closedDrops += uint64(n)
+		} else {
+			q.oversizeDrops += uint64(n)
+		}
 		return false
 	}
 	for {
@@ -95,6 +103,7 @@ func (q *deliveryQueue) add(key string, m *api.AnalyticsMetrics, evict bool) boo
 		}
 		if index < 0 {
 			q.dropped += uint64(n)
+			q.capacityDrops += uint64(n)
 			return false
 		}
 		q.remove(index, true)
@@ -105,6 +114,7 @@ func (q *deliveryQueue) remove(i int, drop bool) {
 	q.bytes -= v.bytes
 	if drop {
 		q.dropped += uint64(v.messages)
+		q.capacityDrops += uint64(v.messages)
 	}
 	copy(q.items[i:], q.items[i+1:])
 	q.items[len(q.items)-1] = nil
@@ -141,7 +151,11 @@ func (q *deliveryQueue) complete(v *queuedMetrics, err error) {
 	for i, item := range q.items {
 		if item == v {
 			if err == nil || status.Code(err) == codes.InvalidArgument {
-				q.remove(i, err != nil)
+				if err != nil {
+					q.invalidDrops += uint64(item.messages)
+					q.dropped += uint64(item.messages)
+				}
+				q.remove(i, false)
 			} else {
 				item.inFlight = false
 			}
@@ -153,7 +167,7 @@ func (q *deliveryQueue) complete(v *queuedMetrics, err error) {
 func (q *deliveryQueue) snapshot() DeliveryStats {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	s := DeliveryStats{Batches: len(q.items), Bytes: q.bytes, DroppedMessages: q.dropped, PushFailures: q.failures}
+	s := DeliveryStats{Batches: len(q.items), Bytes: q.bytes, DroppedMessages: q.dropped, PushFailures: q.failures, CapacityDrops: q.capacityDrops, OversizeDrops: q.oversizeDrops, ClosedDrops: q.closedDrops, InvalidDrops: q.invalidDrops, ConnectFailures: q.connectFailures}
 	for _, v := range q.items {
 		s.Messages += v.messages
 	}
@@ -227,13 +241,18 @@ func (f *AnalyticsForwarder) sendLoop(ctx context.Context) {
 			err := f.backend.ConnectContext(attempt)
 			cancel()
 			if err != nil {
+				f.queue.mu.Lock()
+				f.queue.connectFailures++
+				f.queue.mu.Unlock()
+				if ctx.Err() == nil {
+					log.Warnf("analytics connection failed retry_seconds=%d", int(backoff/time.Second))
+				}
 				if !wait() {
 					return
 				}
 				continue
 			}
 			connected = true
-			backoff = time.Second
 		}
 		item, finished := f.queue.next()
 		if finished {
@@ -254,6 +273,9 @@ func (f *AnalyticsForwarder) sendLoop(ctx context.Context) {
 		cancel()
 		f.queue.complete(item, err)
 		if err != nil {
+			if ctx.Err() == nil {
+				log.Warnf("analytics push failed status=%s retry_seconds=%d", status.Code(err), int(backoff/time.Second))
+			}
 			connected = false
 			_ = f.backend.Disconnect()
 			if !wait() {

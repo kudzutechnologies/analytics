@@ -762,22 +762,26 @@ func (s *session) upstreamToGateway() {
 
 // DebugDumpWriter writes traffic for debugging.
 type DebugDumpWriter struct {
-	w  io.Writer
-	mu sync.Mutex
+	w         io.Writer
+	mu        sync.Mutex
+	remaining int64
 }
 
 // NewDebugDumpWriter creates a debug dump writer.
-func NewDebugDumpWriter(w io.Writer) *DebugDumpWriter {
-	return &DebugDumpWriter{w: w}
+func NewDebugDumpWriter(w io.Writer, limit int64) *DebugDumpWriter {
+	return &DebugDumpWriter{w: w, remaining: limit}
 }
 
-// Write writes a line: direction:key:base64payload:binary
+// Write appends a raw traffic record within the lifetime byte budget.
 func (d *DebugDumpWriter) Write(direction, key string, payload []byte, binary bool) {
 	if d == nil || d.w == nil {
 		return
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	if d.remaining <= 0 {
+		return
+	}
 	b := bytes.Buffer{}
 	b.WriteString(direction)
 	b.WriteString(":")
@@ -788,7 +792,15 @@ func (d *DebugDumpWriter) Write(direction, key string, payload []byte, binary bo
 		b.WriteString(":bin")
 	}
 	b.WriteString("\n")
-	_, _ = d.w.Write(b.Bytes())
+	p := b.Bytes()
+	if int64(len(p)) > d.remaining {
+		p = p[:d.remaining]
+	}
+	n, err := d.w.Write(p)
+	d.remaining -= int64(n)
+	if err != nil {
+		d.remaining = 0
+	}
 }
 
 // Shutdown closes hijacked WebSockets as well as ordinary HTTP connections.

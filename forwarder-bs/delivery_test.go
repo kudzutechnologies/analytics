@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"sync"
 	"testing"
@@ -11,6 +12,35 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
+func TestDebugDumpBudget(t *testing.T) {
+	var out bytes.Buffer
+	dump := NewDebugDumpWriter(&out, 16)
+	for i := 0; i < 10; i++ {
+		dump.Write("up", "fixture", []byte("payload"), false)
+	}
+	if out.Len() != 16 {
+		t.Fatalf("dump exceeded lifetime budget: %d", out.Len())
+	}
+}
+
+func TestLossReasons(t *testing.T) {
+	c := defaultConf
+	c.MaxBatches = 1
+	c.MaxMessages = 1
+	c.MaxBufferBytes = 1024
+	q := newDeliveryQueue(c)
+	q.add("a", testRecord(), true)
+	v, _ := q.next()
+	q.add("b", testRecord(), true)
+	q.complete(v, status.Error(codes.InvalidArgument, "fixture"))
+	q.seal(true)
+	q.add("a", testRecord(), true)
+	s := q.snapshot()
+	if s.DroppedMessages != 3 || s.CapacityDrops != 1 || s.InvalidDrops != 1 || s.ClosedDrops != 1 {
+		t.Fatalf("loss accounting: %+v", s)
+	}
+}
 
 func testRecord() *api.AnalyticsMetrics {
 	return &api.AnalyticsMetrics{GatewayId: "fixture", Uplinks: []*api.AnalyticsUplink{{Fhdr: []byte{0xe0, 1, 2, 3}, Size: 4}}}

@@ -383,9 +383,8 @@ func (f *AnalyticsForwarder) flushData() {
 		}
 		m := f.frame(key)
 		m.Stats = []*api.AnalyticsStat{{GwTime: time.Now().UnixMilli(), RxPackets: c.up, RxWithValidPhyCRC: c.up, RxForwarded: c.up, TxReceived: c.down, TxEmitted: c.emitted, IsGauge: f.config.GaugeStat}}
-		if f.queue.add(key, m, false) {
-			*c = radioCounters{}
-		}
+		f.queue.add(key, m, false)
+		*c = radioCounters{}
 	}
 	f.queue.seal(false)
 }
@@ -394,6 +393,12 @@ func (f *AnalyticsForwarder) queueSize() int { return f.queue.snapshot().Message
 func (f *AnalyticsForwarder) StartAndWait()  { f.Start(); <-f.done }
 func (f *AnalyticsForwarder) OnSessionClosed(key string) {
 	f.collectMu.Lock()
+	if c := f.counters[key]; c != nil && (c.up != 0 || c.down != 0 || c.emitted != 0) {
+		m := f.frame(key)
+		m.Stats = []*api.AnalyticsStat{{GwTime: time.Now().UnixMilli(), RxPackets: c.up, RxWithValidPhyCRC: c.up, RxForwarded: c.up, TxReceived: c.down, TxEmitted: c.emitted, IsGauge: f.config.GaugeStat}}
+		f.queue.add(key, m, false)
+		f.queue.seal(false)
+	}
 	delete(f.counters, key)
 	f.collectMu.Unlock()
 	f.drMu.Lock()

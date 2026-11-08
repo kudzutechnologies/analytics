@@ -48,13 +48,21 @@ func runMain() int {
 	}
 
 	var dump *DebugDumpWriter
-	if config.DebugDump != "" {
+	if config.DebugDump != "" && config.DebugDumpMaxBytes > 0 {
 		f, err := os.OpenFile(config.DebugDump, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
 		if err != nil {
 			log.Warnf("Could not open debug dump %s: %v", config.DebugDump, err)
 		} else {
-			dump = NewDebugDumpWriter(f)
-			log.Infof("Writing all traffic to %s", config.DebugDump)
+			defer f.Close()
+			if err := f.Chmod(0600); err != nil {
+				log.Fatal("Could not restrict debug dump permissions")
+			}
+			st, err := f.Stat()
+			if err != nil || !st.Mode().IsRegular() {
+				log.Fatal("Debug dump requires a regular file")
+			}
+			dump = NewDebugDumpWriter(f, int64(config.DebugDumpMaxBytes)-st.Size())
+			log.Infof("Writing bounded diagnostic traffic to %s", config.DebugDump)
 		}
 	}
 
@@ -98,13 +106,22 @@ func runMain() int {
 	serverErrors := make(chan error, 1)
 	go func() { serverErrors <- proxy.Start() }()
 	forwarder.Start()
+	statusTicker := time.NewTicker(time.Minute)
+	defer statusTicker.Stop()
 	code := 0
-	select {
-	case <-ctx.Done():
-	case err := <-serverErrors:
-		if err != nil && err != http.ErrServerClosed {
-			log.Error(err)
-			code = 1
+	running := true
+	for running {
+		select {
+		case <-ctx.Done():
+			running = false
+		case err := <-serverErrors:
+			if err != nil && err != http.ErrServerClosed {
+				log.Error(err)
+				code = 1
+			}
+			running = false
+		case <-statusTicker.C:
+			logDeliveryStatus("running", forwarder.DeliveryStats())
 		}
 	}
 	shutdown, cancel := context.WithTimeout(context.Background(), time.Duration(config.ShutdownDeadlineMS)*time.Millisecond)
@@ -113,7 +130,10 @@ func runMain() int {
 	if !forwarder.Stop(shutdown) && code == 0 {
 		code = 2
 	}
-	stats := forwarder.DeliveryStats()
-	log.Infof("stopped retained_messages=%d retained_bytes=%d dropped_messages=%d push_failures=%d", stats.Messages, stats.Bytes, stats.DroppedMessages, stats.PushFailures)
+	logDeliveryStatus("stopped", forwarder.DeliveryStats())
 	return code
+}
+
+func logDeliveryStatus(state string, s DeliveryStats) {
+	log.Infof("%s retained_messages=%d retained_bytes=%d dropped_messages=%d capacity_drops=%d oversize_drops=%d closed_drops=%d invalid_drops=%d connect_failures=%d push_failures=%d", state, s.Messages, s.Bytes, s.DroppedMessages, s.CapacityDrops, s.OversizeDrops, s.ClosedDrops, s.InvalidDrops, s.ConnectFailures, s.PushFailures)
 }
