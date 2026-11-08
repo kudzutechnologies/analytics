@@ -15,6 +15,11 @@ Restart=on-failure
 RestartSec=5
 RuntimeDirectory=basicstation
 RuntimeDirectoryMode=0750
+RuntimeDirectoryPreserve=yes
+# The daemon owns its configurable absolute drain deadline.
+TimeoutStopSec=infinity
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target

@@ -1,6 +1,9 @@
-# SPDX-License-Identifier: MIT
-# Copyright 2026 Kudzu Technologies
+# Configure credentials and the matching Basic Station socket before enabling.
+DISABLE_KUDZU_BS_ANALYTICS=yes
 CONFIGURATION_FILE=/etc/kudzu-bs-analytics.conf
-LOG_FILE=/var/log/kudzu-bs-analytics.log
-# DISABLE_KUDZU_BS_ANALYTICS=yes
+# Application log files are opt-in. Prefer supervisor-managed logs.
+LOG_FILE=
 EXTRA_ARGS=
+# Optional minimum-retention environment overrides:
+# export MAX_BATCHES=1 MAX_MESSAGES=1 MAX_BUFFER_BYTES=1024
+# export PRE_IDENTITY_MAX_MESSAGES=0 SOCKET_RCVBUF_BYTES=1024 POLL_MAX_DATAGRAMS=1
