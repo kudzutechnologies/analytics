@@ -1,0 +1,48 @@
+---
+description: Analytics GatewayUpsert/Delete protocol, client parity, codegen, and non-blocking forwarder gateway sync.
+globs: api/**/*,client/**/*,client-cc/**/*,forwarder/**/*,forwarder-cc/**
+alwaysApply: false
+---
+# Gateway Sync (analytics)
+
+## Protocol
+
+In `api/api.proto` (additive only — never reuse field numbers):
+
+- `rpc GatewayUpsert(ReqGatewayUpsert) returns (RespGatewaySync)`
+- `rpc GatewayDelete(ReqGatewayDelete) returns (RespGatewaySync)`
+
+Optional fields use protobuf presence. List wrappers (`GatewayTags`, `GatewayRadios`): omitted = leave unchanged; present empty = clear.
+
+Auth: JWT `token` metadata like `PushMetrics` (Hello/Login remain unauthenticated).
+
+## Codegen
+
+`make api` regenerates:
+
+1. Go: `api/*.pb.go`, `api/*_grpc.pb.go`
+2. C++: `client-cc/src/protobuf/*.{pb,grpc.pb}.{cc,h}` via `protoc` + `grpc_cpp_plugin`
+
+Keep Go and C++ clients in parity (`client/client.go`, `client-cc`). Forwarder behavior must stay in parity between `forwarder/` (Go) and `forwarder-cc/` (C++).
+
+## Forwarder config
+
+Optional keys (any one present enables sync; then `gateway-eid` or `gateway-eui` required):
+
+| Key | Meaning |
+|-----|---------|
+| `gateway` | Kudzu ObjectID (`gateway_id`) |
+| `gateway-eid` | External ID |
+| `gateway-eui` | 16 hex chars (8 bytes) |
+| `gateway-name` | Display name |
+| `gateway-location` | `lat,lon[,alt]` |
+| `gateway-radios` | `rf_chain:max_tx_power[:tx_sensitivity][,...]` |
+
+Implemented in:
+
+- Go: `forwarder/gateway_sync.go`, wired from `forwarder/forwarder.go`
+- C++: `forwarder-cc/gateway_sync.{h,cc}`, wired from `forwarder-cc/forwarder.cc`
+
+## Non-blocking invariant
+
+After successful analytics connect, schedule `GatewayUpsert` in the background (**Go**: detached goroutine; **C++**: one managed `std::thread`). Never await it before UDP proxy event handling or inside receive/forward paths. Install proxy event handlers first. Log failures; do not stop proxying. No automatic delete.
