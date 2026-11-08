@@ -44,6 +44,8 @@ def main():
         if not re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?',tag):raise ValueError('release tag must be a semantic version prefixed with v')
         if git('status','--porcelain'):raise ValueError('release requires a clean checkout')
         sdk,producer,ref,evidence=inputs()
+        if not shutil.which('docker') or not (ROOT/'forwarder/pkg/kerlink/ipk/gen_remove_ipk').is_file():
+            raise ValueError('legacy UDP packages require Docker and the Kerlink gen_remove_ipk tool in forwarder/pkg/kerlink/ipk')
         if args.check:print('Release prerequisites available; target compilation/ABI checks still required');return 0
         version=tag[1:];output=ROOT/'releases'/tag;output.mkdir(parents=True,exist_ok=True)
         records=[]
@@ -67,7 +69,7 @@ def main():
         # Preserve existing UDP IPK/removal-package generation. Its tooling must
         # be installed separately; failures are fatal rather than omitted.
         subprocess.run(['make','-C',str(ROOT/'forwarder/pkg/kerlink'),'all',f'PKG_VERSION={version}',f'BIN_DIR={output}'],check=True)
-        for name in [f'kudzu-forwarder_{version}_klkgw.ipk','kudzu-forwarder-remove.ipk']:
+        for name in [f'kudzu-forwarder_{version}_klkgw.ipk',f'kudzu-forwarder_{version}_klkgw.ipk-remove.ipk']:
             shutil.copy2(ROOT/'forwarder/pkg/kerlink'/name,output/name)
         manifest={'tag':tag,'source_commit':git('rev-parse','HEAD'),'producer_ref':ref,'cpp':records}
         (output/'release-manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
