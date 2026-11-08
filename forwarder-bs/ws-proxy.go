@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"hash/crc32"
 	"io"
@@ -20,7 +21,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	lru "github.com/hashicorp/golang-lru/v2"
+
 	log "github.com/sirupsen/logrus"
 )
 
@@ -44,6 +45,8 @@ type WSProxyEvents interface {
 
 // WSProxyConfig holds configuration for the WebSocket proxy.
 type WSProxyConfig struct {
+	PingInterval, PongTimeout time.Duration
+
 	ProxyMode, PublicURI, GatewayAuthFile, LocalRouter, UpstreamAllowedOrigins, CUPSMode string
 	InjectRouterIntoVersion                                                              bool
 
@@ -72,12 +75,20 @@ type WSProxyConfig struct {
 
 // WSProxy is the WebSocket man-in-the-middle proxy.
 type WSProxy struct {
+	routesMu  sync.Mutex
+	routes    map[string]string
+	pendingMu sync.Mutex
+	pending   map[*websocket.Conn]struct{}
+	admission chan struct{}
+	root      context.Context
+	cancel    context.CancelFunc
+
 	auth *gatewayRegistry
 
 	config     *WSProxyConfig
 	server     *http.Server
 	upgrader   websocket.Upgrader
-	sessions   *lru.Cache[string, *session]
+	sessions   *sessionRegistry
 	httpClient *http.Client
 }
 
@@ -145,89 +156,41 @@ func loadAndLogCertsFromPEM(prefix string, pemData []byte) ([]*x509.Certificate,
 
 // dialer returns a WebSocket dialer for the upstream. If clientCert is non-nil it is used for TLS client auth
 // (required by many LNS e.g. ThingPark for router-info and data WebSocket).
-func (p *WSProxyConfig) dialer(clientCert *tls.Certificate) (*websocket.Dialer, error) {
-	d := &websocket.Dialer{HandshakeTimeout: wsHandshakeTimeout}
-	connectURL, err := url.Parse(p.ConnectURI)
+func (p *WSProxyConfig) dialer(cert *tls.Certificate) (*websocket.Dialer, error) {
+	return p.dialerFor(cert, false)
+}
+func (p *WSProxyConfig) dialerFor(cert *tls.Certificate, data bool) (*websocket.Dialer, error) {
+	roots, err := x509.SystemCertPool()
 	if err != nil {
-		return nil, fmt.Errorf("connect-uri: %w", err)
+		return nil, err
 	}
-	if p.ConnectTLSCA != "" || p.ConnectTLSInsecure || clientCert != nil {
-		tlsConfig := &tls.Config{
-			InsecureSkipVerify: p.ConnectTLSInsecure,
-			ServerName:         connectURL.Hostname(),
+	if roots == nil {
+		roots = x509.NewCertPool()
+	}
+	ca := p.ConnectTLSCA
+	insecure := p.ConnectTLSInsecure
+	name := ""
+	if data {
+		if p.ConnectDataTLSCA != "" {
+			ca = p.ConnectDataTLSCA
 		}
-		if p.ConnectTLSCA != "" {
-			b, err := os.ReadFile(p.ConnectTLSCA)
-			if err != nil {
-				return nil, fmt.Errorf("read connect-tls-ca: %w", err)
-			}
-			if _, err := loadAndLogCertsFromPEM("connect-tls-ca", b); err != nil {
-				return nil, err
-			}
-			pool := x509.NewCertPool()
-			pool.AppendCertsFromPEM(b)
-			tlsConfig.RootCAs = pool
+		insecure = insecure || p.ConnectDataTLSInsecure
+		name = p.ConnectDataTLSServerName
+	}
+	if ca != "" {
+		raw, err := os.ReadFile(ca)
+		if err != nil {
+			return nil, err
 		}
-		if clientCert != nil {
-			tlsConfig.Certificates = []tls.Certificate{*clientCert}
-		}
-		d.TLSClientConfig = tlsConfig
-		d.NetDialTLSContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
-			// Use the host we are actually connecting to for TLS ServerName (and SNI), so verification
-			// succeeds when the data connection goes to a different host than connect-uri (e.g. connect-data-uri).
-			host, _, err := net.SplitHostPort(addr)
-			if err != nil {
-				host = addr
-			}
-			config := tlsConfig.Clone()
-			config.ServerName = host
-			isDataHost := false
-			if p.ConnectDataURI != "" {
-				if dataURL, parseErr := url.Parse(p.ConnectDataURI); parseErr == nil && dataURL.Hostname() != "" {
-					isDataHost = (host == dataURL.Hostname())
-				}
-			}
-			if isDataHost {
-				if p.ConnectDataTLSServerName != "" {
-					config.ServerName = strings.TrimSpace(p.ConnectDataTLSServerName)
-				}
-				if p.ConnectDataTLSInsecure {
-					config.InsecureSkipVerify = true
-				}
-				if p.ConnectDataTLSCA != "" {
-					b, err := os.ReadFile(p.ConnectDataTLSCA)
-					if err != nil {
-						return nil, fmt.Errorf("connect-data-tls-ca: %w", err)
-					}
-					if _, err := loadAndLogCertsFromPEM("connect-data-tls-ca", b); err != nil {
-						// log only, still use the certs
-					}
-					pool := x509.NewCertPool()
-					pool.AppendCertsFromPEM(b)
-					config.RootCAs = pool
-				}
-			}
-			nd := net.Dialer{}
-			rawConn, err := nd.DialContext(ctx, network, addr)
-			if err != nil {
-				return nil, err
-			}
-			tlsConn := tls.Client(rawConn, config)
-			if err := tlsConn.HandshakeContext(ctx); err != nil {
-				rawConn.Close()
-				return nil, err
-			}
-			if log.IsLevelEnabled(log.DebugLevel) {
-				state := tlsConn.ConnectionState()
-				logCertDetails("upstream peer", state.PeerCertificates)
-				for j, chain := range state.VerifiedChains {
-					logCertDetails(fmt.Sprintf("upstream verified chain %d", j+1), chain)
-				}
-			}
-			return tlsConn, nil
+		if !roots.AppendCertsFromPEM(raw) {
+			return nil, fmt.Errorf("invalid upstream CA")
 		}
 	}
-	return d, nil
+	conf := &tls.Config{RootCAs: roots, InsecureSkipVerify: insecure, ServerName: name, MinVersion: tls.VersionTLS12}
+	if cert != nil {
+		conf.Certificates = []tls.Certificate{*cert}
+	}
+	return &websocket.Dialer{HandshakeTimeout: wsHandshakeTimeout, TLSClientConfig: conf}, nil
 }
 
 // clientCertForGateway returns the TLS client cert to use for upstream (router-info / data) for the given gateway.
@@ -279,45 +242,54 @@ func (p *WSProxyConfig) buildHTTPClient(clientCert *tls.Certificate) *http.Clien
 
 // dialWithRedirects dials the upstream WebSocket, following 301/302/307/308 redirects.
 // On non-redirect failure it returns an error whose string includes " — HTTP %d — body: ..." so callers can detect 200 (HTML) and try another path.
-func (p *WSProxyConfig) dialWithRedirects(dialer *websocket.Dialer, targetURI string, reqHeader http.Header) (conn *websocket.Conn, err error) {
-	u := targetURI
-	for redirect := 0; redirect < maxDialRedirect; redirect++ {
-		var resp *http.Response
-		if !p.allowedUpstream(u) {
+type upstreamHandshakeError struct {
+	status int
+	err    error
+}
+
+func (e *upstreamHandshakeError) Error() string {
+	return fmt.Sprintf("upstream handshake HTTP %d: %v", e.status, e.err)
+}
+func (p *WSProxyConfig) dialWithRedirects(d *websocket.Dialer, uri string, h http.Header) (*websocket.Conn, error) {
+	return p.dialContextWithRedirects(context.Background(), d, uri, h)
+}
+func (p *WSProxyConfig) dialContextWithRedirects(ctx context.Context, d *websocket.Dialer, uri string, h http.Header) (*websocket.Conn, error) {
+	for i := 0; i < maxDialRedirect; i++ {
+		if !p.allowedUpstream(uri) {
 			return nil, fmt.Errorf("upstream origin is not allowed")
 		}
-		conn, resp, err = dialer.Dial(u, reqHeader)
+		c, resp, err := d.DialContext(ctx, uri, h)
 		if err == nil {
-			return conn, nil
+			return c, nil
 		}
 		if resp == nil {
 			return nil, err
 		}
-		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
-		status := resp.StatusCode
-		if status != 301 && status != 302 && status != 307 && status != 308 {
-			return nil, fmt.Errorf("%w — HTTP %d — body: %s", err, status, string(body))
+		code := resp.StatusCode
+		if code != 301 && code != 302 && code != 307 && code != 308 {
+			return nil, &upstreamHandshakeError{status: code, err: err}
 		}
 		location := resp.Header.Get("Location")
 		if location == "" {
-			return nil, fmt.Errorf("%w — HTTP %d (no Location) — body: %s", err, status, string(body))
+			return nil, &upstreamHandshakeError{status: code, err: err}
 		}
-		base, _ := url.Parse(u)
-		next, err := base.Parse(location)
-		if err != nil {
-			return nil, fmt.Errorf("redirect Location parse: %w", err)
+		base, e := url.Parse(uri)
+		if e != nil {
+			return nil, e
 		}
-		// Normalize scheme for WebSocket (redirects often return https://)
+		next, e := base.Parse(location)
+		if e != nil {
+			return nil, e
+		}
 		if next.Scheme == "https" {
 			next.Scheme = "wss"
 		} else if next.Scheme == "http" {
 			next.Scheme = "ws"
 		}
-		log.Debugf("following redirect %d -> %s", status, next.String())
-		u = next.String()
+		uri = next.String()
 	}
-	return nil, fmt.Errorf("too many redirects (>%d)", maxDialRedirect)
+	return nil, fmt.Errorf("too many upstream redirects")
 }
 
 // injectRouterIntoVersionMessage adds "router" (EUI format) to a version message if missing, so the LNS can identify the gateway.
@@ -418,11 +390,16 @@ func NewWSProxy(config *WSProxyConfig) (*WSProxy, error) {
 		}
 	}
 
-	sessions, err := lru.NewWithEvict[string, *session](config.MaxStreams, func(key string, s *session) {
-		s.close()
-	})
-	if err != nil {
-		return nil, fmt.Errorf("lru sessions: %w", err)
+	if config.MaxStreams < 1 {
+		return nil, fmt.Errorf("max streams must be positive")
+	}
+	sessions := &sessionRegistry{items: make(map[string]*session), capacity: config.MaxStreams}
+	root, cancel := context.WithCancel(context.Background())
+	if config.PingInterval <= 0 {
+		config.PingInterval = 20 * time.Second
+	}
+	if config.PongTimeout <= 0 {
+		config.PongTimeout = 60 * time.Second
 	}
 	upgrader := websocket.Upgrader{
 		ReadBufferSize:  1024,
@@ -432,7 +409,8 @@ func NewWSProxy(config *WSProxyConfig) (*WSProxy, error) {
 		},
 	}
 	p := &WSProxy{
-		config:     config,
+		config: config,
+		routes: make(map[string]string), pending: make(map[*websocket.Conn]struct{}), admission: make(chan struct{}, config.MaxStreams), root: root, cancel: cancel,
 		auth:       registry,
 		upgrader:   upgrader,
 		sessions:   sessions,
@@ -442,7 +420,7 @@ func NewWSProxy(config *WSProxyConfig) (*WSProxy, error) {
 	mux.HandleFunc("/router-info", p.handleRouterInfo)
 	mux.HandleFunc("/", p.handleDataConnection)
 	p.server = &http.Server{
-		Addr:         fmt.Sprintf("%s:%d", config.ListenHost, config.ListenPort),
+		Addr:         net.JoinHostPort(config.ListenHost, strconv.Itoa(config.ListenPort)),
 		Handler:      mux,
 		ReadTimeout:  httpServerTimeout,
 		WriteTimeout: httpServerTimeout,
@@ -463,11 +441,6 @@ func (p *WSProxy) Start() error {
 			ClientAuth:   tls.RequestClientCert,
 			MinVersion:   tls.VersionTLS12,
 		}
-		if p.config.CertStore != nil {
-			if pool := p.config.CertStore.ClientCACertPool(); pool != nil {
-				tlsConfig.ClientCAs = pool
-			}
-		}
 		listener, err := tls.Listen("tcp", p.server.Addr, tlsConfig)
 		if err != nil {
 			return err
@@ -479,156 +452,96 @@ func (p *WSProxy) Start() error {
 
 // handleRouterInfo handles the discovery phase: forward request to LNS, rewrite uri in response to point to proxy.
 func (p *WSProxy) handleRouterInfo(w http.ResponseWriter, r *http.Request) {
-	gatewayConn, err := p.upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		log.Warnf("router-info upgrade: %v", err)
+	if !p.admit(w) {
 		return
 	}
-	defer gatewayConn.Close()
-
-	_, msg, err := gatewayConn.ReadMessage()
+	defer p.release()
+	gateway, err := p.upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Warnf("router-info read: %v", err)
+		return
+	}
+	p.track(gateway, true)
+	defer func() { p.track(gateway, false); gateway.Close() }()
+	gateway.SetReadLimit(maxMessageSize)
+	_ = gateway.SetReadDeadline(time.Now().Add(wsHandshakeTimeout))
+	_, raw, err := gateway.ReadMessage()
+	if err != nil {
 		return
 	}
 	var req RouterInfoRequest
-	if err := json.Unmarshal(msg, &req); err != nil {
-		log.Warnf("router-info parse: %v", err)
+	if err = json.Unmarshal(raw, &req); err != nil {
+		_ = gateway.WriteJSON(map[string]string{"error": "invalid router identity"})
 		return
 	}
-	pre := gatewayLogPrefix(req.Router)
-	log.Debugf("%srouter-info request", pre)
-	if p.config.Verbose && len(msg) > 0 {
-		log.Debug(Hexdump(pre+"router-info request ", msg, 512))
+	id, err := p.authorize(r, req.Router)
+	if err != nil {
+		_ = gateway.WriteJSON(map[string]string{"error": "gateway authorization rejected"})
+		return
 	}
-
-	// Discovery URL: connect-discovery-uri if set; else when connect-data-uri is set use its host + connect-discovery-path
-	// (so e.g. ThingPark data on lns.thingpark.com gets discovery on lns.thingpark.com/router-info, not community.thingpark.io); else connect-uri + path.
-	var discoveryURI string
-	if p.config.ConnectDiscoveryURI != "" {
-		discoveryURI = p.config.ConnectDiscoveryURI
-	} else {
-		baseURL := p.config.ConnectURI
+	discovery := p.config.ConnectDiscoveryURI
+	if discovery == "" {
+		base := p.config.ConnectURI
 		if p.config.ConnectDataURI != "" {
-			baseURL = strings.TrimSpace(p.config.ConnectDataURI)
+			base = p.config.ConnectDataURI
 		}
-		connectURL, err := url.Parse(baseURL)
-		if err != nil {
-			log.Warnf("%sdiscovery base URI parse: %v", pre, err)
+		u, e := url.Parse(base)
+		if e != nil {
 			return
 		}
 		path := p.config.ConnectDiscoveryPath
 		if path == "" {
 			path = "/router-info"
-		} else if path[0] != '/' {
-			path = "/" + path
 		}
-		connectURL.Path = path
-		connectURL.RawPath = ""
-		connectURL.RawQuery = ""
-		discoveryURI = connectURL.String()
+		u.Path = "/" + strings.TrimPrefix(path, "/")
+		u.RawPath = ""
+		u.RawQuery = ""
+		discovery = u.String()
 	}
-	log.Debugf("%srouter-info discovery URI: %s", pre, discoveryURI)
-
-	gatewayID, authErr := p.authorize(r, req.Router)
-	if authErr != nil {
-		log.Warn("router-info authorization rejected")
-		_ = gatewayConn.WriteJSON(map[string]string{"error": "gateway authorization rejected"})
-		return
-	}
-	clientCert := p.config.clientCertForGatewayWebSocket(gatewayID)
-	if clientCert != nil {
-		log.Debugf("%srouter-info upstream using client cert for gateway %s", pre, gatewayID)
-	}
-	dialer, err := p.config.dialer(clientCert)
+	dialer, err := p.config.dialer(p.config.clientCertForGatewayWebSocket(id))
 	if err != nil {
-		log.Warnf("%srouter-info dialer: %v", pre, err)
 		return
 	}
-	reqHeader := p.upstreamHeaders(gatewayID, "tc", r.Header)
-	upstreamConn, dialResp, lastErr := dialer.Dial(discoveryURI, reqHeader)
-	if lastErr != nil {
-		var dialStatus int
-		var dialBody string
-		if dialResp != nil {
-			dialStatus = dialResp.StatusCode
-			body, _ := io.ReadAll(dialResp.Body)
-			dialResp.Body.Close()
-			dialBody = string(body)
-			if len(dialBody) > 500 {
-				dialBody = dialBody[:500] + "..."
-			}
-		}
-		if dialStatus == 404 {
-			scheme := "ws"
-			if r.TLS != nil {
-				scheme = "wss"
-			}
-			dataURI := fmt.Sprintf("%s://%s/", scheme, r.Host)
-			synthetic := RouterInfoResponse{Router: req.Router, URI: dataURI}
-			log.Infof("%srouter-info upstream returned 404; responding with synthetic router-info (data URI: %s)", pre, dataURI)
-			if err := gatewayConn.WriteJSON(synthetic); err != nil {
-				log.Warnf("%srouter-info synthetic write: %v", pre, err)
-			}
-			return
-		}
-		if dialStatus != 0 || dialBody != "" {
-			log.Warnf("%srouter-info upstream dial: %v (URI: %s, HTTP %d, body: %s)", pre, lastErr, discoveryURI, dialStatus, dialBody)
+	ctx, cancel := context.WithTimeout(p.root, wsHandshakeTimeout)
+	defer cancel()
+	upstream, err := p.config.dialContextWithRedirects(ctx, dialer, discovery, p.upstreamHeaders(id, "tc", r.Header))
+	if err != nil {
+		var handshake *upstreamHandshakeError
+		if errors.As(err, &handshake) && handshake.status == http.StatusNotFound {
+			p.setRoute(id, "")
+			_ = gateway.WriteJSON(RouterInfoResponse{Router: gatewayIDToEUIFormat(id), URI: appendRouterQuery(p.publicURI(), id)})
 		} else {
-			log.Warnf("%srouter-info upstream dial: %v (URI: %s)", pre, lastErr, discoveryURI)
+			_ = gateway.WriteJSON(map[string]string{"error": "upstream discovery failed"})
 		}
-		_ = gatewayConn.WriteJSON(map[string]string{"error": lastErr.Error()})
 		return
 	}
-	defer upstreamConn.Close()
-	if dialResp != nil {
-		dialResp.Body.Close()
-	}
-
-	if err := upstreamConn.WriteMessage(websocket.TextMessage, msg); err != nil {
-		log.Warnf("%srouter-info upstream write: %v", pre, err)
+	defer upstream.Close()
+	_ = upstream.SetWriteDeadline(time.Now().Add(writeWait))
+	_ = upstream.SetReadDeadline(time.Now().Add(wsHandshakeTimeout))
+	upstream.SetReadLimit(maxMessageSize)
+	if upstream.WriteMessage(websocket.TextMessage, raw) != nil {
 		return
 	}
-	_, respMsg, err := upstreamConn.ReadMessage()
+	_, response, err := upstream.ReadMessage()
 	if err != nil {
-		log.Warnf("%srouter-info upstream read: %v", pre, err)
 		return
 	}
-	if p.config.Verbose && len(respMsg) > 0 {
-		log.Debug(Hexdump(pre+"router-info response from upstream ", respMsg, 512))
-	}
-	var resp RouterInfoResponse
-	if err := json.Unmarshal(respMsg, &resp); err != nil {
-		log.Warnf("%srouter-info upstream parse: %v", pre, err)
+	var info RouterInfoResponse
+	if json.Unmarshal(response, &info) != nil {
 		return
 	}
-	log.Debugf("%srouter-info LNS response (from upstream):", pre)
-	log.Debugf("%s  router: %q", pre, resp.Router)
-	log.Debugf("%s  muxs:   %q", pre, resp.Muxs)
-	log.Debugf("%s  uri:    %q", pre, resp.URI)
-	log.Debugf("%s  error:  %q", pre, resp.Error)
-	if resp.Error != "" {
-		log.Warnf("%srouter-info upstream error: %s", pre, resp.Error)
-		_ = gatewayConn.WriteMessage(websocket.TextMessage, respMsg)
+	if info.Error != "" {
+		p.setRoute(id, "")
+		_ = gateway.WriteMessage(websocket.TextMessage, response)
 		return
 	}
-	// Store the full LNS-allocated config for this gateway (tc.uri etc.) so we use it for upstream data connection and do not rely on config file for LNS endpoint.
-	if p.config.CertStore != nil && gatewayID != "" {
-		cfg := &GatewayLNSConfig{Router: resp.Router, Muxs: resp.Muxs, URI: resp.URI}
-		if err := p.config.CertStore.SetGatewayLNSConfig(gatewayID, cfg); err != nil {
-			log.Warnf("%sstore LNS config for gateway: %v", pre, err)
-		}
+	if (info.Router != "" && NormalizeGatewayID(info.Router) != id) || info.URI == "" || !p.config.allowedUpstream(info.URI) {
+		_ = gateway.WriteJSON(map[string]string{"error": "unapproved discovery endpoint"})
+		return
 	}
-	// Rewrite uri to point to this proxy (r.Host is our listen host:port as seen by the client)
-	scheme := "ws"
-	if r.TLS != nil {
-		scheme = "wss"
-	}
-	resp.URI = fmt.Sprintf("%s://%s/", scheme, r.Host)
-	rewritten, _ := json.Marshal(resp)
-	if err := gatewayConn.WriteMessage(websocket.TextMessage, rewritten); err != nil {
-		log.Warnf("%srouter-info gateway write: %v", pre, err)
-	}
+	p.setRoute(id, info.URI)
+	info.Router = gatewayIDToEUIFormat(id)
+	info.URI = appendRouterQuery(p.publicURI(), id)
+	_ = gateway.WriteJSON(info)
 }
 
 // isWebSocketUpgrade returns true if the request asks for a WebSocket upgrade.
@@ -1047,82 +960,77 @@ func (p *WSProxy) handleDataConnection(w http.ResponseWriter, r *http.Request) {
 		p.handleHTTPProxy(w, r)
 		return
 	}
-	gatewayID, authErr := p.authorize(r, r.URL.Query().Get("router"))
-	if authErr != nil {
+	id, err := p.authorize(r, r.URL.Query().Get("router"))
+	if err != nil {
 		http.Error(w, "gateway authorization rejected", http.StatusForbidden)
 		return
 	}
-	gatewayConn, err := p.upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		log.Warnf("data connection upgrade: %v", err)
+	if !p.admit(w) {
 		return
 	}
-	// Identity was authorized before upgrading or consulting credential storage.
-	// If no router/CN, try to identify gateway by matching the client cert against our stored certs (LNS- or proxy-issued).
-	if gatewayID == "" && r.TLS != nil && len(r.TLS.PeerCertificates) > 0 && p.config.CertStore != nil {
-		gatewayID = p.config.CertStore.GatewayIDForClientCert(r.TLS.PeerCertificates[0])
-	}
-	// Session key: use stable gateway ID when known; otherwise a non-persisted key so we never create certs/config by endpoint.
-	gatewayKey := gatewayID
-	if gatewayKey == "" {
-		gatewayKey = "anon-" + strings.ReplaceAll(r.RemoteAddr, ":", "_")
-	}
-	clientCert := p.config.clientCertForGatewayWebSocket(gatewayID)
-	if clientCert != nil {
-		log.Debugf("data upstream using client cert for gateway %s", gatewayID)
-	}
-	dialer, err := p.config.dialer(clientCert)
+	released := false
+	defer func() {
+		if !released {
+			p.release()
+		}
+	}()
+	uri, err := p.config.dataURI()
 	if err != nil {
-		log.Warnf("data dialer: %v", err)
-		gatewayConn.Close()
+		http.Error(w, "invalid upstream", 502)
 		return
 	}
-	reqHeader := p.upstreamHeaders(gatewayID, "tc", r.Header)
+	p.routesMu.Lock()
+	if assigned := p.routes[id]; assigned != "" {
+		uri = assigned
+	}
+	p.routesMu.Unlock()
+	uri = appendRouterQuery(uri, gatewayIDToEUIFormat(id))
+	dialer, err := p.config.dialerFor(p.config.clientCertForGatewayWebSocket(id), true)
+	if err != nil {
+		http.Error(w, "upstream TLS configuration failed", 502)
+		return
+	}
 	if p.config.ConnectWSSubprotocol != "" {
-		reqHeader.Set("Sec-WebSocket-Protocol", p.config.ConnectWSSubprotocol)
+		dialer.Subprotocols = []string{p.config.ConnectWSSubprotocol}
+	} else {
+		dialer.Subprotocols = websocket.Subprotocols(r)
 	}
-	dataURI, err := p.config.dataURIForGateway(gatewayID)
+	ctx, cancel := context.WithTimeout(p.root, wsHandshakeTimeout)
+	defer cancel()
+	upstream, err := p.config.dialContextWithRedirects(ctx, dialer, uri, p.upstreamHeaders(id, "tc", r.Header))
 	if err != nil {
-		log.Warnf("data URI: %v", err)
-		gatewayConn.Close()
+		http.Error(w, "upstream handshake failed", 502)
 		return
 	}
-	// Some LNS (e.g. ThingPark) expect the gateway identity in the URL; append router query so the LNS can associate the WebSocket.
-	// Use EUI-style with colons when we only have normalized gatewayID (e.g. b91a:3108:ac08:8317).
-	routerParam := r.URL.Query().Get("router")
-	if routerParam == "" && gatewayID != "" {
-		routerParam = gatewayIDToEUIFormat(gatewayID)
-	}
-	if routerParam != "" {
-		dataURI = appendRouterQuery(dataURI, routerParam)
-	}
-	if p.config.CertStore != nil {
-		if _, ok := p.config.CertStore.GetGatewayDataURI(gatewayID); ok {
-			log.Debugf("data upstream using stored URI for gateway %s: %s", gatewayID, dataURI)
+	upgrader := p.upgrader
+	for _, offered := range websocket.Subprotocols(r) {
+		if offered == upstream.Subprotocol() {
+			upgrader.Subprotocols = []string{offered}
+			break
 		}
 	}
-	log.Debugf("data upstream connecting to %s", dataURI)
-	upstreamConn, err := p.config.dialWithRedirects(dialer, dataURI, reqHeader)
+	gateway, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Warnf("data upstream handshake failed (gateway %s): %v (URI: %s)", gatewayID, err, dataURI)
-		gatewayConn.Close()
+		upstream.Close()
 		return
 	}
-
-	s := &session{
-		gatewayKey:   gatewayKey,
-		gatewayConn:  gatewayConn,
-		upstreamConn: upstreamConn,
-		config:       p.config,
-		events:       p.config.Events,
-		done:         make(chan struct{}),
+	connection := &session{gatewayKey: id, gatewayConn: gateway, upstreamConn: upstream, config: p.config, events: p.config.Events, done: make(chan struct{})}
+	if !p.sessions.Add(id, connection) {
+		connection.close()
+		return
 	}
-	p.sessions.Add(gatewayKey, s)
-	go s.upstreamPingLoop()
-	go s.gatewayToUpstream()
-	go s.upstreamToGateway()
-	<-s.done
-	p.sessions.Remove(gatewayKey)
+	// Admission limits pending handshakes, not the lifetime of established sessions.
+	p.release()
+	released = true
+	go connection.upstreamPingLoop()
+	go connection.gatewayToUpstream()
+	go connection.upstreamToGateway()
+	<-connection.done
+	if p.sessions.RemoveCurrent(id, connection) {
+		if events, ok := p.config.Events.(interface{ OnSessionClosed(string) }); ok {
+			events.OnSessionClosed(id)
+		}
+	}
 }
 
 func (s *session) close() {
@@ -1139,24 +1047,18 @@ func (s *session) close() {
 
 // upstreamPingLoop sends WebSocket ping frames to the LNS periodically so the server (or load balancer) keeps the connection active. Delay the first ping so the version message is sent first; some LNS (e.g. ThingPark) may close the connection if they receive a ping before the expected first application message.
 func (s *session) upstreamPingLoop() {
-	firstPingDelay := 2 * time.Second
-	select {
-	case <-s.done:
-		return
-	case <-time.After(firstPingDelay):
-		if err := s.upstreamConn.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(writeWait)); err != nil {
-			return
-		}
-	}
-	ticker := time.NewTicker(pingPeriod)
+	ticker := time.NewTicker(s.config.PingInterval)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-s.done:
 			return
 		case <-ticker.C:
-			if err := s.upstreamConn.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(writeWait)); err != nil {
-				return
+			for _, c := range []*websocket.Conn{s.gatewayConn, s.upstreamConn} {
+				if c.WriteControl(websocket.PingMessage, nil, time.Now().Add(writeWait)) != nil {
+					s.close()
+					return
+				}
 			}
 		}
 	}
@@ -1165,9 +1067,9 @@ func (s *session) upstreamPingLoop() {
 func (s *session) gatewayToUpstream() {
 	defer s.close()
 	s.gatewayConn.SetReadLimit(maxMessageSize)
-	s.gatewayConn.SetReadDeadline(time.Now().Add(pongWait))
+	s.gatewayConn.SetReadDeadline(time.Now().Add(s.config.PongTimeout))
 	s.gatewayConn.SetPongHandler(func(string) error {
-		s.gatewayConn.SetReadDeadline(time.Now().Add(pongWait))
+		s.gatewayConn.SetReadDeadline(time.Now().Add(s.config.PongTimeout))
 		return nil
 	})
 	for {
@@ -1190,7 +1092,7 @@ func (s *session) gatewayToUpstream() {
 		}
 		// Some LNS (e.g. ThingPark) require the gateway identity in the first (version) message; inject "router" if missing.
 		toSend := msg
-		if mt == websocket.TextMessage && len(msg) > 0 && !strings.HasPrefix(s.gatewayKey, "anon-") {
+		if s.config.InjectRouterIntoVersion && mt == websocket.TextMessage && len(msg) > 0 {
 			if injected, ok := injectRouterIntoVersionMessage(msg, s.gatewayKey); ok {
 				toSend = injected
 			}
@@ -1217,9 +1119,9 @@ func (s *session) gatewayToUpstream() {
 func (s *session) upstreamToGateway() {
 	defer s.close()
 	s.upstreamConn.SetReadLimit(maxMessageSize)
-	s.upstreamConn.SetReadDeadline(time.Now().Add(pongWait))
+	s.upstreamConn.SetReadDeadline(time.Now().Add(s.config.PongTimeout))
 	s.upstreamConn.SetPongHandler(func(string) error {
-		s.upstreamConn.SetReadDeadline(time.Now().Add(pongWait))
+		s.upstreamConn.SetReadDeadline(time.Now().Add(s.config.PongTimeout))
 		return nil
 	})
 	for {
@@ -1228,7 +1130,11 @@ func (s *session) upstreamToGateway() {
 			if ce, ok := err.(*websocket.CloseError); ok {
 				log.Warnf("%sLNS closed connection: code=%d reason=%q (gateway will be disconnected)", gatewayLogPrefix(s.gatewayKey), ce.Code, ce.Text)
 				// Forward close to gateway so the station sees a clean close with LNS code/reason
-				payload := websocket.FormatCloseMessage(ce.Code, ce.Text)
+				code := ce.Code
+				if code == 1005 || code == 1006 || code == 1015 {
+					code = websocket.CloseGoingAway
+				}
+				payload := websocket.FormatCloseMessage(code, ce.Text)
 				_ = s.gatewayConn.WriteControl(websocket.CloseMessage, payload, time.Now().Add(writeWait))
 			} else if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 				log.Warnf("%supstream read (LNS closed or error): %v", gatewayLogPrefix(s.gatewayKey), err)
@@ -1299,8 +1205,12 @@ func (d *DebugDumpWriter) Write(direction, key string, payload []byte, binary bo
 
 // Shutdown closes hijacked WebSockets as well as ordinary HTTP connections.
 func (p *WSProxy) Shutdown(ctx context.Context) error {
-	for _, s := range p.sessions.Values() {
-		s.close()
+	p.cancel()
+	p.pendingMu.Lock()
+	for c := range p.pending {
+		c.Close()
 	}
+	p.pendingMu.Unlock()
+	p.sessions.CloseAll()
 	return p.server.Shutdown(ctx)
 }

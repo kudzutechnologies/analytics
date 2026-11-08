@@ -107,3 +107,31 @@ func (r *RouterInfoRequest) UnmarshalJSON(raw []byte) error {
 	r.Router = id
 	return e
 }
+
+func (r *RouterInfoResponse) UnmarshalJSON(raw []byte) error {
+	var wire struct {
+		Router, Muxs json.RawMessage
+		URI          string `json:"uri"`
+		Error        string `json:"error"`
+	}
+	if e := json.Unmarshal(raw, &wire); e != nil {
+		return e
+	}
+	r.URI = wire.URI
+	r.Error = wire.Error
+	if len(wire.Router) > 0 {
+		id, e := parseRouterJSON(wire.Router)
+		if e != nil {
+			return e
+		}
+		r.Router = gatewayIDToEUIFormat(id)
+	}
+	if len(wire.Muxs) > 0 {
+		id, e := parseRouterJSON(wire.Muxs)
+		if e != nil {
+			return e
+		}
+		r.Muxs = gatewayIDToEUIFormat(id)
+	}
+	return nil
+}
