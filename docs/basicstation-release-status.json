@@ -8,8 +8,19 @@
   ],
   "completed_batches": [
     "history",
-    "build",
-    "configuration"
+    "build and generated bindings",
+    "configuration and private pairing",
+    "bounded delivery and sender ownership",
+    "deadline shutdown",
+    "gateway identity and ingress authorization",
+    "discovery routing and connection lifecycle",
+    "bounded idempotent CUPS",
+    "radio semantics and golden corpus",
+    "socket ownership and ABI gate tooling",
+    "deterministic packaging",
+    "release tooling and CI",
+    "operator migration documentation",
+    "native resource measurements"
   ],
   "delivery": "bounded memory; retry until acknowledged or explicitly dropped; restart loss permitted",
   "resource_contract": {
@@ -20,12 +31,134 @@
     "minimum_messages": 1,
     "minimum_payload_bytes": 1024,
     "telemetry_disk_spool": false,
-    "hard_process_RSS_budget": null
+    "hard_process_RSS_budget": null,
+    "default_pre_identity_messages": 0,
+    "minimum_socket_receive_request_bytes": 1024,
+    "minimum_poll_datagrams": 1,
+    "default_shutdown_ms": 5000,
+    "minimum_shutdown_ms": 0,
+    "limits_are_serialized_telemetry_charges_not_heap_or_RSS_caps": true
   },
   "release_ready": false,
   "external_gates": {
-    "producer_source_and_ABI": "blocked: pinned custom Basic Station producer not supplied",
-    "embedded_cross_builds": "blocked: SDK/sysroots not supplied",
-    "hardware_smoke_tests": "blocked: target devices not supplied"
-  }
+    "producer_source_and_ABI": "blocked: pinned custom producer source/header/ref and real datagram fixtures not supplied; flags, timestamps, HELLO recovery and target semantics still need verification",
+    "embedded_cross_builds": "blocked: Corecell/RPi/Kerlink compiler SDKs, sysroots and matching host generators not supplied",
+    "hardware_smoke_tests": "blocked: install/start/stop/upgrade/radio/minimum-memory/outage evidence for each exact target binary not supplied",
+    "embedded_dependency_sizes_and_device_budgets": "blocked: measure installed dependency closure, RSS high water, kernel buffers, disk writes and device headroom on actual targets",
+    "legacy_udp_remove_package_tool": "blocked: separately supplied Kerlink gen_remove_ipk utility is not present; Docker/package installation not exercised",
+    "release_tag_and_publication": "pending: exact version tag and release publication were not requested or performed"
+  },
+  "implementation_tip": "37cbd38889a4a7efc6a42212dbe85f022d324b80",
+  "validation": {
+    "go_units": {
+      "command": "go test ./...",
+      "status": "passed"
+    },
+    "go_vet": {
+      "command": "go vet ./...",
+      "status": "passed"
+    },
+    "new_proxy_and_client_race": {
+      "command": "go test -race ./client ./forwarder-bs",
+      "status": "passed"
+    },
+    "long_idle_websocket": {
+      "command": "ANALYTICS_SLOW_TESTS=1 go test ./forwarder-bs -run '^TestLongIdleConnection$' -count=1 -timeout=100s",
+      "status": "passed",
+      "seconds": 75.586
+    },
+    "cups_fuzz": {
+      "command": "go test ./forwarder-bs -run '^$' -fuzz=FuzzCUPSResponse -fuzztime=5s -parallel=2",
+      "status": "passed",
+      "executions": 91728
+    },
+    "cpp_native": {
+      "builds": [
+        "Release",
+        "MinSizeRel"
+      ],
+      "status": "passed",
+      "tests": 13,
+      "protobuf": "36.2.0",
+      "grpc": "1.85.0",
+      "host_protoc": "libprotoc 36.2"
+    },
+    "cpp_existing_udp": {
+      "status": "passed",
+      "tests": 7
+    },
+    "cpp_thread_sanitizer": {
+      "status": "passed",
+      "tests": 13
+    },
+    "cpp_address_undefined_sanitizers": {
+      "status": "passed with documented host dependency compatibility switch",
+      "tests": 13,
+      "flags": "-fsanitize=address,undefined -fno-omit-frame-pointer -DPROTOBUF_MESSAGE_GLOBALS_TEMPORARY_OPTOUT",
+      "limitation": "Unsanitized Homebrew Protobuf 36.2 uses different globals layout from ASan gencode. Unmodified run failed in its consistency checker; an empty-message-only program reproduced it. The provided header compatibility switch passed; dependencies themselves were not rebuilt/instrumented. This switch is not applied to release builds or CI."
+    },
+    "go_cross_builds": {
+      "status": "passed",
+      "components": [
+        "forwarder-bs",
+        "forwarder"
+      ],
+      "targets": [
+        "amd64",
+        "rpi (ARM5)",
+        "arm6",
+        "arm7",
+        "mipsle-24kec-v5 (softfloat)",
+        "mips-24kec-v5 (softfloat)"
+      ],
+      "checksummed_artifacts": 24,
+      "manifest": "basicstation-go-builds.json",
+      "repeat_amd64_binary_and_archive_identical": true
+    },
+    "packaging_and_release_inputs": {
+      "status": "passed",
+      "tests": 4,
+      "scope": "structural dummy ELF archives and invalid/valid fixture inputs; no opkg target install claimed"
+    },
+    "abi_tool_selftest": {
+      "status": "passed",
+      "scope": "consumer header compared against itself only; does not satisfy producer ABI release gate"
+    },
+    "native_default_minimum_resource_smoke": {
+      "status": "passed",
+      "profiles": 4,
+      "workload_seconds_per_profile": 30,
+      "measurements": "basicstation-resource-measurements.json",
+      "scope": "native host fixture, unique uplinks, unavailable backend, bounded retention, counted overflow, shutdown and file inventory"
+    },
+    "ci": {
+      "status": "workflow added; hosted execution not performed",
+      "workflow": ".github/workflows/basicstation.yml"
+    },
+    "release_preflight": {
+      "status": "correctly rejected incomplete release",
+      "exact_tag": "absent; no tag created",
+      "embedded_inputs": "not supplied"
+    }
+  },
+  "inherited_release_blockers": [
+    {
+      "id": "legacy-go-udp-races",
+      "status": "open",
+      "command": "go test -race ./forwarder",
+      "reproduced_at_original_wip": true,
+      "original_observed_warnings": 83,
+      "current_observed_warnings": 79,
+      "warning_count_is_schedule_dependent": true,
+      "production_files": [
+        "forwarder/proxy-stream.go",
+        "forwarder/udp-proxy.go"
+      ],
+      "test_helpers": [
+        "forwarder/proxy-stream_test.go"
+      ],
+      "scope": "Predates Basic Station changes; requires separate UDP lifecycle/test-helper repair. CI keeps this gate failing visibly."
+    }
+  ],
+  "documentation": "basicstation-release.md"
 }

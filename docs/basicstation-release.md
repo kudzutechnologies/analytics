@@ -149,3 +149,28 @@ No upload, tagging, or publication is performed by these commands.
 Do not mark release ready while an external gate, sanitizer compatibility
 question, inherited race, or required device check remains unresolved. Update
 the status JSON with evidence after each gate is actually satisfied.
+
+## Open inherited UDP race gate
+
+`go test -race ./forwarder` reports races in both the older UDP implementation
+and its fixture helpers. The original WIP produced the same class of failures;
+warning counts vary with scheduling (83 originally, 79 in the latest run).
+Repair this in a separate UDP batch before declaring the whole repository
+release ready. Start with these concrete areas:
+
+1. In `forwarder/proxy-stream_test.go`, give server/client maps and receive
+   counters one synchronization policy, and ensure helper goroutines finish
+   before test teardown. Reproduce with `go test -race ./forwarder` after each
+   change; do not remove assertions or suppress race instrumentation.
+2. In `forwarder/proxy-stream.go`, audit the stream running/closed state, socket
+   publication, last-activity updates, and stop/read-thread ownership. Races in
+   the captured run involve lines 49, 64–65, and 182. Use explicit cancellation
+   and completion, and make every shared field obey the same ownership rule.
+3. In `forwarder/udp-proxy.go`, audit listener socket publication and concurrent
+   start/stop (captured lines 67 and 109). Ensure stop waits for receiver work
+   before releasing shared state. Preserve existing UDP forwarding behavior.
+4. Run existing UDP unit tests, the full race gate, and the client/Basic Station
+   checks. Add a regression only for a real lifecycle behavior (for example,
+   concurrent stop during receive), not for implementation details. Then update
+   the status JSON and remove the inherited-blocker entry only after the gate
+   passes. The CI job should remain required and should never be made optional.

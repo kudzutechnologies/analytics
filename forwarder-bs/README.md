@@ -165,7 +165,7 @@ sockets, and per-session state add to the telemetry byte budget.
 
 ## Build and release
 
-Use Go 1.18+ with the module's compatible dependencies:
+Use Go 1.20+ for the repository's dependency and test graph:
 
 ```sh
 go build -trimpath -ldflags='-s -w' -o kudzu-forwarder-bs ./forwarder-bs
