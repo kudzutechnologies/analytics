@@ -65,6 +65,7 @@ set(FORWARDER_CC_CORE_SOURCES
   dedupe.cc
   udp_proxy.cc
   forwarder.cc
+  downlink_delivery.cc
 )
 
 add_library(forwarder-cc-core STATIC ${FORWARDER_CC_CORE_SOURCES})
@@ -121,6 +122,8 @@ if(FORWARDER_CC_BUILD_TESTS)
   forwarder_cc_add_test(config_test tests/config_test.cc)
   forwarder_cc_add_test(semtech_udp_test tests/semtech_udp_test.cc)
   forwarder_cc_add_test(forwarder_test tests/forwarder_test.cc)
+  forwarder_cc_add_test(delivery_test tests/delivery_test.cc)
+  target_compile_definitions(delivery_test PRIVATE ANALYTICS_DELIVERY_FIXTURE="${CMAKE_CURRENT_SOURCE_DIR}/../api/testdata/downlink-delivery.bin")
   forwarder_cc_add_test(dedupe_test tests/dedupe_test.cc)
   forwarder_cc_add_test(udp_proxy_test tests/udp_proxy_test.cc)
   forwarder_cc_add_test(pairing_test tests/pairing_test.cc)

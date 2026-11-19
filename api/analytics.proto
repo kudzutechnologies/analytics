@@ -14,6 +14,8 @@ message AnalyticsMetrics {
   repeated AnalyticsDownlink downlinks = 3;
   repeated AnalyticsStat stats = 4;
   optional AnalyticsInternalMetrics metrics = 7;
+  // Separate from packets so legacy servers safely ignore bare acknowledgements.
+  repeated AnalyticsDownlinkOutcome downlinkOutcomes = 8;
 }
 
 message AnalyticsUplinkAntenna {
@@ -96,6 +98,30 @@ message AnalyticsDownlink {
   // Complete encrypted on-air frame, including MIC. Keep fhdr for old receivers.
   bytes phyPayload = 20;
   bytes gatewayContext = 21;
+  // Optional provider-command identity. A request does not prove transmission.
+  AnalyticsDownlinkDelivery delivery = 22;
+}
+
+message AnalyticsDownlinkDelivery {
+  // Gateway-scoped reusable ACK identity, separate from the packet checksum.
+  string id = 1;
+  // SHA-256 of the raw PULL_RESP body; distinguishes token reuse.
+  string commandKey = 2;
+  int64 observedUnixMs = 3;
+}
+
+enum DownlinkOutcomeStatus {
+  OUTCOME_UNKNOWN = 0;
+  OUTCOME_ACCEPTED = 1;
+  OUTCOME_REJECTED = 2;
+}
+
+message AnalyticsDownlinkOutcome {
+  string id = 1;
+  DownlinkOutcomeStatus status = 2;
+  // Native TX_ACK error, or a parser reason for unknown evidence.
+  string reason = 3;
+  int64 observedUnixMs = 4;
 }
 
 /**

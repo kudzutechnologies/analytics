@@ -1,5 +1,6 @@
 #include "semtech_udp.h"
 #include <cstring>
+#include <limits>
 
 namespace forwarder_cc {
 
@@ -7,6 +8,7 @@ bool DecodeSemtechUDP(const uint8_t* payload, size_t size, SemtechUDPMessage& ms
   if (size < 4) return false;
   if (payload[0] != kSemtechProtocolVersion) return false;
 
+  if ((payload[3] == kPUSH_DATA || payload[3] == kPULL_DATA || payload[3] == kTX_ACK) && size < 12) return false;
   msg.version = payload[0];
   msg.token = static_cast<uint16_t>(payload[1]) | (static_cast<uint16_t>(payload[2]) << 8);
   msg.kind = payload[3];
@@ -62,7 +64,10 @@ static void FromJson(const nlohmann::json& j, SemtechTxPkt& t) {
   t.rfch = j.value("rfch", 0);
   t.powe = j.value("powe", 0.f);
   if (j.contains("modu")) t.modu = j["modu"].get<std::string>();
-  if (j.contains("datr")) t.datr = j["datr"].get<std::string>();
+  if (j.contains("datr")) {
+    if (j["datr"].is_number_unsigned()) t.datr = std::to_string(j["datr"].get<uint32_t>());
+    else t.datr = j["datr"].get<std::string>();
+  }
   if (j.contains("codr")) t.codr = j["codr"].get<std::string>();
   t.fdev = j.value("fdev", 0.f);
   t.ipol = j.value("ipol", false);
@@ -93,28 +98,31 @@ bool ParseSemtechJsonPayload(const SemtechUDPMessage& msg, SemtechJsonPayload& o
   nlohmann::json j;
   try {
     j = nlohmann::json::parse(body, body + body_len);
-  } catch (...) {
+
+    if (j.contains("rxpk") && j["rxpk"].is_array()) {
+      for (const auto& e : j["rxpk"]) {
+        SemtechRxPkt r;
+        FromJson(e, r);
+        out.rxpk.push_back(r);
+      }
+    }
+    if (j.contains("txpk") && j["txpk"].is_object()) {
+      const auto& packet = j["txpk"];
+      if (packet.contains("datr") && packet["datr"].is_number_unsigned() &&
+          packet["datr"].get<uint64_t>() > std::numeric_limits<uint32_t>::max()) return false;
+      SemtechTxPkt t;
+      FromJson(packet, t);
+      out.txpk = t;
+    }
+    if (j.contains("stat") && j["stat"].is_object()) {
+      SemtechStat s;
+      FromJson(j["stat"], s);
+      out.stat = s;
+    }
+    return true;
+  } catch (const nlohmann::json::exception&) {
     return false;
   }
-
-  if (j.contains("rxpk") && j["rxpk"].is_array()) {
-    for (const auto& e : j["rxpk"]) {
-      SemtechRxPkt r;
-      FromJson(e, r);
-      out.rxpk.push_back(r);
-    }
-  }
-  if (j.contains("txpk") && j["txpk"].is_object()) {
-    SemtechTxPkt t;
-    FromJson(j["txpk"], t);
-    out.txpk = t;
-  }
-  if (j.contains("stat") && j["stat"].is_object()) {
-    SemtechStat s;
-    FromJson(j["stat"], s);
-    out.stat = s;
-  }
-  return true;
 }
 
 }  // namespace forwarder_cc

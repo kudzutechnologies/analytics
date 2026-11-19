@@ -128,3 +128,14 @@ Same as the analytics repository.
 ## Complete radio frames
 
 Analytics now includes optional complete encrypted LoRaWAN frame bytes (`phyPayload`), including the on-air MIC. The existing header (`fhdr`) remains populated for older servers. This is an additive wire change: servers and forwarders can be upgraded independently, and gateway traffic forwarding remains unchanged. Header-only senders remain supported, but cannot supply bytes required for MIC verification.
+
+## Downlink delivery observations
+
+This implementation sends the same command fingerprints and separate TX_ACK
+outcomes as the Go forwarder. Complete packet/radio metadata and native rejection
+codes are retained. Empty ACK bodies and explicit `NONE` mean gateway acceptance;
+malformed or missing JSON error values remain unknown. These observations require
+the matching engine gRPC translator for per-command delivery status. Older
+servers safely ignore the additive fields. Acceptance does not prove emission
+or receipt; UDP and gRPC buffering remain best effort. Batches use complete UDP
+peer endpoints and flush the old envelope when its EUI changes.

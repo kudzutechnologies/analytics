@@ -1,0 +1,37 @@
+version: 1
+id: analytics-downlink-delivery
+baseline: 8b7ccd7
+authorization: User explicitly requested implementing Analytics delivery tracking, creating a branch, and opening an Analytics PR using repository-local kudzutech authorship.
+branch: feat/downlink-delivery-tracking
+existing_changes:
+  - api/README.md compatibility note from the preceding authorized review
+  - untracked basicstation-analytics/, forwarder-bs/, tools/ remain untouched
+behavior:
+  - Add optional command identity metadata and a separate repeated TX_ACK outcome batch, preserving all existing field numbers.
+  - Both Go and C++ UDP forwarders emit command evidence and accepted/rejected/unknown ACK observations. Empty TX_ACK is success per Semtech protocol; malformed or missing JSON error is not acceptance.
+  - Retain native rejection reasons and encrypted payload/radio metadata; fingerprint raw command bytes separately from legacy packet checksums.
+  - Scope evidence by configured gateway ID when provided, gateway EUI otherwise, and peer endpoint only when gateway identity is unknown.
+  - Keep peer batches isolated by complete endpoint; synchronize batch mutation/snapshot/eviction so concurrent UDP callbacks cannot mix gateway evidence or lose outcome arrays.
+  - Engine gRPC translates the additive fields using the published Analytics schema without requiring an unpublished module version; reuse durable Mongo ACK reconciliation for semtech_udp alongside ChirpStack.
+  - Missing or ambiguous ACKs never establish acceptance; gateway acceptance establishes neither emission nor receipt.
+acceptance:
+  - id: AD-01
+    then: Old/new protobuf receivers preserve legacy fields; separate outcomes cannot appear as fake downlink packets on an old server.
+    tests: [api/TestDeliveryWireCompatibility]
+  - id: AD-02
+    then: Both forwarders preserve pending command metadata, explicit success/rejection/unknown reasons, empty-body success, malformed safety, ACK-only batches, peer isolation and flush behavior.
+    tests: [forwarder/TestDownlinkDeliveryObservations, forwarder-cc/delivery_test]
+  - id: AD-03
+    then: Engine reads actual Analytics wire fixtures with the published schema, preserves candidate metadata and timing evidence, and accepts legacy frames.
+    tests: [service-ingress-api/TestGRPCDeliveryCompatibility]
+  - id: AD-04
+    then: Durable reconciliation handles ACK ordering, replay, timeout/late refinement, restart and ambiguous token reuse for semtech_udp without duplicate activity or mirrors.
+    tests: [service-egress-mongo/TestSemtechDeliveryRecovery]
+validation:
+  - Go tests and vet in Analytics and affected engine modules; focused Go race checks.
+  - Rebuild generated Go and C++ bindings with versions matching their runtimes and run C++ tests in a clean task-owned build.
+  - Confirm repository-local git author and authenticated PR actor before commit/push/PR creation.
+non_goals:
+  - Basic Station or other untracked adapters
+  - Durable gateway-to-server transport or Redis
+  - Shared production deployment or engine branch push

@@ -103,12 +103,12 @@ int main() {
 
   auto with_etime = MakePushWithETime();
   SockAddr4 ep2 = ep;
-  ep2.port = htons(40001);  // same IP → same frame key
+  ep2.port = htons(40001);  // same IP, a distinct gateway endpoint
   fwd.TestUpLocalData(with_etime.data(), with_etime.size(), ep2);
   ExpectEq(fwd.TestFirstAntennaETime(), "YWJj", "etime propagated");
 
-  // IP-only keying: different ports, same IP → single frame
-  ExpectEq(fwd.TestFrameCount(), size_t{1}, "IP-only frame key");
+  // Distinct UDP peers sharing an IP must retain separate gateway batches.
+  ExpectEq(fwd.TestFrameCount(), size_t{2}, "endpoint-scoped frame key");
 
   // Eviction: add frames from different IPs beyond max_udp_streams
   SockAddr4 ep3;
