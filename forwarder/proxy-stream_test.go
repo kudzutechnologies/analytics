@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"math/rand"
 	"net"
+	"sync"
+	"sync/atomic"
 	"testing"
 )
 
@@ -12,7 +14,8 @@ type serverStream struct {
 	bind      *UDPSock
 	remote    *net.UDPAddr
 	lookup    map[string]*ProxyStream
-	closed    bool
+	closed    uint32
+	mu        sync.Mutex
 	closeWait chan bool
 }
 
@@ -32,27 +35,35 @@ func (s *serverStream) createClient() *UDPSock {
 		},
 	})
 
+	s.mu.Lock()
 	s.lookup[sIn.local.String()] = stream
+	s.mu.Unlock()
 	return sIn
 }
 
 func (s *serverStream) readThread() {
-	for !s.closed {
+	defer close(s.closeWait)
+	for atomic.LoadUint32(&s.closed) == 0 {
 		buf, addr := s.bind.ReadWithAddr(1024)
-		if s.closed {
+		if atomic.LoadUint32(&s.closed) != 0 {
 			break
 		}
-		if found, ok := s.lookup[addr.String()]; ok {
+		s.mu.Lock()
+		found, ok := s.lookup[addr.String()]
+		s.mu.Unlock()
+		if ok {
 			found.HandleLocalData(buf)
 		}
 	}
-	s.closeWait <- true
 }
 
 func (s *serverStream) close() {
-	s.closed = true
+	atomic.StoreUint32(&s.closed, 1)
 	s.bind.Close()
 	<-s.closeWait
+	for _, stream := range s.lookup {
+		stream.Close()
+	}
 }
 
 func createServer(t *testing.T, remote *UDPSock) *serverStream {

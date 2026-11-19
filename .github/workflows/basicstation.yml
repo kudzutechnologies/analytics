@@ -27,8 +27,7 @@ jobs:
           name: go-linux-candidates
           path: /tmp/artifacts
   legacy-udp-race:
-    # This intentionally remains a failing release gate until the inherited UDP
-    # races are repaired. Do not hide them with continue-on-error.
+    # Keep UDP lifecycle coverage under the race detector as a required gate.
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -44,7 +43,17 @@ jobs:
         sanitizer: [none, thread, 'address,undefined']
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update && sudo apt-get install -y cmake libgrpc++-dev protobuf-compiler protobuf-compiler-grpc libprotobuf-dev libssl-dev
+      - name: Install C++ dependencies
+        run: |
+          # Mirrors can return transient 503s even after apt's per-file retries.
+          # Retry the complete operation, and still fail if dependencies cannot install.
+          for attempt in 1 2 3; do
+            if sudo apt-get -o Acquire::Retries=3 update &&
+               sudo apt-get -o Acquire::Retries=3 install -y cmake libgrpc++-dev protobuf-compiler protobuf-compiler-grpc libprotobuf-dev libssl-dev; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then exit 1; fi
+          done
       - name: Configure
         env:
           SANITIZER: '${{ matrix.sanitizer }}'

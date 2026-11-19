@@ -47,7 +47,7 @@ See [Go proxy usage](../forwarder-bs/README.md) and
 go test ./...
 go vet ./...
 go test -race ./client ./forwarder-bs
-go test -race ./forwarder # inherited failing release gate; see status
+go test -race ./forwarder # UDP lifecycle regression gate
 ANALYTICS_SLOW_TESTS=1 go test ./forwarder-bs -run '^TestLongIdleConnection$' -count=1 -timeout=100s
 go test ./forwarder-bs -run '^$' -fuzz=FuzzCUPSResponse -fuzztime=10s -parallel=2
 python3 -m unittest discover -s tools/tests -v
@@ -73,8 +73,8 @@ application with the header's `-DPROTOBUF_MESSAGE_GLOBALS_TEMPORARY_OPTOUT`
 compatibility switch passed all 13 tests with ASan and UBSan still enabled.
 This local workaround is not applied to production builds or CI. Prefer matching
 instrumented dependencies for full dependency coverage; record this limitation
-when assessing the local pass. CI runs these checks independently and keeps the inherited Go
-UDP race gate visible, without `continue-on-error`.
+when assessing the local pass. CI runs these checks independently and keeps the Go UDP race gate required,
+without `continue-on-error`.
 
 The slow proxy test holds an actual fixture WebSocket idle for over 60 seconds,
 then checks forwarding. Unit/fixture coverage also includes cancellation,
@@ -150,27 +150,22 @@ Do not mark release ready while an external gate, sanitizer compatibility
 question, inherited race, or required device check remains unresolved. Update
 the status JSON with evidence after each gate is actually satisfied.
 
-## Open inherited UDP race gate
+## UDP race gate repair
 
-`go test -race ./forwarder` reports races in both the older UDP implementation
-and its fixture helpers. The original WIP produced the same class of failures;
-warning counts vary with scheduling (83 originally, 79 in the latest run).
-Repair this in a separate UDP batch before declaring the whole repository
-release ready. Start with these concrete areas:
+The initial hosted runs exposed inherited races in UDP stream state, listener
+publication, and fixture maps/callback results. The reader error path could also
+wait for its own completion, and a delayed reconnect could reopen sockets after
+shutdown.
 
-1. In `forwarder/proxy-stream_test.go`, give server/client maps and receive
-   counters one synchronization policy, and ensure helper goroutines finish
-   before test teardown. Reproduce with `go test -race ./forwarder` after each
-   change; do not remove assertions or suppress race instrumentation.
-2. In `forwarder/proxy-stream.go`, audit the stream running/closed state, socket
-   publication, last-activity updates, and stop/read-thread ownership. Races in
-   the captured run involve lines 49, 64–65, and 182. Use explicit cancellation
-   and completion, and make every shared field obey the same ownership rule.
-3. In `forwarder/udp-proxy.go`, audit listener socket publication and concurrent
-   start/stop (captured lines 67 and 109). Ensure stop waits for receiver work
-   before releasing shared state. Preserve existing UDP forwarding behavior.
-4. Run existing UDP unit tests, the full race gate, and the client/Basic Station
-   checks. Add a regression only for a real lifecycle behavior (for example,
-   concurrent stop during receive), not for implementation details. Then update
-   the status JSON and remove the inherited-blocker entry only after the gate
-   passes. The CI job should remain required and should never be made optional.
+Stream state and connection registration now share a mutex. Reader errors stop
+the socket without joining their own goroutine. The proxy owns listener and
+stream workers, serializes restart admission, cancels reconnect backoff on close,
+and joins all workers before returning. Failed partial binds release the already
+opened socket. Fixtures synchronize their maps and shutdown flags, wait for
+callback results explicitly, and close their sockets and streams.
+
+`go test -race ./forwarder -count=10` passed locally after these repairs.
+Regression tests cover concurrent close during receive, reader error completion,
+close during reconnect backoff, and cleanup after a downlink bind failure. The CI
+race job remains required. Embedded hardware and other external release gates
+remain open.

@@ -132,23 +132,28 @@
       "scope": "native host fixture, unique uplinks, unavailable backend, bounded retention, counted overflow, shutdown and file inventory"
     },
     "ci": {
-      "status": "workflow added; hosted execution not performed",
+      "status": "hosted execution started; UDP race failures repaired locally; transient Ubuntu package-mirror 503s receive bounded install retries; updated hosted results pending",
       "workflow": ".github/workflows/basicstation.yml"
     },
     "release_preflight": {
       "status": "correctly rejected incomplete release",
       "exact_tag": "absent; no tag created",
       "embedded_inputs": "not supplied"
+    },
+    "legacy_udp_race": {
+      "command": "go test -race ./forwarder -count=10",
+      "status": "passed",
+      "scope": "UDP forwarding fixtures and lifecycle regressions: concurrent close, reader error, reconnect cancellation, partial bind cleanup"
     }
   },
   "inherited_release_blockers": [
     {
       "id": "legacy-go-udp-races",
-      "status": "open",
+      "status": "resolved",
       "command": "go test -race ./forwarder",
       "reproduced_at_original_wip": true,
       "original_observed_warnings": 83,
-      "current_observed_warnings": 79,
+      "current_observed_warnings": 0,
       "warning_count_is_schedule_dependent": true,
       "production_files": [
         "forwarder/proxy-stream.go",
@@ -157,7 +162,7 @@
       "test_helpers": [
         "forwarder/proxy-stream_test.go"
       ],
-      "scope": "Predates Basic Station changes; requires separate UDP lifecycle/test-helper repair. CI keeps this gate failing visibly."
+      "scope": "UDP lifecycle and fixture synchronization repaired; ten repeated local race-suite runs passed. CI retains this gate."
     }
   ],
   "documentation": "basicstation-release.md"

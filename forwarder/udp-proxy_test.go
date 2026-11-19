@@ -9,31 +9,42 @@ import (
 )
 
 type BufHandler struct {
-	LastUpLocal  []byte
-	lastUpRemote []byte
-	LastDnLocal  []byte
-	LastDnRemote []byte
+	LastUpLocal  chan []byte
+	lastUpRemote chan []byte
+	LastDnLocal  chan []byte
+	LastDnRemote chan []byte
 }
 
 func (b *BufHandler) UpLocalData(data []byte, localEp *net.UDPAddr) {
 	tmp := make([]byte, len(data))
 	copy(tmp, data)
-	b.LastUpLocal = tmp
+	b.LastUpLocal <- tmp
 }
 func (b *BufHandler) UpRemoteData(data []byte, localEp *net.UDPAddr) {
 	tmp := make([]byte, len(data))
 	copy(tmp, data)
-	b.lastUpRemote = tmp
+	b.lastUpRemote <- tmp
 }
 func (b *BufHandler) DnLocalData(data []byte, localEp *net.UDPAddr) {
 	tmp := make([]byte, len(data))
 	copy(tmp, data)
-	b.LastDnLocal = tmp
+	b.LastDnLocal <- tmp
 }
 func (b *BufHandler) DnRemoteData(data []byte, localEp *net.UDPAddr) {
 	tmp := make([]byte, len(data))
 	copy(tmp, data)
-	b.LastDnRemote = tmp
+	b.LastDnRemote <- tmp
+}
+
+func receiveEvent(t *testing.T, events <-chan []byte) []byte {
+	t.Helper()
+	select {
+	case data := <-events:
+		return data
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for proxy event")
+		return nil
+	}
 }
 
 func TestEventsOfUDPProxy(t *testing.T) {
@@ -44,7 +55,7 @@ func TestEventsOfUDPProxy(t *testing.T) {
 	serverUp := CreateSocket(t)
 	serverDn := CreateSocket(t)
 
-	bufs := &BufHandler{}
+	bufs := &BufHandler{LastUpLocal: make(chan []byte, 1), lastUpRemote: make(chan []byte, 1), LastDnLocal: make(chan []byte, 1), LastDnRemote: make(chan []byte, 1)}
 	proxy, _ := CreateUDPProxy(&UDPProxyConfig{
 		UpListenAddr:        clientUp.remote,
 		UpConnectAddr:       serverUp.local,
@@ -62,7 +73,7 @@ func TestEventsOfUDPProxy(t *testing.T) {
 	bufLocalUp := randBuf(1024)
 	clientUp.Send(bufLocalUp)
 	expectToReceive(t, serverUp, bufLocalUp)
-	if !bytes.Equal(bufLocalUp, bufs.LastUpLocal) {
+	if !bytes.Equal(bufLocalUp, receiveEvent(t, bufs.LastUpLocal)) {
 		t.Fail()
 	}
 
@@ -70,7 +81,7 @@ func TestEventsOfUDPProxy(t *testing.T) {
 	bufRemoteUp := randBuf(1024)
 	serverUp.Reply(bufRemoteUp)
 	expectToReceive(t, clientUp, bufRemoteUp)
-	if !bytes.Equal(bufRemoteUp, bufs.lastUpRemote) {
+	if !bytes.Equal(bufRemoteUp, receiveEvent(t, bufs.lastUpRemote)) {
 		t.Fail()
 	}
 
@@ -78,7 +89,7 @@ func TestEventsOfUDPProxy(t *testing.T) {
 	bufLocalDn := randBuf(1024)
 	clientDn.Send(bufLocalDn)
 	expectToReceive(t, serverDn, bufLocalDn)
-	if !bytes.Equal(bufLocalDn, bufs.LastDnLocal) {
+	if !bytes.Equal(bufLocalDn, receiveEvent(t, bufs.LastDnLocal)) {
 		t.Fail()
 	}
 
@@ -86,7 +97,7 @@ func TestEventsOfUDPProxy(t *testing.T) {
 	bufRemoteDn := randBuf(1024)
 	serverDn.Reply(bufRemoteDn)
 	expectToReceive(t, clientDn, bufRemoteDn)
-	if !bytes.Equal(bufRemoteDn, bufs.LastDnRemote) {
+	if !bytes.Equal(bufRemoteDn, receiveEvent(t, bufs.LastDnRemote)) {
 		t.Fail()
 	}
 

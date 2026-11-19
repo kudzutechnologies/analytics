@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"runtime"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -19,7 +20,7 @@ type UDPSock struct {
 	last    *net.UDPAddr
 	conn    *net.UDPConn
 	timeout time.Duration
-	closed  bool
+	closed  uint32
 	t       *testing.T
 }
 
@@ -49,13 +50,15 @@ func CreateSocket(t *testing.T) *UDPSock {
 			return nil
 		}
 
-		return &UDPSock{
+		sock := &UDPSock{
 			t:       t,
 			timeout: time.Millisecond * 100,
 			local:   lUdp,
 			remote:  rUdp,
 			conn:    conn,
 		}
+		t.Cleanup(sock.Close)
+		return sock
 	}
 }
 
@@ -78,13 +81,15 @@ func CreateSocketToRemote(t *testing.T, toSockeet *UDPSock) *UDPSock {
 			t.FailNow()
 			return nil
 		}
-		return &UDPSock{
+		sock := &UDPSock{
 			t:       t,
 			timeout: time.Millisecond * 100,
 			local:   lUdp,
 			remote:  toSockeet.local,
 			conn:    conn,
 		}
+		t.Cleanup(sock.Close)
+		return sock
 	}
 }
 
@@ -107,13 +112,15 @@ func CreateSocketWithSameRemote(t *testing.T, toSockeet *UDPSock) *UDPSock {
 			t.FailNow()
 			return nil
 		}
-		return &UDPSock{
+		sock := &UDPSock{
 			t:       t,
 			timeout: time.Millisecond * 100,
 			local:   lUdp,
 			remote:  toSockeet.remote,
 			conn:    conn,
 		}
+		t.Cleanup(sock.Close)
+		return sock
 	}
 }
 
@@ -145,7 +152,8 @@ func (r *UDPSock) SetTimeout(timeout time.Duration) {
 }
 
 func (r *UDPSock) Close() {
-	r.closed = true
+	atomic.StoreUint32(&r.closed, 1)
+	r.conn.Close()
 }
 
 func (r *UDPSock) Restart() {
@@ -164,7 +172,7 @@ func (r *UDPSock) Read(bytes int) []byte {
 	var buf [1024]byte
 	r.conn.SetReadDeadline(time.Now().Add(r.timeout))
 	l, recvAddr, err := r.conn.ReadFromUDP(buf[0:])
-	if r.closed {
+	if atomic.LoadUint32(&r.closed) != 0 {
 		return nil
 	}
 	if err != nil {
@@ -180,7 +188,7 @@ func (r *UDPSock) ReadWithAddr(bytes int) ([]byte, *net.UDPAddr) {
 	var buf [1024]byte
 	r.conn.SetReadDeadline(time.Now().Add(r.timeout))
 	l, recvAddr, err := r.conn.ReadFromUDP(buf[0:])
-	if r.closed {
+	if atomic.LoadUint32(&r.closed) != 0 {
 		return nil, nil
 	}
 	if err != nil {
@@ -194,7 +202,7 @@ func (r *UDPSock) ReadWithAddr(bytes int) ([]byte, *net.UDPAddr) {
 
 func (r *UDPSock) Send(bytes []byte) {
 	_, err := r.conn.WriteToUDP(bytes[0:], r.remote)
-	if r.closed {
+	if atomic.LoadUint32(&r.closed) != 0 {
 		return
 	}
 	if err != nil {
@@ -205,7 +213,7 @@ func (r *UDPSock) Send(bytes []byte) {
 
 func (r *UDPSock) SendToAddr(addr *net.UDPAddr, bytes []byte) {
 	_, err := r.conn.WriteToUDP(bytes[0:], addr)
-	if r.closed {
+	if atomic.LoadUint32(&r.closed) != 0 {
 		return
 	}
 	if err != nil {
@@ -215,7 +223,7 @@ func (r *UDPSock) SendToAddr(addr *net.UDPAddr, bytes []byte) {
 }
 
 func (r *UDPSock) Reply(bytes []byte) {
-	if r.closed {
+	if atomic.LoadUint32(&r.closed) != 0 {
 		return
 	}
 	if r.last == nil {
