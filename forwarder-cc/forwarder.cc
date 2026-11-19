@@ -1,5 +1,6 @@
 #include "forwarder.h"
 #include "dedupe.h"
+#include "downlink_delivery.h"
 #include "gateway_sync.h"
 #include "logging.h"
 #include "lora_mac.h"
@@ -9,6 +10,7 @@
 
 #include <openssl/evp.h>
 #include <chrono>
+#include <charconv>
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
@@ -137,6 +139,7 @@ void IncPktStat(uint8_t kind, api::AnalyticsInternalMetrics* m) {
 void ResetFrameCounters(api::AnalyticsMetrics* frame) {
   frame->clear_uplinks();
   frame->clear_downlinks();
+  frame->clear_downlinkoutcomes();
   frame->clear_stats();
   if (frame->has_metrics()) {
     auto* m = frame->mutable_metrics();
@@ -154,7 +157,7 @@ void ResetFrameCounters(api::AnalyticsMetrics* frame) {
 }
 
 bool FrameHasData(const api::AnalyticsMetrics& f) {
-  if (f.uplinks_size() || f.downlinks_size() || f.stats_size()) return true;
+  if (f.uplinks_size() || f.downlinks_size() || f.stats_size() || f.downlinkoutcomes_size()) return true;
   if (f.has_metrics() && (f.metrics().uprxpackets() || f.metrics().uptxpackets() ||
                           f.metrics().dnrxpackets() || f.metrics().dntxpackets())) {
     return true;
@@ -162,11 +165,6 @@ bool FrameHasData(const api::AnalyticsMetrics& f) {
   return false;
 }
 
-std::string FrameKey(const Config& config, const SockAddr4& local_ep) {
-  // Go keys by IP only for metrics-frame LRU.
-  (void)config;
-  return SockAddrIpString(local_ep);
-}
 
 }  // namespace
 
@@ -181,46 +179,35 @@ AnalyticsForwarder::~AnalyticsForwarder() {
   if (gateway_sync_thread_.joinable()) gateway_sync_thread_.join();
 }
 
-api::AnalyticsMetrics* AnalyticsForwarder::GetOrCreateFrame(const SockAddr4& local_ep) {
-  std::string key = FrameKey(config_, local_ep);
-  std::vector<std::unique_ptr<api::AnalyticsMetrics>> to_flush;
-  api::AnalyticsMetrics* raw = nullptr;
-
-  {
-    std::lock_guard<std::mutex> lock(metrics_mutex_);
-    auto it = metrics_frames_.find(key);
-    if (it != metrics_frames_.end()) {
-      frame_order_.remove(key);
-      frame_order_.push_back(key);
-      return it->second.get();
-    }
-
-    while (static_cast<int>(metrics_frames_.size()) >= config_.max_udp_streams &&
-           !frame_order_.empty()) {
-      const std::string& oldest = frame_order_.front();
-      auto eit = metrics_frames_.find(oldest);
-      if (eit != metrics_frames_.end()) {
-        to_flush.push_back(std::move(eit->second));
-        metrics_frames_.erase(eit);
-      }
-      frame_order_.pop_front();
-    }
-
-    auto frame = std::make_unique<api::AnalyticsMetrics>();
-    if (config_.server_side) {
-      auto* m = frame->mutable_metrics();
-      // Go sets GatewayIp to localEp.String() (IP:port) even though LRU key is IP-only.
-      m->set_gatewayip(SockAddrToString(local_ep));
-    }
-    raw = frame.get();
-    metrics_frames_[key] = std::move(frame);
+api::AnalyticsMetrics* AnalyticsForwarder::GetOrCreateFrame(const SockAddr4& local_ep,
+    std::vector<std::unique_ptr<api::AnalyticsMetrics>>& evicted, const uint8_t* gateway) {
+  // Caller holds metrics_mutex_ through lookup and the complete packet update.
+  std::string key = SockAddrToString(local_ep);
+  auto it = metrics_frames_.find(key);
+  if (it != metrics_frames_.end() && gateway && it->second->gatewayeui().size() == 8 &&
+      std::memcmp(it->second->gatewayeui().data(), gateway, 8) != 0) {
+    evicted.push_back(std::move(it->second));
+    metrics_frames_.erase(it);
+    frame_order_.remove(key);
+    it = metrics_frames_.end();
+  }
+  if (it != metrics_frames_.end()) {
+    frame_order_.remove(key);
     frame_order_.push_back(key);
+    return it->second.get();
   }
-
-  // Flush evicted frames outside the metrics lock (copy+push; do not block UDP long).
-  for (auto& f : to_flush) {
-    if (f) FlushFrame(f.get());
+  while (static_cast<int>(metrics_frames_.size()) >= config_.max_udp_streams && !frame_order_.empty()) {
+    const auto oldest = frame_order_.front();
+    evicted.push_back(std::move(metrics_frames_.at(oldest)));
+    metrics_frames_.erase(oldest);
+    frame_order_.pop_front();
   }
+  auto frame = std::make_unique<api::AnalyticsMetrics>();
+  if (config_.server_side) frame->mutable_metrics()->set_gatewayip(SockAddrToString(local_ep));
+  else frame->set_gatewayid(config_.gateway_id);
+  auto* raw = frame.get();
+  metrics_frames_[key] = std::move(frame);
+  frame_order_.push_back(key);
   return raw;
 }
 
@@ -229,6 +216,7 @@ void AnalyticsForwarder::FlushFrame(api::AnalyticsMetrics* frame) {
   api::AnalyticsMetrics copy;
   copy.CopyFrom(*frame);
   ResetFrameCounters(frame);
+  std::lock_guard<std::mutex> send_lock(send_mutex_);
   if (!client_->PushMetrics(copy)) {
     LOG_WARN() << "Unable to push metrics";
   }
@@ -248,6 +236,7 @@ void AnalyticsForwarder::FlushAll() {
     }
   }
   for (auto& m : to_send) {
+    std::lock_guard<std::mutex> send_lock(send_mutex_);
     if (!client_->PushMetrics(m)) {
       LOG_WARN() << "Unable to push metrics";
     }
@@ -343,7 +332,7 @@ void AnalyticsForwarder::HandleUplink(const uint8_t* data, size_t len, api::Anal
 }
 
 void AnalyticsForwarder::HandleDownlink(const uint8_t* data, size_t len,
-                                        api::AnalyticsMetrics* frame) {
+                                        api::AnalyticsMetrics* frame, const SockAddr4& local_ep) {
   if (len < 4) return;
   SemtechUDPMessage msg;
   if (!DecodeSemtechUDP(data, len, msg)) return;
@@ -352,12 +341,22 @@ void AnalyticsForwarder::HandleDownlink(const uint8_t* data, size_t len,
   const uint8_t* eui = msg.GatewayEUI();
   if (eui) frame->set_gatewayeui(eui, 8);
 
+  if (msg.kind == kTX_ACK) {
+    *frame->add_downlinkoutcomes() = AckOutcome(msg, config_.gateway_id, local_ep);
+    return;
+  }
   if (msg.kind != kPULL_RESP) return;
   SemtechJsonPayload payload;
   if (!ParseSemtechJsonPayload(msg, payload) || !payload.txpk) return;
 
   const auto& t = *payload.txpk;
+  uint32_t fsk_rate = 0;
+  if (t.modu == "FSK") {
+    auto rate = std::from_chars(t.datr.data(), t.datr.data() + t.datr.size(), fsk_rate);
+    if (rate.ec != std::errc() || rate.ptr != t.datr.data() + t.datr.size()) return;
+  }
   api::AnalyticsDownlink* down = frame->add_downlinks();
+  *down->mutable_delivery() = CommandDelivery(msg, frame->gatewayeui(), config_.gateway_id, local_ep);
   down->set_txtime(t.tmst);
   down->set_txgpstime(t.tmms);
   down->set_fskfreqdev(t.fdev);
@@ -370,8 +369,7 @@ void AnalyticsForwarder::HandleDownlink(const uint8_t* data, size_t len,
     api::LoRaDataRate* lora = ParseDataLoRaRate(t.datr);
     if (lora) down->set_allocated_dataratelora(lora);
   } else if (t.modu == "FSK") {
-    int v = std::atoi(t.datr.c_str());
-    down->set_dataratefsk(static_cast<uint32_t>(v));
+    down->set_dataratefsk(fsk_rate);
   }
   down->set_invertpolarity(t.ipol);
   down->set_immediately(t.imme);
@@ -391,40 +389,38 @@ void AnalyticsForwarder::HandleDownlink(const uint8_t* data, size_t len,
   }
 }
 
-void AnalyticsForwarder::UpLocalData(const uint8_t* data, size_t len, const SockAddr4& local_ep) {
-  api::AnalyticsMetrics* frame = GetOrCreateFrame(local_ep);
-  if (!frame) return;
-  if (frame->has_metrics()) frame->mutable_metrics()->set_uptxpackets(frame->metrics().uptxpackets() + 1);
-  if (len < 4) return;
-  if (SemtechUDPIsUplink(data)) HandleUplink(data, len, frame);
-  else if (SemtechUDPIsDownlink(data)) HandleDownlink(data, len, frame);
-}
+void AnalyticsForwarder::UpLocalData(const uint8_t* data, size_t len, const SockAddr4& peer) { HandleData(data, len, peer, 0); }
+void AnalyticsForwarder::UpRemoteData(const uint8_t* data, size_t len, const SockAddr4& peer) { HandleData(data, len, peer, 1); }
+void AnalyticsForwarder::DnLocalData(const uint8_t* data, size_t len, const SockAddr4& peer) { HandleData(data, len, peer, 2); }
+void AnalyticsForwarder::DnRemoteData(const uint8_t* data, size_t len, const SockAddr4& peer) { HandleData(data, len, peer, 3); }
 
-void AnalyticsForwarder::UpRemoteData(const uint8_t* data, size_t len, const SockAddr4& local_ep) {
-  api::AnalyticsMetrics* frame = GetOrCreateFrame(local_ep);
-  if (!frame) return;
-  if (frame->has_metrics()) frame->mutable_metrics()->set_uprxpackets(frame->metrics().uprxpackets() + 1);
-  if (len < 4) return;
-  if (SemtechUDPIsUplink(data)) HandleUplink(data, len, frame);
-  else if (SemtechUDPIsDownlink(data)) HandleDownlink(data, len, frame);
-}
-
-void AnalyticsForwarder::DnLocalData(const uint8_t* data, size_t len, const SockAddr4& local_ep) {
-  api::AnalyticsMetrics* frame = GetOrCreateFrame(local_ep);
-  if (!frame) return;
-  if (frame->has_metrics()) frame->mutable_metrics()->set_dntxpackets(frame->metrics().dntxpackets() + 1);
-  if (len < 4) return;
-  if (SemtechUDPIsUplink(data)) HandleUplink(data, len, frame);
-  else if (SemtechUDPIsDownlink(data)) HandleDownlink(data, len, frame);
-}
-
-void AnalyticsForwarder::DnRemoteData(const uint8_t* data, size_t len, const SockAddr4& local_ep) {
-  api::AnalyticsMetrics* frame = GetOrCreateFrame(local_ep);
-  if (!frame) return;
-  if (frame->has_metrics()) frame->mutable_metrics()->set_dnrxpackets(frame->metrics().dnrxpackets() + 1);
-  if (len < 4) return;
-  if (SemtechUDPIsUplink(data)) HandleUplink(data, len, frame);
-  else if (SemtechUDPIsDownlink(data)) HandleDownlink(data, len, frame);
+void AnalyticsForwarder::HandleData(const uint8_t* data, size_t len, const SockAddr4& peer, int direction) {
+  std::vector<std::unique_ptr<api::AnalyticsMetrics>> evicted;
+  {
+    std::lock_guard<std::mutex> lock(metrics_mutex_);
+    const uint8_t* gateway = nullptr;
+    if (len >= 12 && data[0] == kSemtechProtocolVersion &&
+        (data[3] == kPUSH_DATA || data[3] == kPULL_DATA || data[3] == kTX_ACK)) gateway = data + 4;
+    auto* frame = GetOrCreateFrame(peer, evicted, gateway);
+    if (frame->downlinkoutcomes_size() >= 4096) {
+      evicted.push_back(std::make_unique<api::AnalyticsMetrics>(*frame));
+      ResetFrameCounters(frame);
+    }
+    if (frame->has_metrics()) {
+      auto* m = frame->mutable_metrics();
+      switch (direction) {
+        case 0: m->set_uptxpackets(m->uptxpackets() + 1); break;
+        case 1: m->set_uprxpackets(m->uprxpackets() + 1); break;
+        case 2: m->set_dntxpackets(m->dntxpackets() + 1); break;
+        case 3: m->set_dnrxpackets(m->dnrxpackets() + 1); break;
+      }
+    }
+    if (len >= 4) {
+      if (SemtechUDPIsUplink(data)) HandleUplink(data, len, frame);
+      else if (SemtechUDPIsDownlink(data)) HandleDownlink(data, len, frame, peer);
+    }
+  }
+  for (auto& frame : evicted) FlushFrame(frame.get());
 }
 
 void AnalyticsForwarder::ConnectLoop() {
@@ -509,6 +505,16 @@ api::LoRaSF AnalyticsForwarder::TestFirstUplinkSF() const {
 std::string AnalyticsForwarder::TestFirstFrame() const {
   std::lock_guard<std::mutex> lock(metrics_mutex_);
   for (const auto& p : metrics_frames_) return p.second->SerializeAsString();
+  return {};
+}
+
+std::string AnalyticsForwarder::TestTakeFirstFrame() {
+  std::lock_guard<std::mutex> lock(metrics_mutex_);
+  for (auto& p : metrics_frames_) {
+    auto snapshot = p.second->SerializeAsString();
+    ResetFrameCounters(p.second.get());
+    return snapshot;
+  }
   return {};
 }
 

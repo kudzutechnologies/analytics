@@ -10,6 +10,7 @@
 #include <string>
 #include <thread>
 #include <unordered_map>
+#include <vector>
 
 namespace client_cc {
 class Client;
@@ -38,6 +39,7 @@ class AnalyticsForwarder {
   api::LoRaSF TestFirstUplinkSF() const;
   std::string TestFirstAntennaETime() const;
   std::string TestFirstFrame() const;
+  std::string TestTakeFirstFrame();
   void TestUpLocalData(const uint8_t* data, size_t len, const SockAddr4& local_ep) {
     UpLocalData(data, len, local_ep);
   }
@@ -46,12 +48,14 @@ class AnalyticsForwarder {
   }
 
  private:
-  api::AnalyticsMetrics* GetOrCreateFrame(const SockAddr4& local_ep);
+  api::AnalyticsMetrics* GetOrCreateFrame(const SockAddr4& local_ep,
+      std::vector<std::unique_ptr<api::AnalyticsMetrics>>& evicted, const uint8_t* gateway);
+  void HandleData(const uint8_t* data, size_t len, const SockAddr4& local_ep, int direction);
   void FlushFrame(api::AnalyticsMetrics* frame);
   void FlushAll();
   bool HasData() const;
   void HandleUplink(const uint8_t* data, size_t len, api::AnalyticsMetrics* frame);
-  void HandleDownlink(const uint8_t* data, size_t len, api::AnalyticsMetrics* frame);
+  void HandleDownlink(const uint8_t* data, size_t len, api::AnalyticsMetrics* frame, const SockAddr4& peer);
   void UpLocalData(const uint8_t* data, size_t len, const SockAddr4& local_ep);
   void UpRemoteData(const uint8_t* data, size_t len, const SockAddr4& local_ep);
   void DnLocalData(const uint8_t* data, size_t len, const SockAddr4& local_ep);
@@ -64,6 +68,7 @@ class AnalyticsForwarder {
   client_cc::Client* client_ = nullptr;
   UdpProxy* proxy_ = nullptr;
   mutable std::mutex metrics_mutex_;
+  std::mutex send_mutex_;
   // Recency-ordered keys (front = oldest) + frames keyed by IP (server-side) or IP:port.
   std::list<std::string> frame_order_;
   std::unordered_map<std::string, std::unique_ptr<api::AnalyticsMetrics>> metrics_frames_;

@@ -1,12 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"net"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	lru "github.com/hashicorp/golang-lru/v2"
@@ -17,6 +19,9 @@ import (
 )
 
 type AnalyticsForwarder struct {
+	sendMu       sync.Mutex
+	metricsMu    sync.Mutex
+	evicted      *api.AnalyticsMetrics
 	client       *client.Client
 	config       ForwarderConfig
 	proxy        *UDPProxy
@@ -46,16 +51,19 @@ func (f *AnalyticsForwarder) StartAndWait() {
 }
 
 func (f *AnalyticsForwarder) handleEvict(key string, frame *api.AnalyticsMetrics) {
-	f.flushDataFrame(frame)
+	f.evicted = frame
 }
 
 func (f *AnalyticsForwarder) getMetricsFrame(localEp *net.UDPAddr) *api.AnalyticsMetrics {
-	key := localEp.IP.String()
+	key := localEp.String()
 	if found, ok := f.metricsFrame.Get(key); ok {
 		return found
 	}
 
 	found := &api.AnalyticsMetrics{}
+	if !f.config.ServerSide {
+		found.GatewayId = f.config.GatewayId
+	}
 
 	// Include stats only on the server-side
 	if f.config.ServerSide {
@@ -116,9 +124,15 @@ func (f *AnalyticsForwarder) hasData() bool {
 }
 
 func (f *AnalyticsForwarder) queueSize() int {
+	f.metricsMu.Lock()
+	defer f.metricsMu.Unlock()
+	return f.queueSizeLocked()
+}
+
+func (f *AnalyticsForwarder) queueSizeLocked() int {
 	var total int = 0
 	for _, f := range f.metricsFrame.Values() {
-		sum := len(f.Uplinks) +
+		sum := len(f.DownlinkOutcomes) + len(f.Uplinks) +
 			len(f.Downlinks) +
 			len(f.Stats)
 
@@ -137,96 +151,90 @@ func (f *AnalyticsForwarder) queueSize() int {
 	return total
 }
 
-func (f *AnalyticsForwarder) flushDataFrame(frame *api.AnalyticsMetrics) {
-	// Copy frame to allow it to be re-used while sending
-	frameCopy := proto.Clone(frame).(*api.AnalyticsMetrics)
-
-	// Reset frame
-	frame.Downlinks = nil
-	frame.Uplinks = nil
-	frame.Stats = nil
-
-	// Reset metrics counters
+// Caller owns frame (either under metricsMu or after eviction).
+func takeMetricsFrame(frame *api.AnalyticsMetrics) *api.AnalyticsMetrics {
+	copy := proto.Clone(frame).(*api.AnalyticsMetrics)
+	frame.Downlinks, frame.DownlinkOutcomes, frame.Uplinks, frame.Stats = nil, nil, nil, nil
 	if frame.Metrics != nil {
-		frame.Metrics.DnRxPackets = 0
-		frame.Metrics.DnTxPackets = 0
-		frame.Metrics.UpRxPackets = 0
-		frame.Metrics.UpTxPackets = 0
-		frame.Metrics.PktPULL_ACK = 0
-		frame.Metrics.PktPULL_DATA = 0
-		frame.Metrics.PktPULL_RESP = 0
-		frame.Metrics.PktPUSH_ACK = 0
-		frame.Metrics.PktPUSH_DATA = 0
-		frame.Metrics.PktTX_ACK = 0
+		frame.Metrics = &api.AnalyticsInternalMetrics{GatewayIp: frame.Metrics.GatewayIp}
 	}
+	return copy
+}
 
-	// Push a copy
-	err := f.client.PushMetrics(frameCopy)
-	if err != nil {
+func (f *AnalyticsForwarder) pushMetrics(frame *api.AnalyticsMetrics) error {
+	f.sendMu.Lock()
+	defer f.sendMu.Unlock()
+	return f.client.PushMetrics(frame)
+}
+
+func (f *AnalyticsForwarder) flushDataFrame(frame *api.AnalyticsMetrics) {
+	if err := f.pushMetrics(takeMetricsFrame(frame)); err != nil {
 		log.Warnf("Unable to push metrics: %s", err.Error())
 	}
 }
 
 func (f *AnalyticsForwarder) flushData() {
 	f.isSending = true
-	log.Debugf("Flushing %d frames in %d gateways", f.queueSize(), f.metricsFrame.Len())
-
-	// Flush data
-	for _, sendFrame := range f.metricsFrame.Values() {
-		f.flushDataFrame(sendFrame)
+	defer func() { f.isSending = false }()
+	f.metricsMu.Lock()
+	frames := make([]*api.AnalyticsMetrics, 0, f.metricsFrame.Len())
+	for _, frame := range f.metricsFrame.Values() {
+		frames = append(frames, takeMetricsFrame(frame))
 	}
-
-	f.isSending = false
-}
-
-func (f *AnalyticsForwarder) UpLocalData(data []byte, localEp *net.UDPAddr) {
-	frame := f.getMetricsFrame(localEp)
-	if frame.Metrics != nil {
-		frame.Metrics.UpTxPackets += 1
-	}
-	if SemtechUDPIsUplink(data) {
-		f.handleUplink(data, localEp, frame)
-	} else if SemtechUDPIsDownlink(data) {
-		f.handleDownlink(data, localEp, frame)
+	f.metricsMu.Unlock()
+	for _, frame := range frames {
+		if err := f.pushMetrics(frame); err != nil {
+			log.Warnf("Unable to push metrics: %s", err.Error())
+		}
 	}
 }
 
-func (f *AnalyticsForwarder) UpRemoteData(data []byte, localEp *net.UDPAddr) {
-	frame := f.getMetricsFrame(localEp)
-	if frame.Metrics != nil {
-		frame.Metrics.UpRxPackets += 1
-	}
-
-	if SemtechUDPIsUplink(data) {
-		f.handleUplink(data, localEp, frame)
-	} else if SemtechUDPIsDownlink(data) {
-		f.handleDownlink(data, localEp, frame)
-	}
+func (f *AnalyticsForwarder) UpLocalData(data []byte, peer *net.UDPAddr) { f.handleData(data, peer, 0) }
+func (f *AnalyticsForwarder) UpRemoteData(data []byte, peer *net.UDPAddr) {
+	f.handleData(data, peer, 1)
+}
+func (f *AnalyticsForwarder) DnLocalData(data []byte, peer *net.UDPAddr) { f.handleData(data, peer, 2) }
+func (f *AnalyticsForwarder) DnRemoteData(data []byte, peer *net.UDPAddr) {
+	f.handleData(data, peer, 3)
 }
 
-func (f *AnalyticsForwarder) DnLocalData(data []byte, localEp *net.UDPAddr) {
-	frame := f.getMetricsFrame(localEp)
-	if frame.Metrics != nil {
-		frame.Metrics.DnTxPackets += 1
+func (f *AnalyticsForwarder) handleData(data []byte, peer *net.UDPAddr, direction int) {
+	f.metricsMu.Lock()
+	if len(data) >= 12 && data[0] == PROTOCOL_VERSION && (data[3] == PUSH_DATA || data[3] == PULL_DATA || data[3] == TX_ACK) {
+		if previous, ok := f.metricsFrame.Peek(peer.String()); ok && len(previous.GatewayEui) == 8 && !bytes.Equal(previous.GatewayEui, data[4:12]) {
+			// A reused NAT endpoint must not relabel an already queued gateway batch.
+			f.metricsFrame.Remove(peer.String())
+		}
 	}
-
-	if SemtechUDPIsUplink(data) {
-		f.handleUplink(data, localEp, frame)
-	} else if SemtechUDPIsDownlink(data) {
-		f.handleDownlink(data, localEp, frame)
+	frame := f.getMetricsFrame(peer)
+	// Keep the separate outcome array within the receiver's per-batch limit.
+	if len(frame.DownlinkOutcomes) >= 4096 {
+		f.evicted = takeMetricsFrame(frame)
 	}
-}
-
-func (f *AnalyticsForwarder) DnRemoteData(data []byte, localEp *net.UDPAddr) {
-	frame := f.getMetricsFrame(localEp)
-	if frame.Metrics != nil {
-		frame.Metrics.DnRxPackets += 1
+	if m := frame.Metrics; m != nil {
+		switch direction {
+		case 0:
+			m.UpTxPackets++
+		case 1:
+			m.UpRxPackets++
+		case 2:
+			m.DnTxPackets++
+		case 3:
+			m.DnRxPackets++
+		}
 	}
-
-	if SemtechUDPIsUplink(data) {
-		f.handleUplink(data, localEp, frame)
-	} else if SemtechUDPIsDownlink(data) {
-		f.handleDownlink(data, localEp, frame)
+	if len(data) >= 4 {
+		if SemtechUDPIsUplink(data) {
+			f.handleUplink(data, peer, frame)
+		} else if SemtechUDPIsDownlink(data) {
+			f.handleDownlink(data, peer, frame)
+		}
+	}
+	evicted := f.evicted
+	f.evicted = nil
+	f.metricsMu.Unlock()
+	if evicted != nil {
+		f.flushDataFrame(evicted)
 	}
 }
 
@@ -265,7 +273,7 @@ func (f *AnalyticsForwarder) handleUplink(data []byte, localEp *net.UDPAddr, met
 			log.Debugf("Gateway EUI: %s, Token: %04x", hex.EncodeToString(eui), frame.Token)
 
 			// Configure gateway
-			metricsFrame.GatewayEui = eui
+			metricsFrame.GatewayEui = append([]byte(nil), eui...)
 			if !f.config.ServerSide {
 				metricsFrame.GatewayId = f.config.GatewayId
 			}
@@ -292,7 +300,7 @@ func (f *AnalyticsForwarder) handleUplink(data []byte, localEp *net.UDPAddr, met
 		}
 	}
 
-	log.Debugf("Queue size=%d", f.queueSize())
+	log.Debugf("Queue size=%d", f.queueSizeLocked())
 }
 
 func (f *AnalyticsForwarder) handleDownlink(data []byte, localEp *net.UDPAddr, metricsFrame *api.AnalyticsMetrics) {
@@ -307,18 +315,26 @@ func (f *AnalyticsForwarder) handleDownlink(data []byte, localEp *net.UDPAddr, m
 		log.Debugf("Gateway EUI: %s, Token: %04x", hex.EncodeToString(eui), frame.Token)
 		log.Debugf("Pair Gateway EUI: %s", hex.EncodeToString(metricsFrame.GatewayEui))
 		if eui != nil {
-			metricsFrame.GatewayEui = eui
+			metricsFrame.GatewayEui = append([]byte(nil), eui...)
+		}
+
+		if frame.Kind == TX_ACK {
+			metricsFrame.DownlinkOutcomes = append(metricsFrame.DownlinkOutcomes, ackOutcome(frame, f.config.GatewayId, localEp))
 		}
 
 		// Convert downlinks
 		tx, err := frame.GetTxPacket()
 		if err == nil && tx != nil {
 			log.Debugf("Got downlink: %+v", tx)
-			metricsFrame.Downlinks = append(metricsFrame.Downlinks, f.convertTxPkt(tx))
+			down := f.convertTxPkt(tx)
+			if down != nil {
+				down.Delivery = commandDelivery(frame, metricsFrame.GatewayEui, f.config.GatewayId, localEp)
+				metricsFrame.Downlinks = append(metricsFrame.Downlinks, down)
+			}
 		}
 	}
 
-	log.Debugf("Queue size=%d", f.queueSize())
+	log.Debugf("Queue size=%d", f.queueSizeLocked())
 }
 
 ////////////////////////////////////////////////////////////////////////////////////
@@ -543,12 +559,11 @@ func (f *AnalyticsForwarder) convertTxPkt(in *SemtechUDPTxPkt) *api.AnalyticsDow
 			DataRateLoRa: parseDataLoRaRate(in.DataRate),
 		}
 	case "FSK":
-		val, err := strconv.Atoi(in.DataRate)
-		if err == nil {
-			out.DataRate = &api.AnalyticsDownlink_DataRateFSK{
-				DataRateFSK: uint32(val),
-			}
+		val, err := strconv.ParseUint(in.DataRate, 10, 32)
+		if err != nil {
+			return nil
 		}
+		out.DataRate = &api.AnalyticsDownlink_DataRateFSK{DataRateFSK: uint32(val)}
 	}
 
 	out.InvertPolarity = in.Ipol

@@ -74,6 +74,34 @@ type SemtechUDPTxPkt struct {
 	Data       string  `json:"data,omitempty"`
 }
 
+// Semtech datr is a string for LoRa and an integer for FSK.
+func (p *SemtechUDPTxPkt) UnmarshalJSON(raw []byte) error {
+	type packet SemtechUDPTxPkt
+	var value struct {
+		*packet
+		Rate json.RawMessage `json:"datr"`
+	}
+	value.packet = (*packet)(p)
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return err
+	}
+	if len(value.Rate) == 0 {
+		return nil
+	}
+	if string(value.Rate) == "null" {
+		return fmt.Errorf("invalid null datr")
+	}
+	if value.Rate[0] == '"' {
+		return json.Unmarshal(value.Rate, &p.DataRate)
+	}
+	var rate uint32
+	if err := json.Unmarshal(value.Rate, &rate); err != nil {
+		return err
+	}
+	p.DataRate = strconv.FormatUint(uint64(rate), 10)
+	return nil
+}
+
 // RSig contains the metadata associated with the received signal
 // (Reference from https://github.com/TheThingsArchive/gateway-connector-bridge/blob/master/backend/pktfwd/structs.go)
 type SemtechUDPRxPktRsig struct {
@@ -116,11 +144,15 @@ type SemtechUDPRxPkt struct {
 }
 
 func DecodeMessage(payload []byte, size int, sender *net.UDPAddr, time time.Time, tags []string) (*SemtechUDPMessage, error) {
-	if size < 4 {
+	if size < 4 || size > len(payload) {
 		return nil, fmt.Errorf("packet too small")
 	}
 	if payload[0] != PROTOCOL_VERSION {
 		return nil, fmt.Errorf("invalid protocol version (%d)", payload[0])
+	}
+
+	if (payload[3] == PUSH_DATA || payload[3] == PULL_DATA || payload[3] == TX_ACK) && size < 12 {
+		return nil, fmt.Errorf("gateway packet has no complete EUI")
 	}
 
 	msg := &SemtechUDPMessage{
