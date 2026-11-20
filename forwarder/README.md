@@ -211,3 +211,14 @@ continue receiving ordinary packets and aggregate counters. Gateway acceptance
 is not confirmed transmission or device receipt. Buffers/transport remain best effort.
 Batches and the existing stream limit now count complete UDP peer endpoints;
 gateways sharing an IP cannot share a mutable envelope.
+
+## Clock units
+
+Both forwarders preserve the Analytics wire contract: uplink `rxWallTime` is
+reported gateway UTC in microseconds; stat `gwTime` and downlink `rxWallTime`
+are UTC milliseconds. A downlink's wall time observes the command at the
+forwarder; it is not its scheduled transmission time. RFC3339 timestamps retain
+their fractional precision up to each field's unit and honor numeric UTC offsets.
+Missing or invalid source time stays zero. Semtech `tmst` stays a wrapping
+microsecond gateway counter, and `tmms` stays milliseconds since the GPS epoch.
+Neither host receipt clocks nor ACK observation clocks establish a radio interval.

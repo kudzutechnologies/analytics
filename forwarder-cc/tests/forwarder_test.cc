@@ -5,6 +5,7 @@
 #include "udp_proxy.h"
 
 #include <arpa/inet.h>
+#include <chrono>
 #include <cstring>
 #include <openssl/evp.h>
 #include <string>
@@ -55,6 +56,16 @@ static std::vector<uint8_t> MakePushWithETime() {
   return pkt;
 }
 
+static std::vector<uint8_t> MakeTimestampPush(const std::string& timestamp) {
+  const std::string json = "{\"rxpk\":[{\"time\":\"" + timestamp +
+      "\",\"tmst\":4294967290,\"tmms\":1384035218123,\"freq\":868.1,\"stat\":1,"
+      "\"modu\":\"LORA\",\"datr\":\"SF7BW125\",\"codr\":\"4/5\",\"size\":21,"
+      "\"data\":\"QKydCyYAQwMB7iu5QD6sH5u1C+Yh\"}],\"stat\":{\"time\":\"" + timestamp + "\"}}";
+  std::vector<uint8_t> pkt{2, 0, 1, kPUSH_DATA, 1, 2, 3, 4, 5, 6, 7, 8};
+  pkt.insert(pkt.end(), json.begin(), json.end());
+  return pkt;
+}
+
 int main() {
   Config cfg;
   cfg.gateway_id = "gw1";
@@ -74,6 +85,39 @@ int main() {
   pc.connect_host = "127.0.0.1";
   UdpProxy proxy(pc);
 
+  const struct {
+    const char* name;
+    const char* input;
+    int64_t micros, millis;
+  } timestamp_cases[] = {
+      {"UTC fractional timestamp units", "2023-11-14T22:13:20.123456789Z", 1700000000123456, 1700000000123},
+      {"positive UTC offset", "2023-11-15T00:13:20.123456789+02:00", 1700000000123456, 1700000000123},
+      {"negative UTC offset", "2023-11-14T15:13:20.123456789-07:00", 1700000000123456, 1700000000123},
+      {"whole seconds", "2023-11-14T22:13:20Z", 1700000000000000, 1700000000000},
+      {"short fraction", "2023-11-14T22:13:20.1Z", 1700000000100000, 1700000000100},
+      {"missing timestamp", "", 0, 0},
+      {"invalid calendar date", "2023-02-29T22:13:20Z", 0, 0},
+      {"trailing text", "2023-11-14T22:13:20Zjunk", 0, 0},
+      {"invalid offset", "2023-11-14T22:13:20+AA:00", 0, 0},
+  };
+  for (const auto& tc : timestamp_cases) {
+    AnalyticsForwarder parser(cfg, &client, &proxy);
+    const auto packet = MakeTimestampPush(tc.input);
+    SockAddr4 source;
+    source.addr = htonl(0x7f000001);
+    source.port = htons(40000);
+    parser.TestUpLocalData(packet.data(), packet.size(), source);
+    api::AnalyticsMetrics clocks;
+    Expect(clocks.ParseFromString(parser.TestFirstFrame()), "parse timestamp fixture frame");
+    Expect(clocks.uplinks_size() == 1 && clocks.stats_size() == 1, "timestamp fixture observations");
+    if (clocks.uplinks_size() == 1 && clocks.stats_size() == 1) {
+      Expect(clocks.uplinks(0).rxwalltime() == tc.micros, tc.name);
+      Expect(clocks.stats(0).gwtime() == tc.millis, tc.name);
+      Expect(clocks.uplinks(0).rxfinishedtime() == 4294967290LL, "concentrator microseconds unchanged");
+      Expect(clocks.uplinks(0).rxgpstime() == 1384035218123LL, "GPS epoch milliseconds unchanged");
+    }
+  }
+
   AnalyticsForwarder fwd(cfg, &client, &proxy);
 
   SockAddr4 ep;
@@ -88,6 +132,8 @@ int main() {
 
   // Shared-port style: downlink arrives on up handler.
   auto dn = B64Decode(kPullResp);
+  const auto before_downlink = std::chrono::duration_cast<std::chrono::milliseconds>(
+      std::chrono::system_clock::now().time_since_epoch()).count();
   fwd.TestUpLocalData(dn.data(), dn.size(), ep);
   ExpectEq(fwd.TestDownlinkCount(), 1, "downlink via up path");
 
@@ -100,6 +146,12 @@ int main() {
   ExpectEq(captured.downlinks(0).phypayload(),
            std::string(expected_down.begin(), expected_down.end()), "complete downlink includes MIC");
   ExpectEq(captured.uplinks(0).fhdr().size(), size_t{9}, "legacy uplink header retained");
+  Expect(captured.downlinks(0).txtime() == 4254370396LL, "TX concentrator microseconds unchanged");
+  const auto after_downlink = std::chrono::duration_cast<std::chrono::milliseconds>(
+      std::chrono::system_clock::now().time_since_epoch()).count();
+  Expect(captured.downlinks(0).rxwalltime() >= before_downlink &&
+         captured.downlinks(0).rxwalltime() <= after_downlink,
+         "command observation uses UTC milliseconds");
 
   auto with_etime = MakePushWithETime();
   SockAddr4 ep2 = ep;

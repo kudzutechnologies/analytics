@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"net"
 	"strconv"
 	"strings"
@@ -443,9 +442,7 @@ func parseDataLoRaRate(dataRate string) *api.LoRaDataRate {
 
 func (f *AnalyticsForwarder) convertRxPkt(in *SemtechUDPRxPkt) *api.AnalyticsUplink {
 	var out api.AnalyticsUplink
-	var tm time.Time
-
-	err := json.Unmarshal([]byte(in.Time), &tm)
+	tm, err := time.Parse(time.RFC3339Nano, in.Time)
 	if err == nil {
 		out.RxWallTime = tm.UnixMicro()
 	}
@@ -518,9 +515,7 @@ func (f *AnalyticsForwarder) convertRxPkt(in *SemtechUDPRxPkt) *api.AnalyticsUpl
 
 func (f *AnalyticsForwarder) convertStatPkt(in *SemtechUDPStat) *api.AnalyticsStat {
 	var out api.AnalyticsStat
-	var tm time.Time
-
-	err := json.Unmarshal([]byte(in.Time), &tm)
+	tm, err := time.Parse(time.RFC3339Nano, in.Time)
 	if err == nil {
 		out.GwTime = tm.UnixMilli()
 	}

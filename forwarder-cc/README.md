@@ -139,3 +139,13 @@ the matching engine gRPC translator for per-command delivery status. Older
 servers safely ignore the additive fields. Acceptance does not prove emission
 or receipt; UDP and gRPC buffering remain best effort. Batches use complete UDP
 peer endpoints and flush the old envelope when its EUI changes.
+
+## Clock units
+
+The Go and C++ forwarders use the same Analytics units: uplink `rxWallTime`
+is gateway UTC microseconds, while stat `gwTime` and command-observation
+downlink `rxWallTime` are UTC milliseconds. RFC3339 fractions and numeric UTC
+offsets are parsed before truncating to the field's unit; invalid or absent
+timestamps remain zero. Semtech `tmst` remains a wrapping microsecond gateway
+counter, and `tmms` remains GPS-epoch milliseconds. Command and ACK observation
+times are separate from the gateway's scheduled transmission time.

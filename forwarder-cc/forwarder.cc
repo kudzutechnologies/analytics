@@ -11,6 +11,7 @@
 #include <openssl/evp.h>
 #include <chrono>
 #include <charconv>
+#include <cerrno>
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
@@ -96,31 +97,62 @@ std::string Base64Decode(const std::string& in) {
 }
 
 int64_t ParseTimeISO8601(const std::string& s) {
-  if (s.empty()) return 0;
-  struct tm t = {};
-  int ms = 0;
-  if (sscanf(s.c_str(), "%4d-%2d-%2dT%2d:%2d:%2d.%3dZ",
-             &t.tm_year, &t.tm_mon, &t.tm_mday, &t.tm_hour, &t.tm_min, &t.tm_sec, &ms) >= 6) {
-    t.tm_year -= 1900;
-    t.tm_mon -= 1;
-    time_t sec = timegm(&t);
-    if (sec != static_cast<time_t>(-1)) return static_cast<int64_t>(sec) * 1000000 + ms * 1000;
+  if (s.size() < 20 || s[4] != '-' || s[7] != '-' || s[10] != 'T' ||
+      s[13] != ':' || s[16] != ':') return 0;
+  auto number = [&s](size_t pos, size_t size) {
+    int value = 0;
+    const char* first = s.data() + pos;
+    const char* last = first + size;
+    const auto result = std::from_chars(first, last, value);
+    return result.ec == std::errc() && result.ptr == last ? value : -1;
+  };
+  const int year = number(0, 4), month = number(5, 2), day = number(8, 2);
+  const int hour = number(11, 2), minute = number(14, 2), second = number(17, 2);
+  if (year < 0 || month < 1 || month > 12 || day < 1 || hour < 0 || hour > 23 ||
+      minute < 0 || minute > 59 || second < 0 || second > 59) return 0;
+  const int days[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+  const bool leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+  if (day > days[month-1] + (month == 2 && leap ? 1 : 0)) return 0;
+
+  size_t pos = 19;
+  int micros = 0, digits = 0;
+  if (s[pos] == '.') {
+    ++pos;
+    while (pos < s.size() && s[pos] >= '0' && s[pos] <= '9') {
+      if (digits < 6) micros = micros * 10 + s[pos] - '0';
+      ++digits;
+      ++pos;
+    }
+    if (digits == 0) return 0;
+    for (; digits < 6; ++digits) micros *= 10;
   }
-  return 0;
+  int offset = 0;
+  if (pos < s.size() && s[pos] == 'Z') {
+    if (++pos != s.size()) return 0;
+  } else if (pos + 6 == s.size() && (s[pos] == '+' || s[pos] == '-') && s[pos+3] == ':') {
+    const int hours = number(pos+1, 2), minutes = number(pos+4, 2);
+    if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return 0;
+    offset = (hours * 3600 + minutes * 60) * (s[pos] == '+' ? 1 : -1);
+  } else {
+    return 0;
+  }
+  struct tm t = {};
+  t.tm_year = year - 1900;
+  t.tm_mon = month - 1;
+  t.tm_mday = day;
+  t.tm_hour = hour;
+  t.tm_min = minute;
+  t.tm_sec = second;
+  errno = 0;
+  const time_t sec = timegm(&t);
+  if (sec == static_cast<time_t>(-1) && errno != 0) return 0;
+  // Four-digit RFC3339 years fit in int64 microseconds.
+  return (static_cast<int64_t>(sec) - offset) * 1000000 + micros;
 }
 
 int64_t ParseTimeISO8601Millis(const std::string& s) {
-  if (s.empty()) return 0;
-  struct tm t = {};
-  int ms = 0;
-  if (sscanf(s.c_str(), "%4d-%2d-%2dT%2d:%2d:%2d.%3dZ",
-             &t.tm_year, &t.tm_mon, &t.tm_mday, &t.tm_hour, &t.tm_min, &t.tm_sec, &ms) >= 6) {
-    t.tm_year -= 1900;
-    t.tm_mon -= 1;
-    time_t sec = timegm(&t);
-    if (sec != static_cast<time_t>(-1)) return static_cast<int64_t>(sec) * 1000 + ms;
-  }
-  return 0;
+  const int64_t micros = ParseTimeISO8601(s);
+  return micros / 1000 - (micros < 0 && micros % 1000 != 0 ? 1 : 0);
 }
 
 void IncPktStat(uint8_t kind, api::AnalyticsInternalMetrics* m) {
