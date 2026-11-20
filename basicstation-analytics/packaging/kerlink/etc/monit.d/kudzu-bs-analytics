@@ -1,0 +1,4 @@
+check process kudzu-bs-analytics with pidfile /run/kudzu-bs-analytics/pid
+    start program = "/etc/init.d/kudzu-bs-analytics start"
+    stop program  = "/etc/init.d/kudzu-bs-analytics stop"
+    if 5 restarts within 5 cycles then timeout

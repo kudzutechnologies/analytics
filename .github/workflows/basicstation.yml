@@ -1,0 +1,81 @@
+name: Basic Station release quality
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  go:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: true
+      - run: go test ./...
+      - run: go vet ./...
+      - run: go test -race ./client ./forwarder-bs
+      - run: go test ./forwarder-bs -run '^$' -fuzz=FuzzCUPSResponse -fuzztime=10s -parallel=2
+      - run: ANALYTICS_SLOW_TESTS=1 go test ./forwarder-bs -run '^TestLongIdleConnection$' -count=1 -timeout=100s
+      - run: python3 tools/build-go-forwarders.py --component bs --version dev --output-dir /tmp/artifacts
+      - run: python3 tools/build-go-forwarders.py --component udp --version dev --output-dir /tmp/artifacts
+      - run: python3 -m unittest discover -s tools/tests -v
+      - uses: actions/upload-artifact@v4
+        with:
+          name: go-linux-candidates
+          path: /tmp/artifacts
+  legacy-udp-race:
+    # Keep UDP lifecycle coverage under the race detector as a required gate.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - run: go test -race ./forwarder
+  cpp:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        sanitizer: [none, thread, 'address,undefined']
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install C++ dependencies
+        run: |
+          # Mirrors can return transient 503s even after apt's per-file retries.
+          # Retry the complete operation, and still fail if dependencies cannot install.
+          for attempt in 1 2 3; do
+            if sudo apt-get -o Acquire::Retries=3 update &&
+               sudo apt-get -o Acquire::Retries=3 install -y cmake libgrpc++-dev protobuf-compiler protobuf-compiler-grpc libprotobuf-dev libssl-dev; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then exit 1; fi
+          done
+      - name: Configure
+        env:
+          SANITIZER: '${{ matrix.sanitizer }}'
+        run: |
+          flags=""
+          if [ "$SANITIZER" != none ]; then flags="-fsanitize=$SANITIZER -fno-omit-frame-pointer"; fi
+          cmake -S basicstation-analytics -B /tmp/bs-build -DCMAKE_BUILD_TYPE=Debug -DBS_ANALYTICS_BUILD_TESTS=ON -DCLIENT_CC_BUILD_TESTS=ON "-DCMAKE_CXX_FLAGS=$flags" "-DCMAKE_EXE_LINKER_FLAGS=$flags"
+      - run: cmake --build /tmp/bs-build -j2
+      - run: ctest --test-dir /tmp/bs-build --output-on-failure
+      - name: Existing C++ UDP checks
+        if: matrix.sanitizer == 'none'
+        run: |
+          cmake -S forwarder-cc -B /tmp/udp-build -DFORWARDER_CC_BUILD_TESTS=ON
+          cmake --build /tmp/udp-build -j2
+          ctest --test-dir /tmp/udp-build --output-on-failure
+      - name: Native resource smoke
+        if: matrix.sanitizer == 'none'
+        run: |
+          go build -trimpath -ldflags='-s -w' -o /tmp/kudzu-forwarder-bs ./forwarder-bs
+          python3 tools/resource-smoke.py --go-binary /tmp/kudzu-forwarder-bs --cpp-binary /tmp/bs-build/basicstation-analytics --output /tmp/resource-smoke.json
+      - uses: actions/upload-artifact@v4
+        if: matrix.sanitizer == 'none'
+        with:
+          name: native-resource-smoke
+          path: /tmp/resource-smoke.json

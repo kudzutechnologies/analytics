@@ -149,7 +149,11 @@ func (c *Client) Disconnect() error {
 	return con.Close()
 }
 
-func (c *Client) Connect() error {
+func (c *Client) Connect() error { return c.ConnectContext(context.Background()) }
+
+// ConnectContext performs one connection/authentication attempt. The caller
+// owns retries and may cancel both the transport dial and login RPCs.
+func (c *Client) ConnectContext(parent context.Context) error {
 	if c.conn != nil {
 		c.Disconnect()
 	}
@@ -164,7 +168,7 @@ func (c *Client) Connect() error {
 		endpoint = c.config.Endpoint
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), c.connTimeout)
+	ctx, cancel := context.WithTimeout(parent, c.connTimeout)
 	defer cancel()
 
 	// Dial to the remote endpoint
@@ -173,6 +177,13 @@ func (c *Client) Connect() error {
 		return fmt.Errorf("could not connect to server: %w", err)
 	}
 
+	// Close every failed attempt; ownership transfers only after login.
+	success := false
+	defer func() {
+		if !success {
+			_ = conn.Close()
+		}
+	}()
 	// Create a client for logging in
 	client := api.NewAnalyticsServerClient(conn)
 
@@ -212,6 +223,7 @@ func (c *Client) Connect() error {
 	c.client = client
 	c.conn = conn
 	c.sessionToken = loginResp.AccessToken
+	success = true
 	return nil
 }
 
@@ -321,4 +333,20 @@ func (c *Client) GatewayDelete(req *api.ReqGatewayDelete) (*api.RespGatewaySync,
 		return err
 	})
 	return resp, err
+}
+
+// PushMetricsOnce sends once with a fresh authenticated context. This method
+// does not reconnect or sleep. Like Connect, it has one owner at a time.
+func (c *Client) PushMetricsOnce(ctx context.Context, metrics *api.AnalyticsMetrics) error {
+	if c.conn == nil {
+		return ErrNotConnected
+	}
+	if c.reqTimeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, c.reqTimeout)
+		defer cancel()
+	}
+	ctx = metadata.NewOutgoingContext(ctx, metadata.Pairs("token", c.sessionToken))
+	_, err := c.client.PushMetrics(ctx, metrics)
+	return err
 }

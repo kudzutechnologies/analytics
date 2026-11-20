@@ -1,0 +1,32 @@
+{
+  "corecell": {
+    "toolchain_root": "/opt/sdk/corecell",
+    "sysroot": "/opt/sdk/corecell/sysroot",
+    "host_protoc": "/opt/host-tools/protoc",
+    "host_grpc_plugin": "/opt/host-tools/grpc_cpp_plugin",
+    "protobuf_version": "REPLACE_FROM_SDK",
+    "grpc_version": "REPLACE_FROM_SDK",
+    "runtime_dependencies": "REPLACE_FROM_SDK",
+    "producer_include_dirs": []
+  },
+  "rpi": {
+    "toolchain_root": "/opt/sdk/rpi",
+    "sysroot": "/opt/sdk/rpi/sysroot",
+    "host_protoc": "/opt/host-tools/protoc",
+    "host_grpc_plugin": "/opt/host-tools/grpc_cpp_plugin",
+    "protobuf_version": "REPLACE_FROM_SDK",
+    "grpc_version": "REPLACE_FROM_SDK",
+    "runtime_dependencies": "REPLACE_FROM_SDK",
+    "producer_include_dirs": []
+  },
+  "kerlink": {
+    "toolchain_root": "/opt/sdk/kerlink",
+    "sysroot": "/opt/sdk/kerlink/sysroot",
+    "host_protoc": "/opt/host-tools/protoc",
+    "host_grpc_plugin": "/opt/host-tools/grpc_cpp_plugin",
+    "protobuf_version": "REPLACE_FROM_SDK",
+    "grpc_version": "REPLACE_FROM_SDK",
+    "runtime_dependencies": "REPLACE_FROM_SDK",
+    "producer_include_dirs": []
+  }
+}

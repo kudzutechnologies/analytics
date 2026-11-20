@@ -13,6 +13,12 @@ import (
 )
 
 type UDPProxy struct {
+	mu           sync.Mutex
+	eventsMu     sync.RWMutex
+	idMu         sync.Mutex
+	restartWg    sync.WaitGroup
+	done         chan struct{}
+	restarting   bool
 	closed       bool
 	closeWg      sync.WaitGroup
 	upSock       *net.UDPConn
@@ -49,6 +55,7 @@ func CreateUDPProxy(config *UDPProxyConfig) (*UDPProxy, error) {
 	var err error
 	inst := &UDPProxy{
 		config: config,
+		done:   make(chan struct{}),
 	}
 
 	inst.upStreams, err = lru.NewWithEvict(config.SocketStreams, inst.evictStream)
@@ -65,16 +72,34 @@ func CreateUDPProxy(config *UDPProxyConfig) (*UDPProxy, error) {
 	}
 
 	err = inst.bindLocal()
+	if err != nil {
+		inst.Close()
+	}
 	return inst, err
 }
 
 func (s *UDPProxy) Close() {
+	s.mu.Lock()
+	if !s.closed {
+		s.closed = true
+		close(s.done)
+	}
+	s.mu.Unlock()
 	s.closeAll()
+	s.restartWg.Wait()
 	s.joinThreads()
 }
 
 func (s *UDPProxy) SetEventHandler(events UDPProxyEvents) {
+	s.eventsMu.Lock()
+	defer s.eventsMu.Unlock()
 	s.config.Events = events
+}
+
+func (s *UDPProxy) eventHandler() UDPProxyEvents {
+	s.eventsMu.RLock()
+	defer s.eventsMu.RUnlock()
+	return s.config.Events
 }
 
 func (p *UDPProxy) writeDump(stream int, data []byte) {
@@ -92,12 +117,16 @@ func (p *UDPProxy) writeDump(stream int, data []byte) {
 
 func (s *UDPProxy) evictStream(key string, stream *ProxyStream) {
 	log.Debugf("[%s] Stream evicted", stream.conf.Name)
-	stream.Close()
+	stream.stop()
 }
 
 func (s *UDPProxy) bindLocal() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return ErrSocketClosed
+	}
 	var err error
-	s.closed = false
 
 	// Open first connection
 	s.upSock, err = net.ListenUDP("udp", s.config.UpListenAddr)
@@ -105,54 +134,47 @@ func (s *UDPProxy) bindLocal() error {
 		return fmt.Errorf("could not bind to %s for UP: %w", s.config.UpListenAddr.String(), err)
 	}
 
-	s.closeWg.Add(1)
-	go s.upThread()
-	log.Infof("[up] Listening on %s for uplinks", s.config.UpListenAddr.String())
-
 	// Open second connection
 	if s.config.DownListenAddr != nil {
 		s.dnSock, err = net.ListenUDP("udp", s.config.DownListenAddr)
 		if err != nil {
+			s.upSock.Close()
 			return fmt.Errorf("could not bind to %s for DOWN: %w", s.config.DownListenAddr.String(), err)
 		}
 
-		s.closeWg.Add(1)
-		go s.dnThread()
 		log.Infof("[dn] Listening on %s for downlinks", s.config.DownListenAddr.String())
 	} else {
 		log.Infof("[dn] Also listening on %s for downlinks", s.config.UpListenAddr.String())
 	}
 
+	s.restarting = false
+	s.closeWg.Add(1)
+	go s.upThread(s.upSock)
+	if s.dnSock != nil {
+		s.closeWg.Add(1)
+		go s.dnThread(s.dnSock)
+	}
 	return nil
 }
 
-func (s *UDPProxy) bindLocalWithBackoff() {
-	err := s.bindLocal()
-	if err != nil {
-		log.Warnf("Could not start local sockets: %s", err.Error())
-		s.scheduleRestart()
-	}
-}
-
 func (s *UDPProxy) closeAll() {
-	if s.closed {
-		return
-	}
-
-	s.closed = true
+	s.mu.Lock()
 	if s.upSock != nil {
-		log.Debugf("[up] Closing socket")
 		s.upSock.Close()
 	}
 	if s.dnSock != nil {
-		log.Debugf("[dn] Closing socket")
 		s.dnSock.Close()
 	}
-
-	log.Debugf("[up] Purging %d streams", s.upStreams.Len())
+	// Creation also holds mu, so no stream can be admitted after this purge.
 	s.upStreams.Purge()
-	log.Debugf("[dn] Purging %d streams", s.dnStreams.Len())
 	s.dnStreams.Purge()
+	s.mu.Unlock()
+}
+
+func (s *UDPProxy) stopped() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.closed || s.restarting
 }
 
 func (s *UDPProxy) joinThreads() {
@@ -161,33 +183,44 @@ func (s *UDPProxy) joinThreads() {
 }
 
 func (s *UDPProxy) scheduleRestart() {
-	if s.closed {
+	s.mu.Lock()
+	if s.closed || s.restarting {
+		s.mu.Unlock()
 		return
 	}
-
-	log.Infof("Restarting sockets in %d seconds", s.config.ReconnectInterval)
-	s.closeAll()
-
+	s.restarting = true
+	s.restartWg.Add(1)
+	s.mu.Unlock()
 	go func() {
-		// We might be called from within the thread, so we should not try to
-		// join in the same stack frame. However we should wait before we try
-		// to re-start again...
+		defer s.restartWg.Done()
+		s.closeAll()
 		s.joinThreads()
-
-		time.Sleep(time.Second * time.Duration(s.config.ReconnectInterval))
-		s.bindLocalWithBackoff()
+		for {
+			timer := time.NewTimer(time.Second * time.Duration(s.config.ReconnectInterval))
+			select {
+			case <-s.done:
+				timer.Stop()
+				return
+			case <-timer.C:
+			}
+			if err := s.bindLocal(); err == nil {
+				return
+			} else {
+				log.Warnf("Could not restart local sockets: %s", err)
+			}
+		}
 	}()
 }
 
-func (s *UDPProxy) upThread() {
+func (s *UDPProxy) upThread(socket *net.UDPConn) {
 	defer s.closeWg.Done()
 
 	b := make([]byte, s.config.BufferSize)
 	log.Debugf("[up] Started thread")
 
-	for !s.closed {
-		n, addr, err := s.upSock.ReadFromUDP(b)
-		if s.closed {
+	for !s.stopped() {
+		n, addr, err := socket.ReadFromUDP(b)
+		if s.stopped() {
 			break
 		}
 
@@ -198,6 +231,9 @@ func (s *UDPProxy) upThread() {
 		}
 
 		stream := s.getUpStreamFor(addr, b[0:n])
+		if stream == nil {
+			break
+		}
 		s.writeDump(stream.conf.Index*2+0, b[0:n])
 
 		err = stream.HandleLocalData(b[0:n])
@@ -205,10 +241,10 @@ func (s *UDPProxy) upThread() {
 			log.Warnf("[up:%s] Could not write to remote: %s", addr.String(), err.Error())
 			log.Debugf("[up:%s] Evicting due to error", addr.String())
 			s.upStreams.Remove(addr.String())
-			break
+			continue
 		} else {
-			if s.config.Events != nil {
-				s.config.Events.UpLocalData(b[0:n], addr)
+			if events := s.eventHandler(); events != nil {
+				events.UpLocalData(b[0:n], addr)
 			}
 		}
 	}
@@ -216,15 +252,15 @@ func (s *UDPProxy) upThread() {
 	log.Debugf("[up] Exited thread")
 }
 
-func (s *UDPProxy) dnThread() {
+func (s *UDPProxy) dnThread(socket *net.UDPConn) {
 	defer s.closeWg.Done()
 
 	b := make([]byte, s.config.BufferSize)
 	log.Debugf("[dn] Started thread")
 
-	for !s.closed {
-		n, addr, err := s.dnSock.ReadFromUDP(b)
-		if s.closed {
+	for !s.stopped() {
+		n, addr, err := socket.ReadFromUDP(b)
+		if s.stopped() {
 			break
 		}
 
@@ -235,6 +271,9 @@ func (s *UDPProxy) dnThread() {
 		}
 
 		stream := s.getDnStreamFor(addr, b[0:n])
+		if stream == nil {
+			break
+		}
 		s.writeDump(stream.conf.Index*2+0, b[0:n])
 
 		err = stream.HandleLocalData(b[0:n])
@@ -242,10 +281,10 @@ func (s *UDPProxy) dnThread() {
 			log.Warnf("[up:%s] Could not write to remote: %s", addr.String(), err.Error())
 			log.Debugf("[dn:%s] Evicting due to error", addr.String())
 			s.dnStreams.Remove(addr.String())
-			break
+			continue
 		} else {
-			if s.config.Events != nil {
-				s.config.Events.DnLocalData(b[0:n], addr)
+			if events := s.eventHandler(); events != nil {
+				events.DnLocalData(b[0:n], addr)
 			}
 		}
 	}
@@ -254,6 +293,8 @@ func (s *UDPProxy) dnThread() {
 }
 
 func (s *UDPProxy) getStreamId(ip net.IP, idByes []byte) int {
+	s.idMu.Lock()
+	defer s.idMu.Unlock()
 	key := ip.String()
 	slot, ok := s.streamIds.Get(key)
 	if !ok {
@@ -270,6 +311,11 @@ func (s *UDPProxy) getStreamId(ip net.IP, idByes []byte) int {
 }
 
 func (s *UDPProxy) getUpStreamFor(addr *net.UDPAddr, idbytes []byte) *ProxyStream {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed || s.restarting {
+		return nil
+	}
 	key := addr.String()
 	if found, ok := s.upStreams.Get(key); ok {
 		return found
@@ -284,11 +330,12 @@ func (s *UDPProxy) getUpStreamFor(addr *net.UDPAddr, idbytes []byte) *ProxyStrea
 		LocalReplyAddress: addr,
 		RemoteAddress:     s.config.UpConnectAddr,
 		RemoteBindAddress: s.config.UpConnectBindAddr,
+		workers:           &s.closeWg,
 		Events: ProxyStreamEvents{
 			DataReceived: func(data []byte, rxFrom *net.UDPAddr) {
 				s.writeDump(idx*2+1, data)
-				if s.config.Events != nil {
-					s.config.Events.UpRemoteData(data, addr)
+				if events := s.eventHandler(); events != nil {
+					events.UpRemoteData(data, addr)
 				}
 			},
 			LocalError: func(err error) {
@@ -305,6 +352,11 @@ func (s *UDPProxy) getUpStreamFor(addr *net.UDPAddr, idbytes []byte) *ProxyStrea
 }
 
 func (s *UDPProxy) getDnStreamFor(addr *net.UDPAddr, idBytes []byte) *ProxyStream {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed || s.restarting {
+		return nil
+	}
 	key := addr.String()
 	if found, ok := s.dnStreams.Get(key); ok {
 		return found
@@ -318,11 +370,12 @@ func (s *UDPProxy) getDnStreamFor(addr *net.UDPAddr, idBytes []byte) *ProxyStrea
 		LocalReplyAddress: addr,
 		RemoteAddress:     s.config.DownConnectAddr,
 		RemoteBindAddress: s.config.DownConnectBindAddr,
+		workers:           &s.closeWg,
 		Events: ProxyStreamEvents{
 			DataReceived: func(data []byte, rxFrom *net.UDPAddr) {
 				s.writeDump(idx*2+1, data)
-				if s.config.Events != nil {
-					s.config.Events.DnRemoteData(data, addr)
+				if events := s.eventHandler(); events != nil {
+					events.DnRemoteData(data, addr)
 				}
 			},
 			LocalError: func(err error) {
