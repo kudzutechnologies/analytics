@@ -1,4 +1,4 @@
-package main
+package forwarderbs
 
 import (
 	"bytes"
@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -212,6 +213,19 @@ func (r *gatewayRegistry) authorize(req *http.Request, claimed string, store *Ce
 	return id, nil
 }
 func (p *WSProxy) authorize(req *http.Request, claimed string) (string, error) {
+	id, e := p.authorizeIdentity(req, claimed)
+	if e != nil {
+		return "", e
+	}
+	if s := p.config.CertStore; s != nil && s.Persistence != nil {
+		_, e = s.Persistence.Load(req.Context(), id)
+		if e != nil && !errors.Is(e, ErrNotFound) {
+			return "", e
+		}
+	}
+	return id, nil
+}
+func (p *WSProxy) authorizeIdentity(req *http.Request, claimed string) (string, error) {
 	if p.auth != nil {
 		return p.auth.authorize(req, claimed, p.config.CertStore)
 	}
@@ -285,4 +299,52 @@ func (c *WSProxyConfig) allowedUpstream(raw string) bool {
 		}
 	}
 	return false
+}
+
+// GatewayAuthorization supplies authorization without token files.
+type GatewayAuthorization struct {
+	Router       string
+	Pins         []string
+	IngressToken string
+	TCAuth       string
+	CUPSAuth     string
+}
+
+func registryFromRecords(records []GatewayAuthorization) (*gatewayRegistry, error) {
+	r := &gatewayRegistry{gateways: map[string]*gatewayAccess{}, pins: map[string]string{}}
+	for _, v := range records {
+		id, e := ParseGatewayID(v.Router)
+		if e != nil {
+			return nil, e
+		}
+		if r.gateways[id] != nil {
+			return nil, fmt.Errorf("duplicate gateway")
+		}
+		a := &gatewayAccess{Router: id, tcAuth: v.TCAuth, cupsAuth: v.CUPSAuth}
+		for _, pin := range v.Pins {
+			pin = strings.ToLower(pin)
+			b, e := hex.DecodeString(pin)
+			if e != nil || len(b) != 32 {
+				return nil, fmt.Errorf("invalid pin")
+			}
+			if r.pins[pin] != "" {
+				return nil, fmt.Errorf("duplicate pin")
+			}
+			r.pins[pin] = id
+		}
+		if v.IngressToken != "" {
+			a.hasToken = true
+			a.digest = sha256.Sum256([]byte(v.IngressToken))
+			for _, other := range r.gateways {
+				if other.hasToken && other.digest == a.digest {
+					return nil, fmt.Errorf("duplicate ingress token")
+				}
+			}
+		}
+		if len(v.Pins) == 0 && !a.hasToken {
+			return nil, fmt.Errorf("gateway requires ingress proof")
+		}
+		r.gateways[id] = a
+	}
+	return r, nil
 }

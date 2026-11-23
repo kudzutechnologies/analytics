@@ -1,212 +1,231 @@
-# Kudzu Basic Station proxy
+# Kudzu Basic Station library
 
-`kudzu-forwarder-bs` forwards Basic Station discovery and LNS WebSockets and
-collects analytics in a bounded memory queue. An unavailable analytics backend
-does not block radio forwarding. This proxy terminates TLS and needs its own
-pre-provisioned listener identity and upstream access.
+Package `forwarderbs` embeds a Basic Station CUPS/LNS proxy and analytics
+collection in Go applications. It forwards discovery and data WebSockets while
+collecting analytics in a bounded memory queue. Analytics outages do not block
+radio forwarding.
 
-## Local gateway
+For the standalone executable, configuration files, gateway registration, and
+command-line bootstrap export, see the [CLI README](cli/README.md).
 
-```ini
-# /etc/kudzu-forwarder-bs.conf (0600)
-proxy-mode=local
-listen-host=127.0.0.1
-listen-port=8090
-connect-uri=wss://lns.example.test
-client-id=YOUR_ANALYTICS_CLIENT_ID_HEX
-client-key=YOUR_ANALYTICS_CLIENT_KEY_HEX
-gateway=YOUR_KUDZU_GATEWAY_OBJECT_ID
-```
+## Quick start
 
-Run `kudzu-forwarder-bs --config=/etc/kudzu-forwarder-bs.conf`. Configure Station
-`tc.uri` to `ws://127.0.0.1:8090`; keep CUPS pointed at the original CUPS service
-unless managed CUPS has been deliberately configured. Local mode accepts only
-loopback bindings. Set `gateway-eui` when a direct connection needs a router
-identity without discovery. EUI/ID6 identity is distinct from the analytics
-platform's gateway ObjectID.
+Import `github.com/kudzutechnologies/analytics/forwarder-bs` as `forwarderbs`.
+Start with the default configuration rather than a zero-value struct:
 
-## Shared proxy
+```go
+package main
 
-Shared mode requires explicit TLS, a public root WebSocket URI, and a registry
-of already authorized gateways. Unknown gateways cannot enroll themselves.
+import (
+    "context"
+    "log"
+    "os"
+    "os/signal"
 
-```ini
-proxy-mode=shared
-listen-host=0.0.0.0
-listen-tls-cert=/etc/kudzu/listener.crt
-listen-tls-key=/etc/kudzu/listener.key
-public-uri=wss://proxy.example.test:8090
-gateway-auth-file=/etc/kudzu/gateways.json
-server-side=true
-```
+    forwarderbs "github.com/kudzutechnologies/analytics/forwarder-bs"
+)
 
-Supply the same analytics credentials and upstream settings as in local mode.
-`server-side` controls analytics platform identity handling; `proxy-mode`
-controls ingress authorization. The registry is loaded at startup; restart to
-apply changes. It accepts at most 4096 gateways and 1 MiB of JSON:
+func main() {
+    config := forwarderbs.DefaultForwarderConfig()
+    config.ConnectURI = "wss://lns.example.test"
+    config.ClientId = os.Getenv("CLIENT_ID")
+    config.ClientKey = os.Getenv("CLIENT_KEY")
+    config.GatewayId = os.Getenv("GATEWAY")
 
-```json
-{
-  "version": 1,
-  "gateways": [{
-    "router": "0102030405060708",
-    "client_cert_sha256": ["REPLACE_WITH_64_HEX_DIGIT_SHA256_OF_CLIENT_CERT_DER"],
-    "ingress_token_file": "gateway-a.ingress-token",
-    "upstream_tc_token_file": "gateway-a.tc-token",
-    "upstream_cups_token_file": "gateway-a.cups-token"
-  }]
+    forwarder, err := forwarderbs.New(config, forwarderbs.Dependencies{})
+    if err != nil {
+        log.Fatal(err)
+    }
+    ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+    defer stop()
+    if err := forwarder.Run(ctx); err != nil {
+        log.Fatal(err)
+    }
 }
 ```
 
-Use a client certificate pin, an ingress token, or both. Pins and ingress tokens
-must uniquely identify a gateway. Certificate validity and client-auth usage
-are checked. If both proofs are supplied they must identify the same gateway.
-A certificate common name alone grants no access. Token paths are relative to
-the registry; token files must be regular and private (`0600`, at most 8192
-bytes). A token without a scheme gets `Bearer ` prepended. Ingress proof is
-separate from upstream TC and CUPS credentials. Authorization happens before
-upstream credential selection. The router claimed in a query/discovery body
-must match the authenticated identity.
+This local-mode example binds to loopback. The gateway EUI used by Basic Station
+is distinct from the analytics platform's gateway ObjectID (`GatewayId`). Supply
+`GatewayEUI` when a direct connection needs an identity without discovery.
 
-## LNS routing and TLS
+## Using an existing HTTP server
 
-`connect-uri` is required. Discovery uses `connect-discovery-uri` when set,
-otherwise the base/data host plus `connect-discovery-path` (default
-`/router-info`). Data uses the URI assigned by discovery, or the explicit
-`connect-data-uri` / `connect-data-path` override. Discovery HTTP 404 enables a
-synthetic response using the configured data endpoint. Other failures remain
-failures. Discovery responses advertise `public-uri`; its path must be root.
-Request Host headers do not determine the public destination.
-Advertised data URIs include an explicit root slash before the router query;
-Station rejects a discovery URI with no path. This normalization does not alter
-the CUPS URI or require adding a trailing slash to `public-uri`.
+Call `Start(ctx)` to start analytics and lifecycle monitoring without opening a
+listener. Mount `Handler()` on your server and use `TLSConfig()` when terminating
+TLS there. On shutdown, stop the host server and call `Shutdown(ctx)` with a
+bounded context; WebSocket connections require the forwarder's own shutdown.
+See the [embedding example](example_test.go).
 
-The discovery response's `router` is validated as the gateway identity. String
-`muxs` endpoint labels are forwarded unchanged; they are not authorization or
-routing decisions. Explicit upstream rejections remain rejections even if their
-identity fields are empty. Decode failures report the failing field without
-dumping the upstream response body.
+Shared mode requires TLS, `PublicURI`, and gateway authorization. Preserve
+`tls.RequestClientCert` in the supplied TLS configuration so the handler receives
+peer certificates. Certificate pins and/or ingress tokens authorize the gateway;
+a certificate CN alone grants no access. The handler expects actual TLS request
+state; forwarded headers do not replace it. Mount at the public root path.
+`TLSConfig()` returns nil when listener certificate loading fails or no listener
+certificate is configured.
 
-An assigned destination or redirect must match a configured upstream origin.
-Add other legitimate destinations with comma-separated
-`upstream-allowed-origins`. Origins compare scheme, hostname, and effective
-port; HTTPS and WSS share an origin. `connect-ws-subprotocol` selects an explicit
-subprotocol. The Station version message is forwarded unchanged unless
-`inject-router-into-version=true` is set. Both directions receive heartbeats;
-replaced/closed sessions release identity-specific runtime state.
-The 60-second read inactivity deadline refreshes on incoming application
-messages, ping frames, and pong frames. A silent peer still times out; active
-traffic is not discarded merely because it omits pong replies to proxy pings.
+## API reference
 
-System roots verify upstream TLS by default. `connect-tls-ca` adds a CA;
-`connect-data-tls-ca` and `connect-data-tls-server-name` customize the data
-connection. `connect-tls-insecure` and `connect-data-tls-insecure` explicitly
-disable verification and are unsuitable for normal release configurations.
-Listener TLS requires both `listen-tls-cert` and `listen-tls-key`. Normal startup
-does not generate a listener certificate or a CA.
+Signatures below describe the primary embedding API. Run
+`go doc ./forwarder-bs` from the repository root for the complete exported API.
 
-An optional `certs-dir` imports existing upstream credentials. Canonical router
-filenames are `{router}.server.crt` / `.server.key` for CUPS and
-`{router}_tc.server.crt` / `.server.key` for TC. Purpose-specific credentials
-never fall back to the other purpose. Provision the matching trust/key files
-privately. Proxy-issued client certificates are used only with explicit
-`certs-upstream-client-cert=true`, when the upstream trusts that CA.
+### Construction and lifecycle
 
-## Managed CUPS
+| API | Behavior |
+|---|---|
+| `DefaultForwarderConfig() ForwarderConfig` | Returns default resource, timeout, endpoint, and proxy settings. |
+| `New(ForwarderConfig, Dependencies) (*Forwarder, error)` | Validates configuration and constructs the proxy and analytics collector without starting workers or a listener. May read configured files and open an explicitly configured debug dump. |
+| `(*Forwarder).Run(context.Context) error` | Starts workers and an owned HTTP/TLS listener; cancellation or a server error triggers shutdown. |
+| `(*Forwarder).Start(context.Context) error` | Starts workers and context monitoring for a host-owned HTTP server. The first successful call supplies the lifetime context. |
+| `(*Forwarder).Handler() http.Handler` | Returns the discovery, data, and managed CUPS handler. |
+| `(*Forwarder).TLSConfig() *tls.Config` | Returns listener TLS settings, including client certificate requests. |
+| `(*Forwarder).Shutdown(context.Context) error` | Idempotently closes proxy sessions and drains analytics within the supplied deadline. Does not stop a host-owned server. |
+| `(*Forwarder).DeliveryStats() DeliveryStats` | Returns queue retention, drop, and analytics failure counters. |
 
-Default `cups-mode=off` leaves CUPS outside the proxy. `cups-mode=managed`
-requires `certs-dir`, an explicit listener certificate signed by the configured
-proxy CA, and a valid public TLS hostname. Provision ingress authorization and
-upstream access before starting. Station must trust the proxy listener for
-both TC and CUPS. This mode intentionally issues proxy credentials and writes
-changed upstream state; it does not enable unauthenticated first enrollment.
+Instances cannot restart after shutdown. Queue retention is memory-only: process
+exit or a shutdown deadline can lose pending telemetry. Ambiguous RPC results can
+produce duplicates. These counters do not establish that radio traffic reached
+the LNS.
 
-In this mode `connect-uri` identifies the initial upstream CUPS service. Until
-CUPS supplies a TC URI, the proxy reports an empty upstream `tcUri` (or the
-explicit `connect-data-uri` override). It never substitutes the CUPS host as an
-LNS endpoint. LNS discovery returns a provisioning-pending error and direct
-data connections return HTTP 503 until an endpoint is assigned or explicitly
-configured. A discovery HTTP 404 falls back only to a known LNS data endpoint.
+### Configuration and dependencies
 
-Unchanged updates return the 14-byte zero response. Credentials are compared
-with Basic Station CRC semantics; unchanged files are not rewritten. Changed
-binary credentials are stored atomically as purpose-specific `.server.cred`
-files. `cups-max-credential-bytes` defaults to 16384 (range 1024–65535).
-Malformed DER, lengths, and signatures are rejected. Firmware responses require
-a known Content-Length and stream with a small fixed buffer; there is no
-firmware spool. Owners must manage certificate renewal and provisioning.
+`ForwarderConfig` retains the same settings used by the CLI. Its transport fields
+control discovery/data URIs, allowed origins, TLS, managed CUPS, and local/shared
+mode; its resource fields bound queue sizes and active sessions. See
+[config.go](config.go) for every field and the [CLI configuration reference](cli/README.md#configuration-and-retention)
+for defaults and file/environment mappings.
 
-## Configuration and retention
+Embedded callers can supply material directly:
 
-Precedence is defaults → INI → environment → CLI, including explicit default
-values. Options use kebab case; environment variables use UPPER_SNAKE_CASE.
-`--config` / `CONFIG` select a file. Unknown options, conflicting aliases,
-invalid integers, and invalid profiles fail startup.
+| Fields | Purpose |
+|---|---|
+| `CertsCACertPEM`, `CertsCAKeyPEM` | Trust CA certificate and optional signing key. |
+| `IssuerCertPEM`, `IssuerKeyPEM` | Optional separate issuer signing pair. |
+| `ListenTLSCertPEM`, `ListenTLSKeyPEM` | Listener certificate chain and private key. |
+| `ConnectTLSCAPEM`, `ConnectDataTLSCAPEM` | Additional upstream trust, including a data-specific override. |
+| `GatewayAuthorizations` | Gateway authorization records without a manifest file. |
+| `Logger` | Instance logging through `logrus.FieldLogger`. |
 
-| Control | Default | Minimum / meaning |
-|---|---:|---|
-| `max-batches` | 2 | 1; global, including partial and in-flight batches |
-| `max-messages` | 32 | 1 per batch; statistics count as messages |
-| `max-buffer-bytes` | 65536 | 1024; charged serialized telemetry, not process RSS |
-| `batch-sec` | 10 | 1 second; `flush-interval` / `FLUSH_INTERVAL` alias |
-| `max-ws-streams` | 1 local / 256 shared | 1; includes pending connections |
-| `shutdown-deadline-ms` | 5000 | 0; one deadline for listener, sessions, and sender |
-| `analytics-connect-timeout` | 5 | 1 second |
-| `analytics-request-timeout` | 5 | 1 second |
-| `analytics-max-backoff` | 60 | 1 second; exponential retry cap |
+PEM inputs take precedence over corresponding file paths. They and the inline
+logger/authorization fields are excluded from config serialization and automatic
+flag generation. No CA is generated implicitly.
 
-Source [minimum.env](minimum.env) for the smallest supported retention profile;
-supply credentials and endpoints separately. A pinned in-flight batch consumes
-capacity. When full, oldest waiting telemetry is evicted; new telemetry is
-rejected if only in-flight work remains. Acknowledged batches leave the queue;
-failed pushes remain for retry. Permanent INVALID_ARGUMENT responses are
-counted and discarded. Statistics refused at a flush/session close are counted
-as loss. Restart and deadline expiry can lose retained telemetry. RPC ambiguity
-can produce duplicate delivery. There is no disk spool or exactly-once promise.
-`pre-identity-max-messages` is accepted for profile compatibility; this proxy
-collects only after a router has been resolved and authorized.
+`Dependencies` accepts:
 
-`gauge-stat` defaults false. `analytics-endpoint` defaults to
-`ingress.eu1.cluster.kudzu.gr:443`; `analytics-ca-file` appends a CA for analytics
-and pairing. `--pair-pin=PIN` fetches a configuration; add `--write --config=PATH`
-to save it privately. `pairing-endpoint` defaults to
-`https://console.eu1.cluster.kudzu.gr` and appends `/api/v1/pairing/edge`.
+- `Persistence GatewayPersistence`: custom storage; otherwise `CertsDir` selects
+  `FilesystemPersistence` when configured.
+- `Analytics AnalyticsTransport`: custom analytics transport; otherwise a client
+  is created from the analytics fields in `ForwarderConfig`.
+- `Logger logrus.FieldLogger`: overrides the configuration logger for this instance.
 
-Logs default to stderr at `info`; no application log file is created.
-Managed CUPS logs the upstream HTTP status, response length, URI origins, and
-credential/update byte counts. An empty upstream response with zero local
-credential CRCs produces a warning: issuing proxy credentials does not establish
-that the gateway obtained upstream credentials or connected to the LNS. Discovery
-and data connection logs show connection stages and HTTP/TLS failure categories.
-Data sessions also log forwarding of `version` and `router_config`. Minute and
-close summaries include session age, frame counts, handshake flags, and ping/pong
-counts for each peer. Read failures identify the side and distinguish timeouts
-from WebSocket close codes. A WebSocket connection alone does not establish that
-Station has accepted the radio configuration or that radio traffic is flowing.
-These diagnostics omit credential bodies, request/response payloads, URL userinfo,
-paths, and query strings.
-`log-level` accepts error/warn/info/debug. Minute and shutdown summaries report
-retention, loss reasons, and connection/push failures without payloads or keys.
-`log-file` is an explicit operator-managed file. `verbose` enables packet debug
-logging; `debug-dump=PATH` writes raw WebSocket records privately, capped by
-`debug-dump-max-bytes` (default 1048576, zero disables). Existing file bytes
-consume that cap. Debug traffic can contain sensitive payloads; keep diagnostics
-brief and remove them after use. Runtime memory, protobuf allocations, TLS,
-sockets, and per-session state add to the telemetry byte budget.
+`GatewayAuthorization` contains `Router`, certificate `Pins`, an `IngressToken`,
+and purpose-specific `TCAuth` / `CUPSAuth` headers. Inline token/header values must
+include the intended authorization scheme, such as `Bearer `. Pins and ingress
+tokens must uniquely identify gateways.
 
-## Build and release
+The reusable parsing helpers do not execute CLI actions or exit the process:
 
-Use Go 1.20+ for the repository's dependency and test graph:
-
-```sh
-go build -trimpath -ldflags='-s -w' -o kudzu-forwarder-bs ./forwarder-bs
-go test ./client ./forwarder-bs
-go test -race ./client ./forwarder-bs
-python3 tools/build-go-forwarders.py --component bs --version dev --output-dir /tmp/bs-artifacts
+```go
+func ParseForwarderConfig(args, environ []string) (ForwarderConfig, error)
+func ParseConfigFromEnv() (ForwarderConfig, error)
+func ValidateForwarderConfig(*ForwarderConfig) error
 ```
 
-The script builds all six declared Linux targets (amd64, ARM5/6/7 and both MIPS
-softfloat endiannesses), preserving bounds checks and producing checksummed
-archives. `--version` reports the injected release version and source revision.
-See [release verification](../docs/basicstation-release.md) for migration,
-external gates, measurements, and the current release status.
+`ParseConfigFromEnv` reads process arguments and environment variables. Parsing
+uses defaults → config file → environment → arguments; help returns `flag.ErrHelp`.
+Validation resolves the mode-dependent stream limit in the supplied config.
+`RenderPairConfig(pin, config)` fetches and renders pairing configuration;
+`Version()` reports the build's VCS revision or `"unknown"`.
+
+### Persistence
+
+```go
+type GatewayPersistence interface {
+    Load(context.Context, string) (GatewayRecord, error)
+    Save(context.Context, GatewayRecord, uint64) (uint64, error)
+}
+
+type GatewayPatcher interface {
+    Patch(context.Context, string, GatewayRecordPatch, uint64) (uint64, error)
+}
+```
+
+`GatewayRecord` contains the canonical EUI and revision, gateway client PEM pair,
+upstream CUPS/TC credential blobs, legacy upstream PEM pairs, CUPS endpoint state,
+and saved LNS configuration/data URI. `CertificatePEM`, `CUPSState`, and
+`GatewayLNSConfig` represent those nested values. Records and patches have JSON
+and BSON tags and require no database driver.
+
+`Save` replaces a complete record and checks the expected revision atomically.
+Revision zero supports initial creation or legacy import. Successful changed
+writes return the new revision. `GatewayPatcher` is optional: the library falls
+back to load/merge/save when it is absent. Conflicts are retried up to three times.
+
+Patch nil fields mean unchanged; supplied empty values clear data. Nested groups
+replace the complete supplied group. Supply an empty `GatewayLNSConfig` to clear
+that group. Backends must preserve unrelated fields and enforce revisions under
+concurrent access. Treat the records as private credential material.
+
+| Error | Meaning |
+|---|---|
+| `ErrNotFound` | No gateway record exists. |
+| `ErrReadOnly` | The backend rejects writes. |
+| `ErrConflict` | The expected revision does not match. |
+
+Use `errors.Is` when checking these errors. Other storage failures propagate;
+they are not permission to replace existing credentials.
+
+`FilesystemPersistence{Dir: path, ReadOnly: false}` implements both interfaces.
+It writes private `<eui>.gateway.json` files using atomic replacement and skips
+unchanged writes. When JSON is absent, it imports existing gateway credentials,
+upstream credentials, CUPS state, and saved routing files. The first write makes
+JSON authoritative; legacy files remain untouched and may become stale. Invalid
+JSON is an error rather than a reason to fall back. Use one owning process per
+store directory.
+
+### Gateway bootstrap certificates
+
+```go
+func IssueGatewayBootstrap(ForwarderConfig, string) (GatewayBootstrap, error)
+func ExportGatewayBootstrap(ForwarderConfig) error
+```
+
+`IssueGatewayBootstrap` returns material without writing files. `GatewayBootstrap`
+contains canonical `EUI`, CA PEM `Trust`, client certificate chain `Cert`, private
+key PEM `Key`, and the leaf certificate SHA-256 `Pin`.
+
+The issuer defaults to the CA signing pair. An explicit issuer certificate/key
+must chain to the configured trust CA and permits the root private key to remain
+offline. Certificates use P-256 keys, the EUI as CN, client-auth usage, and up to
+one year of validity capped by issuer expiry. `ErrIssuanceDisabled` means signing
+material is unavailable. Existing runtime credentials remain usable without it.
+
+`ExportGatewayBootstrap` uses `BootstrapGW` and `BootstrapDir`, defaulting the root
+to `./bootstrap`. It writes `cups.trust`, `cups.crt`, and `cups.key` beneath the
+canonical EUI directory and prints its location and pin. It refuses an existing
+output directory and does not change authorization or runtime persistence.
+The trust file copies the supplied CA PEM. See the [CLI bootstrap guide](cli/README.md#export-gateway-bootstrap-credentials)
+for the command-line equivalent.
+
+### Lower-level APIs
+
+For applications assembling their own components, `NewWSProxy(*WSProxyConfig)`
+constructs the proxy, `WSProxyEvents` receives forwarded messages for analytics,
+and `CreateAnalyticsForwarder` constructs the collector. These callers must wire
+events and manage startup/shutdown themselves; `New` handles that integration.
+Identity helpers include `ParseGatewayID` (validated canonical EUI) and
+`NormalizeGatewayID` (empty string on invalid input). Protocol parsers and CUPS
+encoding helpers are also exported; inspect them with `go doc`.
+
+## Verification
+
+From the repository root:
+
+```sh
+go test ./client ./forwarder-bs/...
+go test -race ./client ./forwarder-bs/...
+go vet ./forwarder-bs/...
+```
+
+Executable build instructions and release packaging are in the
+[CLI README](cli/README.md#build-and-release).

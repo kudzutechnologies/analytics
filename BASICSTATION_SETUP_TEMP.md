@@ -248,7 +248,7 @@ Station branch, build and upload the binary. This example targets Linux x86-64
 
 ```sh
 GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' \
-  -o /tmp/kudzu-forwarder-bs-linux ./forwarder-bs
+  -o /tmp/kudzu-forwarder-bs-linux ./forwarder-bs/cli
 scp /tmp/kudzu-forwarder-bs-linux \
   YOUR_SSH_USER@wavesoft.gr:basicstation-proxy-test/kudzu-forwarder-bs
 ```

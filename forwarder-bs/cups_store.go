@@ -1,4 +1,4 @@
-package main
+package forwarderbs
 
 import (
 	"bytes"
@@ -93,6 +93,20 @@ func pemCertificate(der []byte) []byte {
 	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
 }
 func (s *CertStore) upstreamCredential(id string) ([]byte, error) {
+	if s.Persistence != nil {
+		r, e := s.Persistence.Load(s.storageContext(), strings.TrimSuffix(id, "_tc"))
+		if e != nil {
+			return nil, e
+		}
+		b := r.CUPS
+		if strings.HasSuffix(id, "_tc") {
+			b = r.TC
+		}
+		if len(b) == 0 {
+			return nil, ErrNotFound
+		}
+		return b, nil
+	}
 	base := strings.TrimSuffix(id, "_tc")
 	if _, err := ParseGatewayID(base); err != nil {
 		return nil, err
@@ -109,6 +123,16 @@ func (s *CertStore) upstreamCredential(id string) ([]byte, error) {
 	return b, err
 }
 func (s *CertStore) putUpstreamCredential(id string, blob []byte) error {
+	if s.Persistence != nil {
+		if _, _, _, _, e := decodeCredential(blob); e != nil {
+			return e
+		}
+		p := GatewayRecordPatch{CUPS: &blob}
+		if strings.HasSuffix(id, "_tc") {
+			p = GatewayRecordPatch{TC: &blob}
+		}
+		return patchRecord(s.storageContext(), s.Persistence, strings.TrimSuffix(id, "_tc"), p)
+	}
 	if !s.writable {
 		return fmt.Errorf("credential storage is read-only")
 	}
@@ -159,11 +183,18 @@ func (s *CertStore) upstreamCRC(id string) uint32 {
 }
 
 type upstreamCUPSState struct {
-	CupsURI string `json:"cups_uri"`
-	TcURI   string `json:"tc_uri"`
+	CupsURI string `json:"cups_uri" bson:"cups_uri"`
+	TcURI   string `json:"tc_uri" bson:"tc_uri"`
 }
 
 func (s *CertStore) cupsState(id string) upstreamCUPSState {
+	if s.Persistence != nil {
+		r, e := s.Persistence.Load(s.storageContext(), id)
+		if e == nil {
+			return r.State
+		}
+		return upstreamCUPSState{}
+	}
 	var state upstreamCUPSState
 	f, err := os.Open(filepath.Join(s.dir, id+".cups-state.json"))
 	if err != nil {
@@ -177,6 +208,10 @@ func (s *CertStore) cupsState(id string) upstreamCUPSState {
 	return state
 }
 func (s *CertStore) putCUPSState(id string, state upstreamCUPSState) error {
+	if s.Persistence != nil {
+		return patchRecord(s.storageContext(), s.Persistence, id, GatewayRecordPatch{State: &state})
+	}
+
 	if !s.writable {
 		return fmt.Errorf("credential storage is read-only")
 	}

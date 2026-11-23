@@ -1,8 +1,8 @@
-package main
+package forwarderbs
 
 import (
 	"bufio"
-	"errors"
+
 	"flag"
 	"fmt"
 	"io"
@@ -18,9 +18,22 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-var MajorVersion = "dev"
-
 type ForwarderConfig struct {
+	Logger                log.FieldLogger        `json:"-"`
+	GatewayAuthorizations []GatewayAuthorization `json:"-"`
+	IssuerCert            string                 `json:"issuer-cert,omitempty"`
+	IssuerKey             string                 `json:"issuer-key,omitempty"`
+	BootstrapGW           string                 `json:"bootstrap-gw,omitempty"`
+	BootstrapDir          string                 `json:"bootstrap-dir,omitempty"`
+	CertsCACertPEM        []byte                 `json:"-"`
+	CertsCAKeyPEM         []byte                 `json:"-"`
+	IssuerCertPEM         []byte                 `json:"-"`
+	IssuerKeyPEM          []byte                 `json:"-"`
+	ListenTLSCertPEM      []byte                 `json:"-"`
+	ListenTLSKeyPEM       []byte                 `json:"-"`
+	ConnectTLSCAPEM       []byte                 `json:"-"`
+	ConnectDataTLSCAPEM   []byte                 `json:"-"`
+
 	// WebSocket proxy
 	ListenHost               string `json:"listen-host,omitempty"`
 	ListenPort               int    `json:"listen-port,omitempty"`
@@ -287,7 +300,7 @@ func ParseForwarderConfig(args, environ []string) (ForwarderConfig, error) {
 	if e := fs.Parse(normalized); e != nil {
 		return c, e
 	}
-	if c.ShowVersion || c.PairPin != "" {
+	if c.ShowVersion || c.PairPin != "" || c.BootstrapGW != "" {
 		return c, nil
 	}
 	return c, ValidateForwarderConfig(&c)
@@ -374,51 +387,8 @@ func ValidateForwarderConfig(c *ForwarderConfig) error {
 	return nil
 }
 
-func ParseConfigFromEnv() ForwarderConfig {
-	c, e := ParseForwarderConfig(os.Args[1:], os.Environ())
-	if errors.Is(e, flag.ErrHelp) {
-		fmt.Println("Kudzu Basic Station proxy: --config FILE --connect-uri URI --client-id ID --client-key KEY --gateway ID; resource controls: MAX_BATCHES, MAX_MESSAGES, MAX_BUFFER_BYTES, SHUTDOWN_DEADLINE_MS; see README.md for all options")
-		os.Exit(0)
-	}
-	if e != nil {
-		log.Fatal(e)
-	}
-	if c.ShowVersion {
-		fmt.Printf("Kudzu Analytics Basic Station Forwarder v%s (Git %s)\n", MajorVersion, Version())
-		os.Exit(0)
-	}
-	if c.PairPin != "" {
-		rendered, e := getRenderedPairConfig(c.PairPin, c)
-		if e != nil {
-			log.Fatal(e)
-		}
-		if c.WriteConfig {
-			if c.ConfigPath == "" {
-				log.Fatal("--write requires --config")
-			}
-			if e = os.WriteFile(c.ConfigPath, []byte(rendered), 0600); e != nil {
-				log.Fatal(e)
-			}
-			if e = os.Chmod(c.ConfigPath, 0600); e != nil {
-				log.Fatal(e)
-			}
-		} else {
-			fmt.Print(rendered)
-		}
-		os.Exit(0)
-	}
-	if c.Verbose {
-		c.LogLevel = "debug"
-	}
-	level, _ := log.ParseLevel(c.LogLevel)
-	log.SetLevel(level)
-	if c.LogFile != "" {
-		f, e := os.OpenFile(c.LogFile, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
-		if e != nil {
-			log.Fatal(e)
-		}
-		log.SetOutput(f)
-	}
-	log.Debugf("proxy mode=%s batches=%d messages=%d telemetry-byte-budget=%d", c.ProxyMode, c.MaxBatches, c.MaxMessages, c.MaxBufferBytes)
-	return c
+func ParseConfigFromEnv() (ForwarderConfig, error) {
+	return ParseForwarderConfig(os.Args[1:], os.Environ())
 }
+
+func DefaultForwarderConfig() ForwarderConfig { return defaultConf }

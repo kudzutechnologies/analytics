@@ -1,7 +1,8 @@
-package main
+package forwarderbs
 
 import (
 	"bytes"
+	"context"
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -12,6 +13,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"math/big"
 	"os"
@@ -36,15 +38,18 @@ const (
 // certs = our issued per-gateway certs (keyed by stable gateway ID, e.g. normalized router or client cert CN);
 // serverCerts = certs issued by upstream CUPS; lnsConfigs = LNS-allocated config per gateway; dataURIs = legacy per-gateway URI (superseded by lnsConfig when set).
 type CertStore struct {
-	writable    bool
-	dir         string
-	caCert      *x509.Certificate
-	caKey       crypto.Signer
-	mu          sync.RWMutex
-	certs       map[string]*tls.Certificate
-	serverCerts map[string]*tls.Certificate
-	lnsConfigs  map[string]*GatewayLNSConfig
-	dataURIs    map[string]string
+	operationContext context.Context
+	Persistence      GatewayPersistence
+	IssuerConfig     *ForwarderConfig
+	writable         bool
+	dir              string
+	caCert           *x509.Certificate
+	caKey            crypto.Signer
+	mu               sync.RWMutex
+	certs            map[string]*tls.Certificate
+	serverCerts      map[string]*tls.Certificate
+	lnsConfigs       map[string]*GatewayLNSConfig
+	dataURIs         map[string]string
 }
 
 // NewCertStore explicitly enables issuance and loads or creates its CA.
@@ -70,7 +75,7 @@ func openCertStore(dir, caCertPath, caKeyPath string, writable bool) (*CertStore
 	} else if caCertPath != "" && caKeyPath != "" {
 		caCert, caKey, err = loadCAFromPaths(caCertPath, caKeyPath)
 	} else {
-		caCert, caKey, err = loadOrCreateCA(dir)
+		caCert, caKey, err = loadCAFromPaths(filepath.Join(dir, caCertFile), filepath.Join(dir, caKeyFile))
 	}
 	if err != nil {
 		return nil, err
@@ -298,6 +303,10 @@ func (s *CertStore) loadExistingLNSConfigs() error {
 
 // GetGatewayLNSConfig returns the LNS-allocated config for the gateway (from router-info), if stored.
 func (s *CertStore) GetGatewayLNSConfig(gatewayID string) (*GatewayLNSConfig, bool) {
+	if s.Persistence != nil {
+		r, e := s.Persistence.Load(s.storageContext(), gatewayID)
+		return r.LNSConfig, e == nil && r.LNSConfig != nil
+	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	cfg, ok := s.lnsConfigs[gatewayID]
@@ -306,6 +315,9 @@ func (s *CertStore) GetGatewayLNSConfig(gatewayID string) (*GatewayLNSConfig, bo
 
 // SetGatewayLNSConfig stores the LNS-allocated config for the gateway and persists it.
 func (s *CertStore) SetGatewayLNSConfig(gatewayID string, cfg *GatewayLNSConfig) error {
+	if s.Persistence != nil {
+		return patchRecord(s.storageContext(), s.Persistence, gatewayID, GatewayRecordPatch{LNSConfig: cfg})
+	}
 	if gatewayID == "" || cfg == nil {
 		return nil
 	}
@@ -376,6 +388,17 @@ func (s *CertStore) GatewayIDForClientCert(peerCert *x509.Certificate) string {
 
 // GetGatewayDataURI returns the LNS data WebSocket URI for this gateway: from LNS config (router-info) if present, else legacy dataURIs.
 func (s *CertStore) GetGatewayDataURI(gatewayID string) (string, bool) {
+	if s.Persistence != nil {
+		r, e := s.Persistence.Load(s.storageContext(), gatewayID)
+		if e != nil {
+			return "", false
+		}
+		if r.LNSConfig != nil && r.LNSConfig.URI != "" {
+			return r.LNSConfig.URI, true
+		}
+		return strings.TrimSpace(r.DataURI), r.DataURI != ""
+	}
+
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if cfg, ok := s.lnsConfigs[gatewayID]; ok && cfg != nil && cfg.URI != "" {
@@ -387,6 +410,9 @@ func (s *CertStore) GetGatewayDataURI(gatewayID string) (string, bool) {
 
 // SetGatewayDataURI stores the LNS data URI for the gateway (from upstream router-info response) and persists it to certs-dir.
 func (s *CertStore) SetGatewayDataURI(gatewayID string, uri string) error {
+	if s.Persistence != nil {
+		return patchRecord(s.storageContext(), s.Persistence, gatewayID, GatewayRecordPatch{DataURI: &uri})
+	}
 	if gatewayID == "" || uri == "" {
 		return nil
 	}
@@ -420,6 +446,24 @@ func (s *CertStore) loadServerIssuedCert(gatewayID string) (*tls.Certificate, er
 }
 
 func (s *CertStore) loadGatewayCert(gatewayID string) (*tls.Certificate, error) {
+	if s.Persistence != nil {
+		r, e := s.Persistence.Load(s.storageContext(), gatewayID)
+		if errors.Is(e, ErrNotFound) {
+			return nil, os.ErrNotExist
+		}
+		if e != nil {
+			return nil, e
+		}
+		if len(r.Client.Cert) == 0 && len(r.Client.Key) > 0 {
+			return nil, fmt.Errorf("incomplete gateway credential pair")
+		}
+		if len(r.Client.Cert) == 0 {
+			return nil, os.ErrNotExist
+		}
+		c, e := tls.X509KeyPair(r.Client.Cert, r.Client.Key)
+		return &c, e
+	}
+
 	certPath := filepath.Join(s.dir, gatewayID+".crt")
 	keyPath := filepath.Join(s.dir, gatewayID+".key")
 	certPEM, err := os.ReadFile(certPath)
@@ -439,6 +483,28 @@ func (s *CertStore) loadGatewayCert(gatewayID string) (*tls.Certificate, error) 
 
 // GetServerIssuedCert returns the server-issued (CUPS) client cert for the gateway if stored.
 func (s *CertStore) GetServerIssuedCert(id string) (*tls.Certificate, bool) {
+	if s.Persistence != nil {
+		r, e := s.Persistence.Load(s.storageContext(), strings.TrimSuffix(id, "_tc"))
+		if e != nil {
+			return nil, false
+		}
+		blob := r.CUPS
+		legacy := r.LegacyCUPS
+		if strings.HasSuffix(id, "_tc") {
+			blob = r.TC
+			legacy = r.LegacyTC
+		}
+		if len(blob) > 0 {
+			_, c, k, _, e := decodeCredential(blob)
+			if e != nil || len(c) == 0 {
+				return nil, false
+			}
+			legacy = CertificatePEM{pemCertificate(c), pemEncodeKey(k)}
+		}
+		c, e := tls.X509KeyPair(legacy.Cert, legacy.Key)
+		return &c, e == nil
+	}
+
 	s.mu.RLock()
 	c, ok := s.serverCerts[id]
 	s.mu.RUnlock()
@@ -464,6 +530,18 @@ func (s *CertStore) GetServerIssuedCert(id string) (*tls.Certificate, bool) {
 // PutServerIssuedCert stores the cert and key (DER from CUPS credentials blob) for the gateway.
 // Used after intercepting the CUPS update-info response; these certs are then used for proxy→upstream auth.
 func (s *CertStore) PutServerIssuedCert(gatewayID string, certDER, keyDER []byte) error {
+	if s.Persistence != nil {
+		pair := CertificatePEM{pemCertificate(certDER), pemEncodeKey(keyDER)}
+		if _, e := tls.X509KeyPair(pair.Cert, pair.Key); e != nil {
+			return e
+		}
+		p := GatewayRecordPatch{LegacyCUPS: &pair}
+		if strings.HasSuffix(gatewayID, "_tc") {
+			p = GatewayRecordPatch{LegacyTC: &pair}
+		}
+		return patchRecord(s.storageContext(), s.Persistence, strings.TrimSuffix(gatewayID, "_tc"), p)
+	}
+
 	if !s.writable {
 		return fmt.Errorf("credential store is read-only")
 	}
@@ -544,6 +622,36 @@ func (s *CertStore) GetOrCreateClientCert(gatewayID string) (*tls.Certificate, e
 }
 
 func (s *CertStore) issueAndSaveClientCert(gatewayID string) (*tls.Certificate, error) {
+	if s.Persistence != nil && s.IssuerConfig != nil {
+		b, e := IssueGatewayBootstrap(*s.IssuerConfig, gatewayID)
+		if e != nil {
+			return nil, e
+		}
+		pair := CertificatePEM{b.Cert, b.Key}
+		for attempt := 0; attempt < 3; attempt++ {
+			r, e := s.Persistence.Load(s.storageContext(), gatewayID)
+			if errors.Is(e, ErrNotFound) {
+				r = GatewayRecord{EUI: gatewayID}
+			} else if e != nil {
+				return nil, e
+			}
+			if len(r.Client.Cert) > 0 {
+				c, e := tls.X509KeyPair(r.Client.Cert, r.Client.Key)
+				return &c, e
+			}
+			r.Client = pair
+			_, e = s.Persistence.Save(s.storageContext(), r, r.Revision)
+			if errors.Is(e, ErrConflict) {
+				continue
+			}
+			if e != nil {
+				return nil, e
+			}
+			c, e := tls.X509KeyPair(pair.Cert, pair.Key)
+			return &c, e
+		}
+		return nil, ErrConflict
+	}
 	if !s.writable || s.caCert == nil {
 		return nil, fmt.Errorf("credential store does not permit issuing certificates")
 	}
@@ -671,4 +779,11 @@ func (s *CertStore) BootstrapCertPath() string {
 // BootstrapKeyPath returns the path to the bootstrap server key file.
 func (s *CertStore) BootstrapKeyPath() string {
 	return filepath.Join(s.dir, bootstrapKey)
+}
+
+func (s *CertStore) storageContext() context.Context {
+	if s.operationContext != nil {
+		return s.operationContext
+	}
+	return context.Background()
 }

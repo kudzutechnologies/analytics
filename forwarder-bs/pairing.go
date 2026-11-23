@@ -1,4 +1,4 @@
-package main
+package forwarderbs
 
 import (
 	"encoding/json"
@@ -62,4 +62,8 @@ func renderPairConfig(config ForwarderConfig, pairConfig *client.PairingConfig) 
 	}
 
 	return iniConfig
+}
+
+func RenderPairConfig(pin string, c ForwarderConfig) (string, error) {
+	return getRenderedPairConfig(pin, c)
 }

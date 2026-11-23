@@ -1,4 +1,4 @@
-package main
+package forwarderbs
 
 import (
 	"bytes"
@@ -28,7 +28,7 @@ import (
 
 func managedCUPSFixture(t *testing.T, upstream string) (*WSProxy, *httptest.Server, *CertStore) {
 	t.Helper()
-	store, e := NewCertStore(t.TempDir(), "", "")
+	store, e := fixtureCertStore(t.TempDir(), "", "")
 	if e != nil {
 		t.Fatal(e)
 	}

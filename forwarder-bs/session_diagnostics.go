@@ -1,4 +1,4 @@
-package main
+package forwarderbs
 
 import (
 	"errors"
@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	log "github.com/sirupsen/logrus"
 )
 
 type sessionDiagnostics struct {
@@ -79,10 +78,10 @@ func (s *session) recordForwarded(side string, kind int, raw []byte) {
 	}
 	s.stats.mu.Unlock()
 	if version {
-		log.Infof("%sLNS version forwarded age_s=%.1f", gatewayLogPrefix(s.gatewayKey), s.ageSeconds())
+		instanceLogger(s.config.Logger).Infof("%sLNS version forwarded age_s=%.1f", gatewayLogPrefix(s.gatewayKey), s.ageSeconds())
 	}
 	if routerConfig {
-		log.Infof("%sLNS router_config forwarded age_s=%.1f", gatewayLogPrefix(s.gatewayKey), s.ageSeconds())
+		instanceLogger(s.config.Logger).Infof("%sLNS router_config forwarded age_s=%.1f", gatewayLogPrefix(s.gatewayKey), s.ageSeconds())
 	}
 }
 
@@ -112,21 +111,23 @@ func (s *session) logReadFailure(side string, err error) {
 	if s.isClosed() {
 		return
 	}
-	log.Warnf("%s%s WebSocket read ended reason=%s age_s=%.1f", gatewayLogPrefix(s.gatewayKey), side, websocketReadFailureReason(err), s.ageSeconds())
+	instanceLogger(s.config.Logger).Warnf("%s%s WebSocket read ended reason=%s age_s=%.1f", gatewayLogPrefix(s.gatewayKey), side, websocketReadFailureReason(err), s.ageSeconds())
 }
 
 func (s *session) logStatus(state string) {
 	s.stats.mu.Lock()
 	defer s.stats.mu.Unlock()
-	log.Infof("%sLNS session state=%s age_s=%.1f gateway_messages=%d upstream_messages=%d version_forwarded=%t router_config_forwarded=%t gateway_pings=%d gateway_pongs=%d upstream_pings=%d upstream_pongs=%d",
+	instanceLogger(s.config.Logger).Infof("%sLNS session state=%s age_s=%.1f gateway_messages=%d upstream_messages=%d version_forwarded=%t router_config_forwarded=%t gateway_pings=%d gateway_pongs=%d upstream_pings=%d upstream_pongs=%d",
 		gatewayLogPrefix(s.gatewayKey), state, s.ageSeconds(), s.stats.gatewayMessages, s.stats.upstreamMessages, s.stats.versionForwarded, s.stats.routerConfigForwarded,
 		s.stats.gatewayPings, s.stats.gatewayPongs, s.stats.upstreamPings, s.stats.upstreamPongs)
 }
 
-func (p *WSProxy) logSessionStatus() {
+func (p *WSProxy) LogSessionStatus() {
 	sessions := p.sessions.Values()
-	log.Infof("LNS sessions active=%d", len(sessions))
+	instanceLogger(p.config.Logger).Infof("LNS sessions active=%d", len(sessions))
 	for _, s := range sessions {
 		s.logStatus("open")
 	}
 }
+
+func (p *WSProxy) logSessionStatus() { p.LogSessionStatus() }

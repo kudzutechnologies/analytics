@@ -1,4 +1,4 @@
-package main
+package forwarderbs
 
 import (
 	"encoding/json"
@@ -142,9 +142,9 @@ type RouterInfoResponse struct {
 // GatewayLNSConfig is the LNS-allocated configuration for a gateway (from router-info response).
 // Stored per gateway so the forwarder uses LNS-provided tc.uri and related options instead of config file.
 type GatewayLNSConfig struct {
-	Router string `json:"router,omitempty"`
-	Muxs   string `json:"muxs,omitempty"`
-	URI    string `json:"uri,omitempty"`
+	Router string `json:"router,omitempty" bson:"router,omitempty"`
+	Muxs   string `json:"muxs,omitempty" bson:"muxs,omitempty"`
+	URI    string `json:"uri,omitempty" bson:"uri,omitempty"`
 }
 
 // GetMsgtype returns the msgtype field from a JSON object without full unmarshaling.

@@ -1,4 +1,4 @@
-package main
+package forwarderbs
 
 import (
 	"fmt"
@@ -107,7 +107,7 @@ func (p *WSProxy) publicURI() string {
 		return p.config.PublicURI
 	}
 	scheme := "ws"
-	if p.config.ListenTLSCert != "" {
+	if p.config.ListenTLSCert != "" || p.config.ListenCertificate != nil {
 		scheme = "wss"
 	}
 	return fmt.Sprintf("%s://%s/", scheme, net.JoinHostPort(p.config.ListenHost, fmt.Sprint(p.config.ListenPort)))

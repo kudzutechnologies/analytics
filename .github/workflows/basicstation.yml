@@ -16,7 +16,7 @@ jobs:
           cache: true
       - run: go test ./...
       - run: go vet ./...
-      - run: go test -race ./client ./forwarder-bs
+      - run: go test -race ./client ./forwarder-bs/...
       - run: go test ./forwarder-bs -run '^$' -fuzz=FuzzCUPSResponse -fuzztime=10s -parallel=2
       - run: ANALYTICS_SLOW_TESTS=1 go test ./forwarder-bs -run '^TestLongIdleConnection$' -count=1 -timeout=100s
       - run: python3 tools/build-go-forwarders.py --component bs --version dev --output-dir /tmp/artifacts
@@ -72,7 +72,7 @@ jobs:
       - name: Native resource smoke
         if: matrix.sanitizer == 'none'
         run: |
-          go build -trimpath -ldflags='-s -w' -o /tmp/kudzu-forwarder-bs ./forwarder-bs
+          go build -trimpath -ldflags='-s -w' -o /tmp/kudzu-forwarder-bs ./forwarder-bs/cli
           python3 tools/resource-smoke.py --go-binary /tmp/kudzu-forwarder-bs --cpp-binary /tmp/bs-build/basicstation-analytics --output /tmp/resource-smoke.json
       - uses: actions/upload-artifact@v4
         if: matrix.sanitizer == 'none'

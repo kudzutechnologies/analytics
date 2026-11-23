@@ -1,4 +1,4 @@
-package main
+package forwarderbs
 
 import (
 	"bytes"
@@ -15,8 +15,6 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-
-	log "github.com/sirupsen/logrus"
 )
 
 type cupsRequest struct {
@@ -139,7 +137,7 @@ func (p *WSProxy) validateManagedCUPS() error {
 	if store == nil || store.caCert == nil || !store.writable {
 		return fmt.Errorf("managed CUPS requires a writable CA credential store")
 	}
-	pair, err := tls.LoadX509KeyPair(p.config.ListenTLSCert, p.config.ListenTLSKey)
+	pair, err := p.listenCertificate()
 	if err != nil {
 		return err
 	}
@@ -175,7 +173,7 @@ func (p *WSProxy) handleHTTPProxy(w http.ResponseWriter, r *http.Request) {
 	defer p.release()
 	id := "?"
 	reject := func(status int, reason string) {
-		log.Warnf("%sCUPS failed status=%d reason=%s", gatewayLogPrefix(id), status, reason)
+		instanceLogger(p.config.Logger).Warnf("%sCUPS failed status=%d reason=%s", gatewayLogPrefix(id), status, reason)
 		http.Error(w, reason, status)
 	}
 	var incoming cupsRequest
@@ -233,7 +231,7 @@ func (p *WSProxy) handleHTTPProxy(w http.ResponseWriter, r *http.Request) {
 	cupsCRC, tcCRC := store.upstreamCRC(id), store.upstreamCRC(id+"_tc")
 	outgoing.CupsCRC = &cupsCRC
 	outgoing.TcCRC = &tcCRC
-	log.Infof("%sCUPS upstream request origin=%s cups_crc=%08x tc_crc=%08x",
+	instanceLogger(p.config.Logger).Infof("%sCUPS upstream request origin=%s cups_crc=%08x tc_crc=%08x",
 		gatewayLogPrefix(id), upstreamLogOrigin(upstreamURL), cupsCRC, tcCRC)
 	body, err := json.Marshal(outgoing)
 	if err != nil {
@@ -260,12 +258,12 @@ func (p *WSProxy) handleHTTPProxy(w http.ResponseWriter, r *http.Request) {
 	request.Header.Set("Accept-Encoding", "identity")
 	response, err := client.Do(request)
 	if err != nil {
-		log.Warnf("%sCUPS upstream connection failed reason=%s", gatewayLogPrefix(id), upstreamFailureReason(err))
+		instanceLogger(p.config.Logger).Warnf("%sCUPS upstream connection failed reason=%s", gatewayLogPrefix(id), upstreamFailureReason(err))
 		reject(502, "upstream CUPS request failed")
 		return
 	}
 	defer response.Body.Close()
-	log.Infof("%sCUPS upstream response status=%d bytes=%d", gatewayLogPrefix(id), response.StatusCode, response.ContentLength)
+	instanceLogger(p.config.Logger).Infof("%sCUPS upstream response status=%d bytes=%d", gatewayLogPrefix(id), response.StatusCode, response.ContentLength)
 	if response.StatusCode != 200 {
 		reject(response.StatusCode, "upstream CUPS request rejected")
 		return
@@ -285,10 +283,10 @@ func (p *WSProxy) handleHTTPProxy(w http.ResponseWriter, r *http.Request) {
 		reject(502, "invalid CUPS response lengths")
 		return
 	}
-	log.Infof("%sCUPS upstream update cups_origin=%s tc_origin=%s cups_credential_bytes=%d tc_credential_bytes=%d firmware_bytes=%d",
+	instanceLogger(p.config.Logger).Infof("%sCUPS upstream update cups_origin=%s tc_origin=%s cups_credential_bytes=%d tc_credential_bytes=%d firmware_bytes=%d",
 		gatewayLogPrefix(id), upstreamLogOrigin(parsed.CupsURI), upstreamLogOrigin(parsed.TcURI), len(parsed.CupsCred), len(parsed.TcCred), updateLength)
 	if cupsCRC == 0 && tcCRC == 0 && parsed.CupsURI == "" && parsed.TcURI == "" && len(parsed.CupsCred) == 0 && len(parsed.TcCred) == 0 && updateLength == 0 {
-		log.Warnf("%sCUPS upstream returned no updates with zero local upstream credential CRCs; check ThingPark registration and bootstrap state", gatewayLogPrefix(id))
+		instanceLogger(p.config.Logger).Warnf("%sCUPS upstream returned no updates with zero local upstream credential CRCs; check ThingPark registration and bootstrap state", gatewayLogPrefix(id))
 	}
 	for _, uri := range []string{parsed.CupsURI, parsed.TcURI} {
 		if uri != "" && !p.config.allowedUpstream(uri) {
@@ -311,23 +309,41 @@ func (p *WSProxy) handleHTTPProxy(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	for _, entry := range []struct {
-		suffix string
-		blob   []byte
-	}{{id, parsed.CupsCred}, {id + "_tc", parsed.TcCred}} {
-		if len(entry.blob) > 0 {
-			if err = store.putUpstreamCredential(entry.suffix, entry.blob); err != nil {
-				reject(502, "invalid upstream credentials")
+	if store.Persistence != nil {
+		patch := GatewayRecordPatch{}
+		if len(parsed.CupsCred) > 0 {
+			patch.CUPS = &parsed.CupsCred
+		}
+		if len(parsed.TcCred) > 0 {
+			patch.TC = &parsed.TcCred
+		}
+		if parsed.CupsURI != "" || parsed.TcURI != "" {
+			patch.State = &state
+		}
+		if err = patchRecord(r.Context(), store.Persistence, id, patch); err != nil {
+			reject(500, "cannot persist gateway record")
+			return
+		}
+	} else {
+		for _, entry := range []struct {
+			suffix string
+			blob   []byte
+		}{{id, parsed.CupsCred}, {id + "_tc", parsed.TcCred}} {
+			if len(entry.blob) > 0 {
+				if err = store.putUpstreamCredential(entry.suffix, entry.blob); err != nil {
+					reject(502, "invalid upstream credentials")
+					return
+				}
+			}
+		}
+		if parsed.CupsURI != "" || parsed.TcURI != "" {
+			if err = store.putCUPSState(id, state); err != nil {
+				reject(500, "cannot persist CUPS state")
 				return
 			}
 		}
 	}
-	if parsed.CupsURI != "" || parsed.TcURI != "" {
-		if err = store.putCUPSState(id, state); err != nil {
-			reject(500, "cannot persist CUPS state")
-			return
-		}
-	}
+
 	issued, err := store.GetOrCreateClientCert(id)
 	if err != nil {
 		reject(500, "cannot load station credentials")
@@ -369,15 +385,15 @@ func (p *WSProxy) handleHTTPProxy(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Length", strconv.FormatInt(int64(len(prefix))+int64(updateLength), 10))
 	w.WriteHeader(200)
 	if _, err = w.Write(prefix); err != nil {
-		log.Warnf("%sCUPS response write failed", gatewayLogPrefix(id))
+		instanceLogger(p.config.Logger).Warnf("%sCUPS response write failed", gatewayLogPrefix(id))
 		return
 	}
 	var buffer [4096]byte
 	written, copyErr := io.CopyBuffer(w, io.LimitReader(response.Body, int64(updateLength)), buffer[:])
 	if copyErr != nil || written != int64(updateLength) {
-		log.Warnf("%sCUPS response transfer incomplete firmware_bytes=%d expected=%d", gatewayLogPrefix(id), written, updateLength)
+		instanceLogger(p.config.Logger).Warnf("%sCUPS response transfer incomplete firmware_bytes=%d expected=%d", gatewayLogPrefix(id), written, updateLength)
 		return
 	}
-	log.Infof("%sCUPS response sent cups_uri_updated=%t tc_uri_updated=%t cups_credential_bytes=%d tc_credential_bytes=%d",
+	instanceLogger(p.config.Logger).Infof("%sCUPS response sent cups_uri_updated=%t tc_uri_updated=%t cups_credential_bytes=%d tc_credential_bytes=%d",
 		gatewayLogPrefix(id), cupsURI != "", tcUpdate != "", len(cupsCred), len(tcCred))
 }

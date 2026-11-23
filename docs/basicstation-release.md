@@ -38,7 +38,7 @@ A native test pass is not a release approval for embedded targets.
    Retained telemetry is lost on restart; delivery may duplicate after an
    ambiguous RPC. No disk spool is supported.
 
-See [Go proxy usage](../forwarder-bs/README.md) and
+See [Go CLI usage](../forwarder-bs/cli/README.md) and [library API](../forwarder-bs/README.md) and
 [C++ consumer usage](../basicstation-analytics/README.md) for exact settings.
 
 ## Reproducible local checks
@@ -46,7 +46,7 @@ See [Go proxy usage](../forwarder-bs/README.md) and
 ```sh
 go test ./...
 go vet ./...
-go test -race ./client ./forwarder-bs
+go test -race ./client ./forwarder-bs/...
 go test -race ./forwarder # UDP lifecycle regression gate
 ANALYTICS_SLOW_TESTS=1 go test ./forwarder-bs -run '^TestLongIdleConnection$' -count=1 -timeout=100s
 go test ./forwarder-bs -run '^$' -fuzz=FuzzCUPSResponse -fuzztime=10s -parallel=2
@@ -90,7 +90,7 @@ observations, not device budgets. Reproduce with stripped/optimized candidate
 binaries:
 
 ```sh
-go build -trimpath -ldflags='-s -w' -o /tmp/kudzu-forwarder-bs ./forwarder-bs
+go build -trimpath -ldflags='-s -w' -o /tmp/kudzu-forwarder-bs ./forwarder-bs/cli
 python3 tools/resource-smoke.py --go-binary /tmp/kudzu-forwarder-bs \
   --cpp-binary /tmp/bs-build/basicstation-analytics \
   --seconds 30 --output /tmp/basicstation-resources.json

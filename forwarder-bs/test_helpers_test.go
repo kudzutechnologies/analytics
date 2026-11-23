@@ -1,4 +1,4 @@
-package main
+package forwarderbs
 
 import (
 	"context"
@@ -56,4 +56,13 @@ func startAnalyticsFixture(t *testing.T, f *analyticsFixture) (endpoint, caFile 
 	go s.Serve(l)
 	t.Cleanup(func() { s.Stop(); l.Close() })
 	return l.Addr().String(), caFile
+}
+
+func fixtureCertStore(dir, cert, key string) (*CertStore, error) {
+	if cert == "" && key == "" {
+		if _, _, e := loadOrCreateCA(dir); e != nil {
+			return nil, e
+		}
+	}
+	return NewCertStore(dir, cert, key)
 }

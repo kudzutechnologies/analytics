@@ -1,4 +1,4 @@
-package main
+package forwarderbs
 
 import (
 	"crypto/x509"
@@ -28,7 +28,7 @@ func TestNormalizeGatewayID(t *testing.T) {
 
 func TestCertStore_GetOrCreateClientCert_emptyIDRejected(t *testing.T) {
 	dir := t.TempDir()
-	store, err := NewCertStore(dir, "", "")
+	store, err := fixtureCertStore(dir, "", "")
 	if err != nil {
 		t.Fatalf("NewCertStore: %v", err)
 	}
@@ -40,7 +40,7 @@ func TestCertStore_GetOrCreateClientCert_emptyIDRejected(t *testing.T) {
 
 func TestCertStore_GetOrCreateClientCert(t *testing.T) {
 	dir := t.TempDir()
-	store, err := NewCertStore(dir, "", "")
+	store, err := fixtureCertStore(dir, "", "")
 	if err != nil {
 		t.Fatalf("NewCertStore: %v", err)
 	}
@@ -63,7 +63,7 @@ func TestCertStore_GetOrCreateClientCert(t *testing.T) {
 		t.Errorf("ExtKeyUsage = %v, want ClientAuth", parsed.ExtKeyUsage)
 	}
 	// Persistence: create a new store with same dir, should load the same cert
-	store2, err := NewCertStore(dir, "", "")
+	store2, err := fixtureCertStore(dir, "", "")
 	if err != nil {
 		t.Fatalf("NewCertStore (reload): %v", err)
 	}
@@ -79,7 +79,7 @@ func TestCertStore_GetOrCreateClientCert(t *testing.T) {
 
 func TestCertStore_GetOrCreateClientCert_chainsToCA(t *testing.T) {
 	dir := t.TempDir()
-	store, err := NewCertStore(dir, "", "")
+	store, err := fixtureCertStore(dir, "", "")
 	if err != nil {
 		t.Fatalf("NewCertStore: %v", err)
 	}
@@ -109,7 +109,7 @@ func TestCertStore_GetOrCreateClientCert_chainsToCA(t *testing.T) {
 
 func TestCertStore_GetOrCreateBootstrap(t *testing.T) {
 	dir := t.TempDir()
-	store, err := NewCertStore(dir, "", "")
+	store, err := fixtureCertStore(dir, "", "")
 	if err != nil {
 		t.Fatalf("NewCertStore: %v", err)
 	}
@@ -143,10 +143,10 @@ func TestCertStore_GetOrCreateBootstrap(t *testing.T) {
 
 func TestCARejectsMismatchedAndPartialState(t *testing.T) {
 	a, b := t.TempDir(), t.TempDir()
-	if _, err := NewCertStore(a, "", ""); err != nil {
+	if _, err := fixtureCertStore(a, "", ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := NewCertStore(b, "", ""); err != nil {
+	if _, err := fixtureCertStore(b, "", ""); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, err := loadCAFromPaths(filepath.Join(a, "ca.crt"), filepath.Join(b, "ca.key")); err == nil {
@@ -159,14 +159,14 @@ func TestCARejectsMismatchedAndPartialState(t *testing.T) {
 	if err := os.Remove(filepath.Join(a, "ca.crt")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := NewCertStore(a, "", ""); err == nil {
+	if _, err := fixtureCertStore(a, "", ""); err == nil {
 		t.Fatal("partial CA state silently replaced")
 	}
 	after, _ := os.ReadFile(filepath.Join(a, "ca.key"))
 	if string(before) != string(after) {
 		t.Fatal("existing key overwritten")
 	}
-	if _, err := NewCertStore(t.TempDir(), "only-cert", ""); err == nil {
+	if _, err := fixtureCertStore(t.TempDir(), "only-cert", ""); err == nil {
 		t.Fatal("unpaired CA paths accepted")
 	}
 }

@@ -1,4 +1,4 @@
-package main
+package forwarderbs
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/kudzutechnologies/analytics/api"
-	log "github.com/sirupsen/logrus"
+
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -245,7 +245,7 @@ func (f *AnalyticsForwarder) sendLoop(ctx context.Context) {
 				f.queue.connectFailures++
 				f.queue.mu.Unlock()
 				if ctx.Err() == nil {
-					log.Warnf("analytics connection failed retry_seconds=%d", int(backoff/time.Second))
+					instanceLogger(f.config.Logger).Warnf("analytics connection failed retry_seconds=%d", int(backoff/time.Second))
 				}
 				if !wait() {
 					return
@@ -274,7 +274,7 @@ func (f *AnalyticsForwarder) sendLoop(ctx context.Context) {
 		f.queue.complete(item, err)
 		if err != nil {
 			if ctx.Err() == nil {
-				log.Warnf("analytics push failed status=%s retry_seconds=%d", status.Code(err), int(backoff/time.Second))
+				instanceLogger(f.config.Logger).Warnf("analytics push failed status=%s retry_seconds=%d", status.Code(err), int(backoff/time.Second))
 			}
 			connected = false
 			_ = f.backend.Disconnect()

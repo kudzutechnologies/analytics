@@ -1,4 +1,4 @@
-package main
+package forwarderbs
 
 import (
 	"bytes"
@@ -44,7 +44,11 @@ type WSProxyEvents interface {
 
 // WSProxyConfig holds configuration for the WebSocket proxy.
 type WSProxyConfig struct {
-	CUPSMaxCredentialBytes int
+	Logger                   log.FieldLogger
+	ListenCertificate        *tls.Certificate
+	UpstreamCAPEM, DataCAPEM []byte
+	GatewayAuthorizations    []GatewayAuthorization
+	CUPSMaxCredentialBytes   int
 
 	PingInterval, PongTimeout time.Duration
 
@@ -135,7 +139,7 @@ func logCertDetails(prefix string, certs []*x509.Certificate) {
 }
 
 // loadAndLogCertsFromPEM parses PEM data, logs each certificate at debug level, returns certs.
-func loadAndLogCertsFromPEM(prefix string, pemData []byte) ([]*x509.Certificate, error) {
+func LoadAndLogCertsFromPEM(prefix string, pemData []byte) ([]*x509.Certificate, error) {
 	var certs []*x509.Certificate
 	for len(pemData) > 0 {
 		var block *pem.Block
@@ -179,8 +183,19 @@ func (p *WSProxyConfig) dialerFor(cert *tls.Certificate, data bool) (*websocket.
 		insecure = insecure || p.ConnectDataTLSInsecure
 		name = p.ConnectDataTLSServerName
 	}
-	if ca != "" {
-		raw, err := os.ReadFile(ca)
+	raw := p.UpstreamCAPEM
+	if data {
+		if len(p.DataCAPEM) > 0 {
+			raw = p.DataCAPEM
+		} else if p.ConnectDataTLSCA != "" {
+			raw = nil
+		}
+	}
+	if ca != "" || len(raw) > 0 {
+		var err error
+		if len(raw) == 0 {
+			raw, err = os.ReadFile(ca)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -380,7 +395,11 @@ func NewWSProxy(config *WSProxyConfig) (*WSProxy, error) {
 	var registry *gatewayRegistry
 	if config.ProxyMode == "shared" {
 		var err error
-		registry, err = loadGatewayRegistry(config.GatewayAuthFile)
+		if config.GatewayAuthorizations != nil {
+			registry, err = registryFromRecords(config.GatewayAuthorizations)
+		} else {
+			registry, err = loadGatewayRegistry(config.GatewayAuthFile)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -428,9 +447,9 @@ func NewWSProxy(config *WSProxyConfig) (*WSProxy, error) {
 
 // Start starts the HTTP server (blocking).
 func (p *WSProxy) Start() error {
-	log.Infof("WebSocket proxy listening on %s", p.server.Addr)
-	if p.config.ListenTLSCert != "" && p.config.ListenTLSKey != "" {
-		cert, err := tls.LoadX509KeyPair(p.config.ListenTLSCert, p.config.ListenTLSKey)
+	instanceLogger(p.config.Logger).Infof("WebSocket proxy listening on %s", p.server.Addr)
+	if p.config.ListenCertificate != nil || p.config.ListenTLSCert != "" {
+		cert, err := p.listenCertificate()
 		if err != nil {
 			return fmt.Errorf("listen TLS: %w", err)
 		}
@@ -473,7 +492,7 @@ func (p *WSProxy) handleRouterInfo(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := p.authorize(r, req.Router)
 	if err != nil {
-		log.Warn("LNS discovery gateway authorization rejected")
+		instanceLogger(p.config.Logger).Warn("LNS discovery gateway authorization rejected")
 		_ = gateway.WriteJSON(map[string]string{"error": "gateway authorization rejected"})
 		return
 	}
@@ -483,7 +502,7 @@ func (p *WSProxy) handleRouterInfo(w http.ResponseWriter, r *http.Request) {
 		if p.config.CUPSMode == "managed" {
 			base, err = p.config.dataURIForGateway(id)
 			if err != nil {
-				log.Warnf("%sLNS discovery waiting for upstream CUPS provisioning", gatewayLogPrefix(id))
+				instanceLogger(p.config.Logger).Warnf("%sLNS discovery waiting for upstream CUPS provisioning", gatewayLogPrefix(id))
 				_ = gateway.WriteJSON(map[string]string{"error": errLNSProvisioningPending.Error()})
 				return
 			}
@@ -505,7 +524,7 @@ func (p *WSProxy) handleRouterInfo(w http.ResponseWriter, r *http.Request) {
 	}
 	tlsConfig, err := p.gatewayDialer(id, "tc", false)
 	if err != nil {
-		log.Warnf("%sLNS discovery TLS configuration failed", gatewayLogPrefix(id))
+		instanceLogger(p.config.Logger).Warnf("%sLNS discovery TLS configuration failed", gatewayLogPrefix(id))
 		return
 	}
 	dialer := &websocket.Dialer{HandshakeTimeout: wsHandshakeTimeout, TLSClientConfig: tlsConfig}
@@ -514,23 +533,23 @@ func (p *WSProxy) handleRouterInfo(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(p.root, wsHandshakeTimeout)
 	defer cancel()
-	log.Infof("%sLNS discovery connecting origin=%s", gatewayLogPrefix(id), upstreamLogOrigin(discovery))
+	instanceLogger(p.config.Logger).Infof("%sLNS discovery connecting origin=%s", gatewayLogPrefix(id), upstreamLogOrigin(discovery))
 	upstream, err := p.config.dialContextWithRedirects(ctx, dialer, discovery, p.upstreamHeaders(id, "tc", r.Header))
 	if err != nil {
 		var handshake *upstreamHandshakeError
 		if errors.As(err, &handshake) && handshake.status == http.StatusNotFound {
 			if p.config.CUPSMode == "managed" {
 				if _, e := p.config.dataURIForGateway(id); e != nil {
-					log.Warnf("%sLNS discovery HTTP 404 without an assigned data endpoint", gatewayLogPrefix(id))
+					instanceLogger(p.config.Logger).Warnf("%sLNS discovery HTTP 404 without an assigned data endpoint", gatewayLogPrefix(id))
 					_ = gateway.WriteJSON(map[string]string{"error": errLNSProvisioningPending.Error()})
 					return
 				}
 			}
-			log.Infof("%sLNS discovery returned HTTP 404; using configured data endpoint", gatewayLogPrefix(id))
+			instanceLogger(p.config.Logger).Infof("%sLNS discovery returned HTTP 404; using configured data endpoint", gatewayLogPrefix(id))
 			p.setRoute(id, "")
 			_ = gateway.WriteJSON(RouterInfoResponse{Router: gatewayIDToEUIFormat(id), URI: appendRouterQuery(p.publicURI(), id)})
 		} else {
-			log.Warnf("%sLNS discovery failed reason=%s", gatewayLogPrefix(id), upstreamFailureReason(err))
+			instanceLogger(p.config.Logger).Warnf("%sLNS discovery failed reason=%s", gatewayLogPrefix(id), upstreamFailureReason(err))
 			_ = gateway.WriteJSON(map[string]string{"error": "upstream discovery failed"})
 		}
 		return
@@ -540,40 +559,40 @@ func (p *WSProxy) handleRouterInfo(w http.ResponseWriter, r *http.Request) {
 	_ = upstream.SetReadDeadline(time.Now().Add(wsHandshakeTimeout))
 	upstream.SetReadLimit(maxMessageSize)
 	if upstream.WriteMessage(websocket.TextMessage, raw) != nil {
-		log.Warnf("%sLNS discovery request write failed", gatewayLogPrefix(id))
+		instanceLogger(p.config.Logger).Warnf("%sLNS discovery request write failed", gatewayLogPrefix(id))
 		return
 	}
 	_, response, err := upstream.ReadMessage()
 	if err != nil {
-		log.Warnf("%sLNS discovery response read failed", gatewayLogPrefix(id))
+		instanceLogger(p.config.Logger).Warnf("%sLNS discovery response read failed", gatewayLogPrefix(id))
 		return
 	}
 	var info RouterInfoResponse
 	if err := json.Unmarshal(response, &info); err != nil {
-		log.Warnf("%sLNS discovery returned an invalid response reason=%v", gatewayLogPrefix(id), err)
+		instanceLogger(p.config.Logger).Warnf("%sLNS discovery returned an invalid response reason=%v", gatewayLogPrefix(id), err)
 		_ = gateway.WriteJSON(map[string]string{"error": "invalid upstream discovery response"})
 		return
 	}
 	if info.Error != "" {
-		log.Warnf("%sLNS discovery rejected by upstream", gatewayLogPrefix(id))
+		instanceLogger(p.config.Logger).Warnf("%sLNS discovery rejected by upstream", gatewayLogPrefix(id))
 		p.setRoute(id, "")
 		_ = gateway.WriteMessage(websocket.TextMessage, response)
 		return
 	}
 	if (info.Router != "" && NormalizeGatewayID(info.Router) != id) || info.URI == "" || !p.config.allowedUpstream(info.URI) {
-		log.Warnf("%sLNS discovery returned an unapproved endpoint or mismatched router origin=%s", gatewayLogPrefix(id), upstreamLogOrigin(info.URI))
+		instanceLogger(p.config.Logger).Warnf("%sLNS discovery returned an unapproved endpoint or mismatched router origin=%s", gatewayLogPrefix(id), upstreamLogOrigin(info.URI))
 		_ = gateway.WriteJSON(map[string]string{"error": "unapproved discovery endpoint"})
 		return
 	}
 	p.setRoute(id, info.URI)
-	log.Infof("%sLNS discovery assigned origin=%s", gatewayLogPrefix(id), upstreamLogOrigin(info.URI))
+	instanceLogger(p.config.Logger).Infof("%sLNS discovery assigned origin=%s", gatewayLogPrefix(id), upstreamLogOrigin(info.URI))
 	info.Router = gatewayIDToEUIFormat(id)
 	info.URI = appendRouterQuery(p.publicURI(), id)
 	if err := gateway.WriteJSON(info); err != nil {
-		log.Warnf("%sLNS discovery response write failed", gatewayLogPrefix(id))
+		instanceLogger(p.config.Logger).Warnf("%sLNS discovery response write failed", gatewayLogPrefix(id))
 		return
 	}
-	log.Infof("%sLNS discovery response sent public_origin=%s path=/", gatewayLogPrefix(id), upstreamLogOrigin(info.URI))
+	instanceLogger(p.config.Logger).Infof("%sLNS discovery response sent public_origin=%s path=/", gatewayLogPrefix(id), upstreamLogOrigin(info.URI))
 }
 
 // isWebSocketUpgrade returns true if the request asks for a WebSocket upgrade.
@@ -597,7 +616,7 @@ func (p *WSProxy) handleDataConnection(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := p.authorize(r, r.URL.Query().Get("router"))
 	if err != nil {
-		log.Warn("LNS data gateway authorization rejected")
+		instanceLogger(p.config.Logger).Warn("LNS data gateway authorization rejected")
 		http.Error(w, "gateway authorization rejected", http.StatusForbidden)
 		return
 	}
@@ -620,7 +639,7 @@ func (p *WSProxy) handleDataConnection(w http.ResponseWriter, r *http.Request) {
 			uri, err = p.config.dataURI()
 		}
 		if errors.Is(err, errLNSProvisioningPending) {
-			log.Warnf("%sLNS data waiting for upstream CUPS provisioning", gatewayLogPrefix(id))
+			instanceLogger(p.config.Logger).Warnf("%sLNS data waiting for upstream CUPS provisioning", gatewayLogPrefix(id))
 			http.Error(w, errLNSProvisioningPending.Error(), http.StatusServiceUnavailable)
 			return
 		}
@@ -633,7 +652,7 @@ func (p *WSProxy) handleDataConnection(w http.ResponseWriter, r *http.Request) {
 	tlsConfig, err := p.gatewayDialer(id, "tc", true)
 	dialer := &websocket.Dialer{HandshakeTimeout: wsHandshakeTimeout, TLSClientConfig: tlsConfig}
 	if err != nil {
-		log.Warnf("%sLNS data TLS configuration failed", gatewayLogPrefix(id))
+		instanceLogger(p.config.Logger).Warnf("%sLNS data TLS configuration failed", gatewayLogPrefix(id))
 		http.Error(w, "upstream TLS configuration failed", 502)
 		return
 	}
@@ -644,10 +663,10 @@ func (p *WSProxy) handleDataConnection(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(p.root, wsHandshakeTimeout)
 	defer cancel()
-	log.Infof("%sLNS data connecting origin=%s", gatewayLogPrefix(id), upstreamLogOrigin(uri))
+	instanceLogger(p.config.Logger).Infof("%sLNS data connecting origin=%s", gatewayLogPrefix(id), upstreamLogOrigin(uri))
 	upstream, err := p.config.dialContextWithRedirects(ctx, dialer, uri, p.upstreamHeaders(id, "tc", r.Header))
 	if err != nil {
-		log.Warnf("%sLNS data connection failed reason=%s", gatewayLogPrefix(id), upstreamFailureReason(err))
+		instanceLogger(p.config.Logger).Warnf("%sLNS data connection failed reason=%s", gatewayLogPrefix(id), upstreamFailureReason(err))
 		http.Error(w, "upstream handshake failed", 502)
 		return
 	}
@@ -668,7 +687,7 @@ func (p *WSProxy) handleDataConnection(w http.ResponseWriter, r *http.Request) {
 		connection.close()
 		return
 	}
-	log.Infof("%sLNS data connected origin=%s", gatewayLogPrefix(id), upstreamLogOrigin(uri))
+	instanceLogger(p.config.Logger).Infof("%sLNS data connected origin=%s", gatewayLogPrefix(id), upstreamLogOrigin(uri))
 	// Admission limits pending handshakes, not the lifetime of established sessions.
 	p.release()
 	released = true
@@ -712,7 +731,7 @@ func (s *session) upstreamPingLoop() {
 						side = "upstream"
 					}
 					if !s.isClosed() {
-						log.Warnf("%s%s keepalive ping write failed age_s=%.1f", gatewayLogPrefix(s.gatewayKey), side, time.Since(s.started).Seconds())
+						instanceLogger(s.config.Logger).Warnf("%s%s keepalive ping write failed age_s=%.1f", gatewayLogPrefix(s.gatewayKey), side, time.Since(s.started).Seconds())
 					}
 					s.close()
 					return
@@ -741,7 +760,7 @@ func (s *session) gatewayToUpstream() {
 			if mt == websocket.BinaryMessage {
 				dir = "binary"
 			}
-			log.Debug(Hexdump(gatewayLogPrefix(s.gatewayKey)+"WS payload sent to LNS "+dir+" ", msg, 512))
+			instanceLogger(s.config.Logger).Debug(Hexdump(gatewayLogPrefix(s.gatewayKey)+"WS payload sent to LNS "+dir+" ", msg, 512))
 		}
 		// Some LNS (e.g. ThingPark) require the gateway identity in the first (version) message; inject "router" if missing.
 		toSend := msg
@@ -753,7 +772,7 @@ func (s *session) gatewayToUpstream() {
 		// Forward first so the tunnel is never blocked or broken by analytics logic.
 		s.upstreamConn.SetWriteDeadline(time.Now().Add(writeWait))
 		if err := s.upstreamConn.WriteMessage(mt, toSend); err != nil {
-			log.Warnf("%supstream write: %v", gatewayLogPrefix(s.gatewayKey), err)
+			instanceLogger(s.config.Logger).Warnf("%supstream write: %v", gatewayLogPrefix(s.gatewayKey), err)
 			break
 		}
 		s.recordForwarded("gateway", mt, msg)
@@ -761,7 +780,7 @@ func (s *session) gatewayToUpstream() {
 			func() {
 				defer func() {
 					if r := recover(); r != nil {
-						log.Warnf("%sOnUpstreamMessage panic (tunnel unaffected): %v", gatewayLogPrefix(s.gatewayKey), r)
+						instanceLogger(s.config.Logger).Warnf("%sOnUpstreamMessage panic (tunnel unaffected): %v", gatewayLogPrefix(s.gatewayKey), r)
 					}
 				}()
 				s.events.OnUpstreamMessage(s.gatewayKey, msg, mt == websocket.BinaryMessage)
@@ -801,12 +820,12 @@ func (s *session) upstreamToGateway() {
 			if mt == websocket.BinaryMessage {
 				dir = "binary"
 			}
-			log.Debug(Hexdump(gatewayLogPrefix(s.gatewayKey)+"WS reply from LNS "+dir+" ", msg, 512))
+			instanceLogger(s.config.Logger).Debug(Hexdump(gatewayLogPrefix(s.gatewayKey)+"WS reply from LNS "+dir+" ", msg, 512))
 		}
 		// Forward first so the tunnel is never blocked or broken by analytics logic.
 		s.gatewayConn.SetWriteDeadline(time.Now().Add(writeWait))
 		if err := s.gatewayConn.WriteMessage(mt, msg); err != nil {
-			log.Warnf("%sgateway write: %v", gatewayLogPrefix(s.gatewayKey), err)
+			instanceLogger(s.config.Logger).Warnf("%sgateway write: %v", gatewayLogPrefix(s.gatewayKey), err)
 			break
 		}
 		s.recordForwarded("upstream", mt, msg)
@@ -814,7 +833,7 @@ func (s *session) upstreamToGateway() {
 			func() {
 				defer func() {
 					if r := recover(); r != nil {
-						log.Warnf("%sOnDownstreamMessage panic (tunnel unaffected): %v", gatewayLogPrefix(s.gatewayKey), r)
+						instanceLogger(s.config.Logger).Warnf("%sOnDownstreamMessage panic (tunnel unaffected): %v", gatewayLogPrefix(s.gatewayKey), r)
 					}
 				}()
 				s.events.OnDownstreamMessage(s.gatewayKey, msg, mt == websocket.BinaryMessage)
@@ -876,4 +895,19 @@ func (p *WSProxy) Shutdown(ctx context.Context) error {
 	p.pendingMu.Unlock()
 	p.sessions.CloseAll()
 	return p.server.Shutdown(ctx)
+}
+
+func (p *WSProxy) listenCertificate() (tls.Certificate, error) {
+	if p.config.ListenCertificate != nil {
+		return *p.config.ListenCertificate, nil
+	}
+	return tls.LoadX509KeyPair(p.config.ListenTLSCert, p.config.ListenTLSKey)
+}
+func (p *WSProxy) Handler() http.Handler { return p.server.Handler }
+func (p *WSProxy) TLSConfig() *tls.Config {
+	c, e := p.listenCertificate()
+	if e != nil {
+		return nil
+	}
+	return &tls.Config{Certificates: []tls.Certificate{c}, ClientAuth: tls.RequestClientCert, MinVersion: tls.VersionTLS12}
 }

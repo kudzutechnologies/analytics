@@ -1,4 +1,4 @@
-package main
+package forwarderbs
 
 import (
 	"encoding/hex"
@@ -7,7 +7,6 @@ import (
 
 	"github.com/kudzutechnologies/analytics/api"
 	"github.com/kudzutechnologies/analytics/client"
-	log "github.com/sirupsen/logrus"
 )
 
 // AnalyticsForwarder implements WSProxyEvents and batches analytics for push.
@@ -178,7 +177,7 @@ func (f *AnalyticsForwarder) handleJreq(gatewayKey string, raw []byte, metricsFr
 	}
 	fhdr, fullPayload, err := ReconstructJreqPayload(m)
 	if err != nil {
-		log.Debugf("jreq reconstruct: %v", err)
+		instanceLogger(f.config.Logger).Debugf("jreq reconstruct: %v", err)
 		return
 	}
 	up.Fhdr = fhdr
@@ -202,7 +201,7 @@ func (f *AnalyticsForwarder) handleUpdf(gatewayKey string, raw []byte, metricsFr
 	}
 	fhdr, fullPayload, err := ReconstructUpdfPayload(m)
 	if err != nil {
-		log.Debugf("updf reconstruct: %v", err)
+		instanceLogger(f.config.Logger).Debugf("updf reconstruct: %v", err)
 		return
 	}
 	up.Fhdr = fhdr
@@ -226,7 +225,7 @@ func (f *AnalyticsForwarder) handlePropdf(gatewayKey string, raw []byte, metrics
 	}
 	fhdr, fullPayload, err := ReconstructPropdfPayload(m)
 	if err != nil {
-		log.Debugf("propdf reconstruct: %v", err)
+		instanceLogger(f.config.Logger).Debugf("propdf reconstruct: %v", err)
 		return
 	}
 	up.Fhdr = fhdr

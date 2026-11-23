@@ -30,8 +30,8 @@ dirty=bool(subprocess.check_output(['git','status','--porcelain','--untracked-fi
 artifacts=[];binaries=[]
 for target in (TARGETS if a.target=='all' else [a.target]):
     binary=out/(name+'-'+target);env=dict(os.environ);env.update({'CGO_ENABLED':'0','GOOS':'linux','GOARM':'','GOMIPS':'',**TARGETS[target]})
-    subprocess.run(['go','build','-trimpath','-ldflags','-s -w -X main.MajorVersion='+a.version,'-o',str(binary),'./'+component],cwd=ROOT,env=env,check=True)
-    entries=[(binary.name,binary,0o755),('README.md',ROOT/component/'README.md',0o644),('LICENSE',ROOT/'LICENSE',0o644)]
+    subprocess.run(['go','build','-trimpath','-ldflags','-s -w -X main.MajorVersion='+a.version,'-o',str(binary),'./'+component+('/cli' if a.component=='bs' else '')],cwd=ROOT,env=env,check=True)
+    entries=[(binary.name,binary,0o755),('README.md',ROOT/component/('cli/README.md' if a.component=='bs' else 'README.md'),0o644),('LICENSE',ROOT/'LICENSE',0o644)]
     archive=out/(binary.name+'.tgz');tarball(archive,entries);binaries.append((binary.name,binary,0o755))
     for file in [binary,archive]:artifacts.append({'name':file.name,'target':target,'bytes':file.stat().st_size,'sha256':hashlib.sha256(file.read_bytes()).hexdigest()})
 if a.bundle:tarball(out/(name+'-all.tar.gz'),binaries)
