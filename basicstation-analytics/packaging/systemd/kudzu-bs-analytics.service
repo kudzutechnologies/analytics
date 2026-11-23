@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: MIT
+# Copyright 2026 Kudzu Technologies
+[Unit]
+Description=Kudzu Basic Station Analytics Bridge
+After=network-online.target
+Wants=network-online.target
+# Bind the analytics socket before Basic Station starts.
+Before=basicstation.service
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/default/kudzu-bs-analytics
+ExecStart=/usr/bin/basicstation-analytics --config /etc/kudzu-bs-analytics.conf
+Restart=on-failure
+RestartSec=5
+RuntimeDirectory=basicstation
+RuntimeDirectoryMode=0750
+RuntimeDirectoryPreserve=yes
+# The daemon owns its configurable absolute drain deadline.
+TimeoutStopSec=infinity
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

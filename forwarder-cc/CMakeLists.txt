@@ -6,7 +6,7 @@
 #
 # Uses client-cc as a sub-project (same repo). No -march=native for portability.
 
-cmake_minimum_required(VERSION 3.14)
+cmake_minimum_required(VERSION 3.24)
 project(forwarder_cc LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -38,6 +38,7 @@ include(FetchContent)
 FetchContent_Declare(
   json
   URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz
+  URL_HASH SHA256=d6c65aca6b1ed68e7a182f4757257b107ae403032760ed6ef121c9d55e81757d
   DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 set(JSON_BuildTests OFF CACHE BOOL "" FORCE)

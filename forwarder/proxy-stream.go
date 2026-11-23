@@ -24,9 +24,11 @@ type ProxyStreamConfig struct {
 	RemoteAddress     *net.UDPAddr
 	RemoteBindAddress *net.UDPAddr
 	Events            ProxyStreamEvents
+	workers           *sync.WaitGroup
 }
 
 type ProxyStream struct {
+	mu              sync.Mutex
 	connected       bool
 	closed          bool
 	closeWg         sync.WaitGroup
@@ -55,15 +57,18 @@ func CreateProxyStream(config *ProxyStreamConfig) *ProxyStream {
 }
 
 func (s *ProxyStream) HandleLocalData(data []byte) error {
+	s.mu.Lock()
 	if s.closed {
+		s.mu.Unlock()
 		return ErrSocketClosed
 	}
 
 	// Make sure we are connected
 	if !s.connected {
 		log.Debugf("[%s] Remote not connected, connecting now", s.conf.Name)
-		err := s.connect()
+		err := s.connectLocked()
 		if err != nil {
+			s.mu.Unlock()
 			return err
 		}
 	}
@@ -71,8 +76,10 @@ func (s *ProxyStream) HandleLocalData(data []byte) error {
 	log.Debugf("[%s] Sending %d bytes to %s: %s", s.conf.Name,
 		len(data), s.conf.RemoteAddress.String(), hex.EncodeToString(data))
 
-	// Write to remote
-	_, err := s.remote.Write(data)
+	// The socket remains safe to use if Close runs after the snapshot.
+	remote := s.remote
+	s.mu.Unlock()
+	_, err := remote.Write(data)
 	if err != nil {
 		log.Warnf("[%s] Unable to write to remote (%s): %s", s.conf.Name, s.conf.RemoteAddress.String(), err.Error())
 		s.Close()
@@ -83,41 +90,51 @@ func (s *ProxyStream) HandleLocalData(data []byte) error {
 	return nil
 }
 
-func (s *ProxyStream) Close() {
-	if s.closed {
-		return
-	}
-
+// stop closes the socket without joining the reader. It is safe in reader callbacks.
+func (s *ProxyStream) stop() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if !s.closed {
-		log.Debugf("[%s] Closing stream", s.conf.Name)
 		s.closed = true
 		if s.remote != nil {
 			s.remote.Close()
 		}
-		s.closeWg.Wait()
-		log.Debugf("[%s] Thread joined", s.conf.Name)
 	}
+}
+
+func (s *ProxyStream) Close() {
+	s.stop()
+	s.closeWg.Wait()
+}
+
+func (s *ProxyStream) isClosed() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.closed
 }
 
 func (s *ProxyStream) remoteToLocal() {
 	defer s.closeWg.Done()
+	if s.conf.workers != nil {
+		defer s.conf.workers.Done()
+	}
 
 	log.Debugf("[%s] Reading thread started", s.conf.Name)
 	b := make([]byte, s.conf.BufferSize)
 
-	for s.connected {
+	for {
 		log.Debugf("[%s] Reading up to %d bytes from %s", s.conf.Name, s.conf.BufferSize, s.remoteBoundAddr.String())
 		n, addr, err := s.remote.ReadFromUDP(b)
 
 		// If were intentionally closed in the process, exit the loop
-		if s.closed {
+		if s.isClosed() {
 			break
 		}
 
 		// Otherwise handle errors
 		if err != nil {
 			log.Errorf("[%s] Could not read from remote side: %s", s.conf.Name, err.Error())
-			s.Close()
+			s.stop()
 			s.conf.Events.RemoteError(err)
 			break
 		}
@@ -127,13 +144,15 @@ func (s *ProxyStream) remoteToLocal() {
 
 		// Once a message is received from the specified endpoint, we will be using that
 		// for communicating with the upstream from this point onwards
+		s.mu.Lock()
 		s.remoteReplyAddr = addr
+		s.mu.Unlock()
 
 		// Send data to the local endpoint
 		wb, err := s.conf.Local.WriteToUDP(b[0:n], s.conf.LocalReplyAddress)
 		if err != nil {
 			log.Warnf("[%s] Unable to write to local (%s): %s", s.conf.Name, s.conf.LocalReplyAddress.String(), err)
-			s.Close()
+			s.stop()
 			s.conf.Events.LocalError(err)
 			break
 		} else if wb != n {
@@ -148,7 +167,8 @@ func (s *ProxyStream) remoteToLocal() {
 	log.Debugf("[%s] Reading thread exited", s.conf.Name)
 }
 
-func (s *ProxyStream) connect() error {
+// connectLocked publishes the socket and registers its reader before Close can wait.
+func (s *ProxyStream) connectLocked() error {
 	var err error
 	if s.connected {
 		return nil
@@ -179,6 +199,9 @@ func (s *ProxyStream) connect() error {
 	// Start the reader thread
 	s.connected = true
 	s.closeWg.Add(1)
+	if s.conf.workers != nil {
+		s.conf.workers.Add(1)
+	}
 	go s.remoteToLocal()
 
 	return nil

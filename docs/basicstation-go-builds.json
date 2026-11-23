@@ -1,0 +1,167 @@
+{
+  "scope": "local cross-compiled candidates, not published releases",
+  "builds": [
+    {
+      "version": "dev",
+      "source_commit": "37cbd38889a4a7efc6a42212dbe85f022d324b80",
+      "source_dirty": false,
+      "go": "go version go1.27.3 darwin/arm64",
+      "CGO_ENABLED": 0,
+      "artifacts": [
+        {
+          "name": "kudzu-forwarder-bs-amd64",
+          "target": "amd64",
+          "bytes": 13672608,
+          "sha256": "e08a9d1ea3483d8e0cfda9420bbd8febb8a491fffb58028b59483bffe70f556b"
+        },
+        {
+          "name": "kudzu-forwarder-bs-amd64.tgz",
+          "target": "amd64",
+          "bytes": 5356658,
+          "sha256": "15e3e594ca27fb95801c8007a78c72472b6a45b0d7d7582f7c66288956ad58e2"
+        },
+        {
+          "name": "kudzu-forwarder-bs-rpi",
+          "target": "rpi",
+          "bytes": 13303968,
+          "sha256": "3441f8cbcb9514bfb1c34e50dadf6947d77e8cc558842e3fd405d631fc2e1e1c"
+        },
+        {
+          "name": "kudzu-forwarder-bs-rpi.tgz",
+          "target": "rpi",
+          "bytes": 5105696,
+          "sha256": "959fdd72bfcff66c7b97bd9f641b810c0e5ce8d3c1c78cd9745499e6dcab5fd4"
+        },
+        {
+          "name": "kudzu-forwarder-bs-arm6",
+          "target": "arm6",
+          "bytes": 13238432,
+          "sha256": "0b28eafd5430e60c33f13cd616b8f5eb337b6d707073190c081c655b8c8587af"
+        },
+        {
+          "name": "kudzu-forwarder-bs-arm6.tgz",
+          "target": "arm6",
+          "bytes": 5100288,
+          "sha256": "54f3c3d2ae6c6785f1c3a66a146352428f102042e8d70ecbc08b085202ad2a32"
+        },
+        {
+          "name": "kudzu-forwarder-bs-arm7",
+          "target": "arm7",
+          "bytes": 13238432,
+          "sha256": "872d8dcb420fdbedd10721f4f306ae287a3a79d2eeabf6bc5fbef94a676ae6ad"
+        },
+        {
+          "name": "kudzu-forwarder-bs-arm7.tgz",
+          "target": "arm7",
+          "bytes": 5089792,
+          "sha256": "3be3562bdf1dc8dd078f0e29af4628d6a02b95228f62e26ff5befb4837a484f0"
+        },
+        {
+          "name": "kudzu-forwarder-bs-mipsle-24kec-v5",
+          "target": "mipsle-24kec-v5",
+          "bytes": 14876863,
+          "sha256": "bd186621d00d19a611841b7beaf4cd689eea0d37a17deaeb59ef408e955fe02c"
+        },
+        {
+          "name": "kudzu-forwarder-bs-mipsle-24kec-v5.tgz",
+          "target": "mipsle-24kec-v5",
+          "bytes": 4884288,
+          "sha256": "17f78e2de238d3d309f697e45db44a09b9b1e55f7748643583560f4188e53fd2"
+        },
+        {
+          "name": "kudzu-forwarder-bs-mips-24kec-v5",
+          "target": "mips-24kec-v5",
+          "bytes": 14876863,
+          "sha256": "c9baea409081ac64751c23352cc4e684fe8054f76859a4148d9dcf8bc77857ec"
+        },
+        {
+          "name": "kudzu-forwarder-bs-mips-24kec-v5.tgz",
+          "target": "mips-24kec-v5",
+          "bytes": 4976851,
+          "sha256": "9f87cdd4a05b729189d948827cd2c0d872d3c9a5d979a36da0136a71affd22bd"
+        }
+      ]
+    },
+    {
+      "version": "dev",
+      "source_commit": "37cbd38889a4a7efc6a42212dbe85f022d324b80",
+      "source_dirty": false,
+      "go": "go version go1.27.3 darwin/arm64",
+      "CGO_ENABLED": 0,
+      "artifacts": [
+        {
+          "name": "kudzu-forwarder-amd64",
+          "target": "amd64",
+          "bytes": 12574880,
+          "sha256": "9bb259cf40a42d1c1de653ddbbcec57f13503dc434704c4ad2e22dc6ff5a0c6a"
+        },
+        {
+          "name": "kudzu-forwarder-amd64.tgz",
+          "target": "amd64",
+          "bytes": 4934380,
+          "sha256": "49ab816d396041c7ba824a73d2d5eaeeb1f3a1f7a9c1f9866c256211b5bf75d8"
+        },
+        {
+          "name": "kudzu-forwarder-rpi",
+          "target": "rpi",
+          "bytes": 12189856,
+          "sha256": "feb5fafaa1a86aa11226f72d623aa218982546888236e6d42c4138420449db4e"
+        },
+        {
+          "name": "kudzu-forwarder-rpi.tgz",
+          "target": "rpi",
+          "bytes": 4707952,
+          "sha256": "84b1697eda35db6ca0afa8a9c712632f09f8d9edee3b74be35aeed24ce6f6361"
+        },
+        {
+          "name": "kudzu-forwarder-arm6",
+          "target": "arm6",
+          "bytes": 12189856,
+          "sha256": "6d3158730464500b72df79a6611dd090200d3812b171e4d7eae1b9d974366b2e"
+        },
+        {
+          "name": "kudzu-forwarder-arm6.tgz",
+          "target": "arm6",
+          "bytes": 4703041,
+          "sha256": "a8a5b90b094d03a29a95f4e2ea50dad902e65adc6793a4344a4a1e1ac24753ec"
+        },
+        {
+          "name": "kudzu-forwarder-arm7",
+          "target": "arm7",
+          "bytes": 12189856,
+          "sha256": "dfe2383a80aa9ce38b3d50e88057a34bd85708a632af338187eaba3f226273ec"
+        },
+        {
+          "name": "kudzu-forwarder-arm7.tgz",
+          "target": "arm7",
+          "bytes": 4696908,
+          "sha256": "bc446fb90d66012eca53afc5058e96c890ee2bd90a704534b2597c4079d3f142"
+        },
+        {
+          "name": "kudzu-forwarder-mipsle-24kec-v5",
+          "target": "mipsle-24kec-v5",
+          "bytes": 13697215,
+          "sha256": "65a3d87dea51ce45a396324ad118a9090328977ac3d7dc9c58f3dad6a982dba0"
+        },
+        {
+          "name": "kudzu-forwarder-mipsle-24kec-v5.tgz",
+          "target": "mipsle-24kec-v5",
+          "bytes": 4506288,
+          "sha256": "3c489bcee0d23885618f6fc712bddfab86cf4bc0a4f03745720b1508a2b1ea0b"
+        },
+        {
+          "name": "kudzu-forwarder-mips-24kec-v5",
+          "target": "mips-24kec-v5",
+          "bytes": 13697215,
+          "sha256": "02c6362116c9964aedb7eab8106e6e88769c4e97d23af461724e1dd4e14d8ef3"
+        },
+        {
+          "name": "kudzu-forwarder-mips-24kec-v5.tgz",
+          "target": "mips-24kec-v5",
+          "bytes": 4589385,
+          "sha256": "17f0e31c5588c301aba8f9c845dcce4d8a8b3fc4301c33d70f2d0dfc7eabe698"
+        }
+      ]
+    }
+  ]
+}

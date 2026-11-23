@@ -50,50 +50,67 @@ bool Client::LoadTLSCredentials(std::shared_ptr<grpc::ChannelCredentials>& creds
     return true;
 }
 
-bool Client::Connect() {
-    Disconnect();
-    last_error_.clear();
-    std::shared_ptr<grpc::ChannelCredentials> creds;
-    if (!LoadTLSCredentials(creds)) return false;
-    grpc::ChannelArguments args;
-    if (!config_.ssl_target_name_override.empty()) {
-        args.SetSslTargetNameOverride(config_.ssl_target_name_override);
-    }
-    auto deadline = std::chrono::system_clock::now() + std::chrono::seconds(config_.connect_timeout);
-    channel_ = grpc::CreateCustomChannel(config_.endpoint, creds, args);
-    stub_ = api::AnalyticsServer::NewStub(channel_);
-    grpc::ClientContext ctx;
-    ctx.set_deadline(deadline);
-    api::ReqHello hello_req;
-    hello_req.set_version(kClientVersion);
-    api::RespHello hello_resp;
-    auto status = stub_->Hello(&ctx, hello_req, &hello_resp);
-    if (!status.ok()) {
-        last_error_ = "Hello RPC failed (" + std::to_string(status.error_code()) +
-                      "): " + status.error_message();
-        return false;
-    }
-    if (!Login(hello_resp.challenge())) return false;
-    connected_ = true;
-    return true;
+Client::ActiveCall::ActiveCall(Client* c, Deadline deadline) : owner(c) {
+  context.set_deadline(deadline);
+  std::lock_guard<std::mutex> lock(owner->call_mutex_);
+  owner->active_call_ = &context;
+  if (owner->cancelled_) context.TryCancel();
+}
+Client::ActiveCall::~ActiveCall() {
+  std::lock_guard<std::mutex> lock(owner->call_mutex_);
+  owner->active_call_ = nullptr;
+}
+void Client::CancelPending() {
+  std::lock_guard<std::mutex> lock(call_mutex_);
+  cancelled_ = true;
+  if (active_call_) active_call_->TryCancel();
 }
 
-bool Client::Login(const std::string& challenge) {
-    grpc::ClientContext ctx;
-    api::ReqLogin login_req;
-    login_req.set_clientid(HexToBytes(config_.client_id));
-    std::string key_bytes = HexToBytes(config_.client_key);
-    login_req.set_hash(BuildLoginHash(challenge, key_bytes));
-    login_req.set_serverside(config_.server_side.value_or(false));
-    api::RespLogin login_resp;
-    auto status = stub_->Login(&ctx, login_req, &login_resp);
-    if (!status.ok()) {
-        last_error_ = "Login RPC failed (" + std::to_string(status.error_code()) +
-                      "): " + status.error_message();
-        return false;
-    }
-    session_token_ = login_resp.accesstoken();
-    return true;
+bool Client::Connect() {
+  return ConnectOnce(std::chrono::system_clock::now()+std::chrono::seconds(config_.connect_timeout)).ok();
+}
+grpc::Status Client::ConnectOnce(Deadline deadline) {
+  Disconnect();
+  last_error_.clear();
+  std::shared_ptr<grpc::ChannelCredentials> creds;
+  if (!LoadTLSCredentials(creds)) return {grpc::StatusCode::FAILED_PRECONDITION,last_error_};
+  grpc::ChannelArguments args;
+  if (!config_.ssl_target_name_override.empty()) args.SetSslTargetNameOverride(config_.ssl_target_name_override);
+  channel_=grpc::CreateCustomChannel(config_.endpoint,creds,args);
+  stub_=api::AnalyticsServer::NewStub(channel_);
+  api::RespHello hello_resp;
+  {
+    ActiveCall call(this,deadline);
+    api::ReqHello req; req.set_version(kClientVersion);
+    auto status=stub_->Hello(&call.context,req,&hello_resp);
+    if (!status.ok()) {last_error_="Hello RPC failed: "+status.error_message();Disconnect();return status;}
+  }
+  ActiveCall call(this,deadline);
+  api::ReqLogin login_req;
+  login_req.set_clientid(HexToBytes(config_.client_id));
+  login_req.set_hash(BuildLoginHash(hello_resp.challenge(),HexToBytes(config_.client_key)));
+  login_req.set_serverside(config_.server_side.value_or(false));
+  api::RespLogin login_resp;
+  auto status=stub_->Login(&call.context,login_req,&login_resp);
+  if (!status.ok()) {last_error_="Login RPC failed: "+status.error_message();Disconnect();return status;}
+  session_token_=login_resp.accesstoken(); connected_=true;
+  return grpc::Status::OK;
+}
+grpc::Status Client::PushMetricsOnce(const api::AnalyticsMetrics& metrics, Deadline deadline) {
+  if (!connected_) return {grpc::StatusCode::UNAVAILABLE,"not connected"};
+  ActiveCall call(this,deadline); call.context.AddMetadata("token",session_token_);
+  api::RespPush resp;
+  auto status=stub_->PushMetrics(&call.context,metrics,&resp);
+  if(!status.ok())last_error_=status.error_message();
+  return status;
+}
+grpc::Status Client::GatewayUpsertOnce(const api::ReqGatewayUpsert& req, Deadline deadline) {
+  if (!connected_) return {grpc::StatusCode::UNAVAILABLE,"not connected"};
+  ActiveCall call(this,deadline); call.context.AddMetadata("token",session_token_);
+  api::RespGatewaySync resp;
+  auto status=stub_->GatewayUpsert(&call.context,req,&resp);
+  if(!status.ok())last_error_=status.error_message();
+  return status;
 }
 
 void Client::Disconnect() {

@@ -3,6 +3,8 @@
 #include <memory>
 #include <string>
 #include <optional>
+#include <mutex>
+#include <chrono>
 #include <grpcpp/grpcpp.h>
 #include "protobuf/api.pb.h"
 #include "protobuf/api.grpc.pb.h"
@@ -34,6 +36,12 @@ public:
     explicit Client(const AnalyticsClientConfig& config);
     ~Client();
 
+    using Deadline = std::chrono::system_clock::time_point;
+    grpc::Status ConnectOnce(Deadline deadline);
+    grpc::Status PushMetricsOnce(const api::AnalyticsMetrics& metrics, Deadline deadline);
+    grpc::Status GatewayUpsertOnce(const api::ReqGatewayUpsert& req, Deadline deadline);
+    // The only operation permitted concurrently with an RPC owner.
+    void CancelPending();
     bool Connect();
     void Disconnect();
     const std::string& LastError() const;
@@ -43,7 +51,15 @@ public:
 
 private:
     bool LoadTLSCredentials(std::shared_ptr<grpc::ChannelCredentials>& creds);
-    bool Login(const std::string& challenge);
+    struct ActiveCall {
+      Client* owner;
+      grpc::ClientContext context;
+      ActiveCall(Client* owner, Deadline deadline);
+      ~ActiveCall();
+    };
+    std::mutex call_mutex_;
+    grpc::ClientContext* active_call_ = nullptr;
+    bool cancelled_ = false;
     bool WithReconnect(const std::function<bool()>& fn);
     std::shared_ptr<grpc::Channel> channel_;
     std::unique_ptr<api::AnalyticsServer::Stub> stub_;

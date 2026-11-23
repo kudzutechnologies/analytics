@@ -10,7 +10,7 @@ C++ implementation of the Kudzu Analytics Forwarder. It sits between the Semtech
 
 ## Dependencies
 
-- **CMake** 3.14+
+- **CMake** 3.24+
 - **C++17** compiler (GCC, Clang)
 - **gRPC** and **Protobuf** (same as [client-cc](../client-cc))
 - **OpenSSL** (TLS and SHA1 dedupe)
