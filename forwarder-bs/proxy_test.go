@@ -49,7 +49,7 @@ func TestDiscoveryUsesAllocatedEndpointWithoutDisk(t *testing.T) {
 			if c.ReadJSON(&req) != nil {
 				return
 			}
-			c.WriteJSON(RouterInfoResponse{Router: gatewayIDToEUIFormat(req.Router), Muxs: "::1", URI: wsURL(lns.URL) + "/assigned"})
+			c.WriteJSON(RouterInfoResponse{Router: gatewayIDToEUIFormat(req.Router), Muxs: "lns-bridge-1", URI: wsURL(lns.URL) + "/assigned"})
 			return
 		}
 		hits <- r.URL.RequestURI()
@@ -64,7 +64,10 @@ func TestDiscoveryUsesAllocatedEndpointWithoutDisk(t *testing.T) {
 		}
 	}))
 	defer lns.Close()
-	_, proxy := startProxyFixture(t, &WSProxyConfig{ConnectURI: wsURL(lns.URL)})
+	p, proxy := startProxyFixture(t, &WSProxyConfig{ConnectURI: wsURL(lns.URL)})
+	// Public configurations commonly omit the root slash. Go's WebSocket client
+	// accepts that form, but Station requires an explicit path in discovery.
+	p.config.PublicURI = strings.TrimSuffix(p.config.PublicURI, "/")
 	discovery, _, e := websocket.DefaultDialer.Dial(wsURL(proxy.URL)+"/router-info", nil)
 	if e != nil {
 		t.Fatal(e)
@@ -75,8 +78,14 @@ func TestDiscoveryUsesAllocatedEndpointWithoutDisk(t *testing.T) {
 	if e = discovery.ReadJSON(&response); e != nil {
 		t.Fatal(e)
 	}
+	if response.Muxs != "lns-bridge-1" {
+		t.Fatalf("changed upstream endpoint label: %q", response.Muxs)
+	}
 	if !strings.Contains(response.URI, "router=000f000000000001") {
 		t.Fatalf("lost identity: %s", response.URI)
+	}
+	if !strings.Contains(response.URI, "/?router=") {
+		t.Fatalf("Station discovery URI has no root path: %s", response.URI)
 	}
 	data, _, e := websocket.DefaultDialer.Dial(response.URI, nil)
 	if e != nil {
@@ -223,5 +232,42 @@ func TestLongIdleConnection(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("no response after idle")
+	}
+}
+
+func TestDiscoveryRejectsMismatchedRouterWithOpaqueMuxs(t *testing.T) {
+	var upstream *httptest.Server
+	upstream = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := (&websocket.Upgrader{}).Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		if _, _, err = conn.ReadMessage(); err != nil {
+			return
+		}
+		conn.WriteJSON(RouterInfoResponse{Router: "0102030405060708", Muxs: "lns-bridge-1", URI: wsURL(upstream.URL) + "/assigned"})
+	}))
+	defer upstream.Close()
+	p, proxy := startProxyFixture(t, &WSProxyConfig{ConnectURI: wsURL(upstream.URL)})
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL(proxy.URL)+"/router-info", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	conn.WriteJSON(map[string]string{"router": "24e124fffef37b09"})
+	var response RouterInfoResponse
+	if err = conn.ReadJSON(&response); err != nil {
+		t.Fatal(err)
+	}
+	if response.Error != "unapproved discovery endpoint" || response.URI != "" {
+		t.Fatalf("accepted mismatched gateway: %+v", response)
+	}
+	p.routesMu.Lock()
+	assigned := p.routes["24e124fffef37b09"]
+	p.routesMu.Unlock()
+	if assigned != "" {
+		t.Fatal("installed mismatched gateway route")
 	}
 }

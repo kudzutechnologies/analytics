@@ -77,6 +77,15 @@ otherwise the base/data host plus `connect-discovery-path` (default
 synthetic response using the configured data endpoint. Other failures remain
 failures. Discovery responses advertise `public-uri`; its path must be root.
 Request Host headers do not determine the public destination.
+Advertised data URIs include an explicit root slash before the router query;
+Station rejects a discovery URI with no path. This normalization does not alter
+the CUPS URI or require adding a trailing slash to `public-uri`.
+
+The discovery response's `router` is validated as the gateway identity. String
+`muxs` endpoint labels are forwarded unchanged; they are not authorization or
+routing decisions. Explicit upstream rejections remain rejections even if their
+identity fields are empty. Decode failures report the failing field without
+dumping the upstream response body.
 
 An assigned destination or redirect must match a configured upstream origin.
 Add other legitimate destinations with comma-separated
@@ -85,6 +94,9 @@ port; HTTPS and WSS share an origin. `connect-ws-subprotocol` selects an explici
 subprotocol. The Station version message is forwarded unchanged unless
 `inject-router-into-version=true` is set. Both directions receive heartbeats;
 replaced/closed sessions release identity-specific runtime state.
+The 60-second read inactivity deadline refreshes on incoming application
+messages, ping frames, and pong frames. A silent peer still times out; active
+traffic is not discarded merely because it omits pong replies to proxy pings.
 
 System roots verify upstream TLS by default. `connect-tls-ca` adds a CA;
 `connect-data-tls-ca` and `connect-data-tls-server-name` customize the data
@@ -108,6 +120,13 @@ proxy CA, and a valid public TLS hostname. Provision ingress authorization and
 upstream access before starting. Station must trust the proxy listener for
 both TC and CUPS. This mode intentionally issues proxy credentials and writes
 changed upstream state; it does not enable unauthenticated first enrollment.
+
+In this mode `connect-uri` identifies the initial upstream CUPS service. Until
+CUPS supplies a TC URI, the proxy reports an empty upstream `tcUri` (or the
+explicit `connect-data-uri` override). It never substitutes the CUPS host as an
+LNS endpoint. LNS discovery returns a provisioning-pending error and direct
+data connections return HTTP 503 until an endpoint is assigned or explicitly
+configured. A discovery HTTP 404 falls back only to a known LNS data endpoint.
 
 Unchanged updates return the 14-byte zero response. Credentials are compared
 with Basic Station CRC semantics; unchanged files are not rewritten. Changed
@@ -154,6 +173,18 @@ to save it privately. `pairing-endpoint` defaults to
 `https://console.eu1.cluster.kudzu.gr` and appends `/api/v1/pairing/edge`.
 
 Logs default to stderr at `info`; no application log file is created.
+Managed CUPS logs the upstream HTTP status, response length, URI origins, and
+credential/update byte counts. An empty upstream response with zero local
+credential CRCs produces a warning: issuing proxy credentials does not establish
+that the gateway obtained upstream credentials or connected to the LNS. Discovery
+and data connection logs show connection stages and HTTP/TLS failure categories.
+Data sessions also log forwarding of `version` and `router_config`. Minute and
+close summaries include session age, frame counts, handshake flags, and ping/pong
+counts for each peer. Read failures identify the side and distinguish timeouts
+from WebSocket close codes. A WebSocket connection alone does not establish that
+Station has accepted the radio configuration or that radio traffic is flowing.
+These diagnostics omit credential bodies, request/response payloads, URL userinfo,
+paths, and query strings.
 `log-level` accepts error/warn/info/debug. Minute and shutdown summaries report
 retention, loss reasons, and connection/push failures without payloads or keys.
 `log-file` is an explicit operator-managed file. `verbose` enables packet debug

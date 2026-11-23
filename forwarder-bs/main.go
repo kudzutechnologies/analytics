@@ -122,6 +122,7 @@ func runMain() int {
 			running = false
 		case <-statusTicker.C:
 			logDeliveryStatus("running", forwarder.DeliveryStats())
+			proxy.logSessionStatus()
 		}
 	}
 	shutdown, cancel := context.WithTimeout(context.Background(), time.Duration(config.ShutdownDeadlineMS)*time.Millisecond)

@@ -117,21 +117,29 @@ func (r *RouterInfoResponse) UnmarshalJSON(raw []byte) error {
 	if e := json.Unmarshal(raw, &wire); e != nil {
 		return e
 	}
-	r.URI = wire.URI
-	r.Error = wire.Error
+	*r = RouterInfoResponse{URI: wire.URI, Error: wire.Error}
+	// Rejection responses need not carry usable routing identities. The caller
+	// forwards the rejection and never installs a route from these responses.
+	if wire.Error != "" {
+		return nil
+	}
 	if len(wire.Router) > 0 {
 		id, e := parseRouterJSON(wire.Router)
 		if e != nil {
-			return e
+			return fmt.Errorf("discovery router: %w", e)
 		}
 		r.Router = gatewayIDToEUIFormat(id)
 	}
 	if len(wire.Muxs) > 0 {
-		id, e := parseRouterJSON(wire.Muxs)
-		if e != nil {
-			return e
+		// muxs labels the upstream endpoint, not the authenticated gateway.
+		// Preserve string labels rather than requiring them to encode an EUI.
+		if e := json.Unmarshal(wire.Muxs, &r.Muxs); e != nil {
+			id, e := parseRouterJSON(wire.Muxs)
+			if e != nil {
+				return fmt.Errorf("discovery muxs: %w", e)
+			}
+			r.Muxs = gatewayIDToEUIFormat(id)
 		}
-		r.Muxs = gatewayIDToEUIFormat(id)
 	}
 	return nil
 }
