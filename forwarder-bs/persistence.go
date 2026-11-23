@@ -18,26 +18,20 @@ type CertificatePEM struct {
 	Key  []byte `json:"key" bson:"key"`
 }
 type GatewayRecord struct {
-	LNSConfig  *GatewayLNSConfig `json:"lns_config,omitempty" bson:"lns_config,omitempty"`
-	DataURI    string            `json:"data_uri,omitempty" bson:"data_uri,omitempty"`
-	LegacyCUPS CertificatePEM    `json:"legacy_cups" bson:"legacy_cups"`
-	LegacyTC   CertificatePEM    `json:"legacy_tc" bson:"legacy_tc"`
-	EUI        string            `json:"eui" bson:"eui"`
-	Revision   uint64            `json:"revision" bson:"revision"`
-	Client     CertificatePEM    `json:"client" bson:"client"`
-	CUPS       []byte            `json:"cups" bson:"cups"`
-	TC         []byte            `json:"tc" bson:"tc"`
-	State      CUPSState         `json:"state" bson:"state"`
+	LNSConfig *GatewayLNSConfig `json:"lns_config,omitempty" bson:"lns_config,omitempty"`
+	EUI       string            `json:"eui" bson:"eui"`
+	Revision  uint64            `json:"revision" bson:"revision"`
+	Client    CertificatePEM    `json:"client" bson:"client"`
+	CUPS      []byte            `json:"cups" bson:"cups"`
+	TC        []byte            `json:"tc" bson:"tc"`
+	State     CUPSState         `json:"state" bson:"state"`
 }
 type GatewayRecordPatch struct {
-	LegacyCUPS *CertificatePEM   `json:"legacy_cups,omitempty" bson:"legacy_cups,omitempty"`
-	LegacyTC   *CertificatePEM   `json:"legacy_tc,omitempty" bson:"legacy_tc,omitempty"`
-	LNSConfig  *GatewayLNSConfig `json:"lns_config,omitempty" bson:"lns_config,omitempty"`
-	DataURI    *string           `json:"data_uri,omitempty" bson:"data_uri,omitempty"`
-	Client     *CertificatePEM   `json:"client,omitempty" bson:"client,omitempty"`
-	CUPS       *[]byte           `json:"cups,omitempty" bson:"cups,omitempty"`
-	TC         *[]byte           `json:"tc,omitempty" bson:"tc,omitempty"`
-	State      *CUPSState        `json:"state,omitempty" bson:"state,omitempty"`
+	LNSConfig *GatewayLNSConfig `json:"lns_config,omitempty" bson:"lns_config,omitempty"`
+	Client    *CertificatePEM   `json:"client,omitempty" bson:"client,omitempty"`
+	CUPS      *[]byte           `json:"cups,omitempty" bson:"cups,omitempty"`
+	TC        *[]byte           `json:"tc,omitempty" bson:"tc,omitempty"`
+	State     *CUPSState        `json:"state,omitempty" bson:"state,omitempty"`
 }
 type GatewayPersistence interface {
 	Load(context.Context, string) (GatewayRecord, error)
@@ -68,43 +62,9 @@ func (s *FilesystemPersistence) load(id string) (GatewayRecord, error) {
 	if !os.IsNotExist(e) {
 		return r, e
 	}
-	found := false
-	var readErr error
-	read := func(suffix string) []byte {
-		b, e := os.ReadFile(filepath.Join(s.Dir, id+suffix))
-		if e != nil && !os.IsNotExist(e) {
-			readErr = e
-		}
-		if e == nil {
-			found = true
-		}
-		return b
-	}
-	r.LegacyCUPS = CertificatePEM{read(".server.crt"), read(".server.key")}
-	r.LegacyTC = CertificatePEM{read("_tc.server.crt"), read("_tc.server.key")}
-	r.DataURI = string(read(".data_uri"))
-	if b := read(".lns_config"); len(b) > 0 {
-		if e = json.Unmarshal(b, &r.LNSConfig); e != nil {
-			return r, e
-		}
-	}
-	r.Client = CertificatePEM{read(".crt"), read(".key")}
-	r.CUPS = read(".server.cred")
-	r.TC = read("_tc.server.cred")
-	b = read(".cups-state.json")
-	if len(b) > 0 {
-		if e = json.Unmarshal(b, &r.State); e != nil {
-			return r, e
-		}
-	}
-	if readErr != nil {
-		return r, readErr
-	}
-	if !found {
-		return r, ErrNotFound
-	}
-	return r, nil
+	return r, ErrNotFound
 }
+
 func (s *FilesystemPersistence) Load(ctx context.Context, id string) (GatewayRecord, error) {
 	if e := ctx.Err(); e != nil {
 		return GatewayRecord{}, e
@@ -127,7 +87,7 @@ func (s *FilesystemPersistence) save(r GatewayRecord, rev uint64) (uint64, error
 	r.Revision = rev
 	before, _ := json.Marshal(old)
 	after, _ := json.Marshal(r)
-	if e == nil && old.Revision > 0 && string(before) == string(after) {
+	if e == nil && string(before) == string(after) {
 		return rev, nil
 	}
 	r.Revision = rev + 1
@@ -163,17 +123,8 @@ func (s *FilesystemPersistence) Patch(ctx context.Context, id string, p GatewayR
 	return s.save(r, rev)
 }
 func applyPatch(r *GatewayRecord, p GatewayRecordPatch) {
-	if p.LegacyCUPS != nil {
-		r.LegacyCUPS = *p.LegacyCUPS
-	}
-	if p.LegacyTC != nil {
-		r.LegacyTC = *p.LegacyTC
-	}
 	if p.LNSConfig != nil {
 		r.LNSConfig = p.LNSConfig
-	}
-	if p.DataURI != nil {
-		r.DataURI = *p.DataURI
 	}
 	if p.Client != nil {
 		r.Client = *p.Client

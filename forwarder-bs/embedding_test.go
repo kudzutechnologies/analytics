@@ -59,14 +59,37 @@ func TestRecordPersistenceAndPatch(t *testing.T) {
 		t.Fatal("invalid EUI accepted")
 	}
 }
+func TestFilesystemRecordErrors(t *testing.T) {
+	dir := t.TempDir()
+	s := &FilesystemPersistence{Dir: dir}
+	id := "0102030405060708"
+	ctx := context.Background()
+	if _, err := s.Load(ctx, id); !errors.Is(err, ErrNotFound) {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, id+".gateway.json"), []byte("invalid JSON"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Load(ctx, id); err == nil || errors.Is(err, ErrNotFound) {
+		t.Fatalf("invalid record treated as missing: %v", err)
+	}
+	if _, err := s.Save(ctx, GatewayRecord{EUI: id}, 0); err == nil {
+		t.Fatal("invalid record overwritten")
+	}
+	s.ReadOnly = true
+	if _, err := s.Save(ctx, GatewayRecord{EUI: id}, 0); !errors.Is(err, ErrReadOnly) {
+		t.Fatal(err)
+	}
+}
+
 func TestBootstrapExportAndParsing(t *testing.T) {
 	store, e := fixtureCertStore(t.TempDir(), "", "")
 	if e != nil {
 		t.Fatal(e)
 	}
 	c := DefaultForwarderConfig()
-	c.CertsCACert = filepath.Join(store.dir, "ca.crt")
-	c.CertsCAKey = filepath.Join(store.dir, "ca.key")
+	c.CertsCACert = filepath.Join(store.IssuerConfig.CertsDir, "ca.crt")
+	c.CertsCAKey = filepath.Join(store.IssuerConfig.CertsDir, "ca.key")
 	c.BootstrapGW = "01-02-03-04-05-06-07-08"
 	c.BootstrapDir = filepath.Join(t.TempDir(), "bootstrap")
 	if e = ExportGatewayBootstrap(c); e != nil {
@@ -97,33 +120,6 @@ func TestBootstrapExportAndParsing(t *testing.T) {
 		t.Fatal(parsed, e)
 	}
 }
-func TestLegacyRecordImport(t *testing.T) {
-	dir := t.TempDir()
-	id := "0102030405060708"
-	os.WriteFile(filepath.Join(dir, id+".cups-state.json"), []byte(`{"tc_uri":"wss://lns.example"}`), 0600)
-	s := &FilesystemPersistence{Dir: dir}
-	r, e := s.Load(context.Background(), id)
-	if e != nil || r.State.TcURI != "wss://lns.example" {
-		t.Fatal(r, e)
-	}
-	if _, e = s.Save(context.Background(), r, 0); e != nil {
-		t.Fatal(e)
-	}
-	if _, e = os.Stat(filepath.Join(dir, id+".gateway.json")); e != nil {
-		t.Fatal(e)
-	}
-}
-
-func TestExplicitCARequired(t *testing.T) {
-	dir := t.TempDir()
-	if _, e := NewCertStore(dir, "", ""); e == nil {
-		t.Fatal("created CA implicitly")
-	}
-	if _, e := os.Stat(filepath.Join(dir, "ca.key")); !os.IsNotExist(e) {
-		t.Fatal(e)
-	}
-}
-
 func TestSeparateIssuerWithoutRootKey(t *testing.T) {
 	store, e := fixtureCertStore(t.TempDir(), "", "")
 	if e != nil {
@@ -134,12 +130,12 @@ func TestSeparateIssuerWithoutRootKey(t *testing.T) {
 		t.Fatal(e)
 	}
 	issuer := &x509.Certificate{SerialNumber: big.NewInt(42), Subject: pkix.Name{CommonName: "Intermediate"}, NotBefore: time.Now().Add(-time.Minute), NotAfter: time.Now().Add(time.Hour), IsCA: true, BasicConstraintsValid: true, KeyUsage: x509.KeyUsageCertSign}
-	der, e := x509.CreateCertificate(rand.Reader, issuer, store.caCert, &key.PublicKey, store.caKey)
+	der, e := x509.CreateCertificate(rand.Reader, issuer, store.caCert, &key.PublicKey, fixtureCAKey(store))
 	if e != nil {
 		t.Fatal(e)
 	}
 	kd, _ := x509.MarshalECPrivateKey(key)
-	trust, _ := os.ReadFile(filepath.Join(store.dir, "ca.crt"))
+	trust, _ := os.ReadFile(filepath.Join(store.IssuerConfig.CertsDir, "ca.crt"))
 	c := DefaultForwarderConfig()
 	c.CertsCACertPEM = trust
 	c.IssuerCertPEM = pemCertificate(der)

@@ -151,13 +151,12 @@ type GatewayPatcher interface {
 ```
 
 `GatewayRecord` contains the canonical EUI and revision, gateway client PEM pair,
-upstream CUPS/TC credential blobs, legacy upstream PEM pairs, CUPS endpoint state,
-and saved LNS configuration/data URI. `CertificatePEM`, `CUPSState`, and
+upstream CUPS/TC credential blobs, CUPS endpoint state, and saved LNS configuration. `CertificatePEM`, `CUPSState`, and
 `GatewayLNSConfig` represent those nested values. Records and patches have JSON
 and BSON tags and require no database driver.
 
 `Save` replaces a complete record and checks the expected revision atomically.
-Revision zero supports initial creation or legacy import. Successful changed
+Revision zero supports initial creation. Successful changed
 writes return the new revision. `GatewayPatcher` is optional: the library falls
 back to load/merge/save when it is absent. Conflicts are retried up to three times.
 
@@ -177,11 +176,8 @@ they are not permission to replace existing credentials.
 
 `FilesystemPersistence{Dir: path, ReadOnly: false}` implements both interfaces.
 It writes private `<eui>.gateway.json` files using atomic replacement and skips
-unchanged writes. When JSON is absent, it imports existing gateway credentials,
-upstream credentials, CUPS state, and saved routing files. The first write makes
-JSON authoritative; legacy files remain untouched and may become stale. Invalid
-JSON is an error rather than a reason to fall back. Use one owning process per
-store directory.
+unchanged writes. Missing records return `ErrNotFound`; malformed records return
+an error. Use one owning process per store directory.
 
 ### Gateway bootstrap certificates
 
@@ -209,7 +205,9 @@ for the command-line equivalent.
 
 ### Lower-level APIs
 
-For applications assembling their own components, `NewWSProxy(*WSProxyConfig)`
+For applications assembling their own components,
+`NewCertStore(GatewayPersistence, ForwarderConfig)` constructs record-backed
+credential access with optional signing. `NewWSProxy(*WSProxyConfig)`
 constructs the proxy, `WSProxyEvents` receives forwarded messages for analytics,
 and `CreateAnalyticsForwarder` constructs the collector. These callers must wire
 events and manage startup/shutdown themselves; `New` handles that integration.

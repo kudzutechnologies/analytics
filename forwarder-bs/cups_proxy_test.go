@@ -39,12 +39,12 @@ func managedCUPSFixture(t *testing.T, upstream string) (*WSProxy, *httptest.Serv
 		t.Fatal(e)
 	}
 	template := &x509.Certificate{SerialNumber: big.NewInt(1234), Subject: pkix.Name{CommonName: host}, IPAddresses: []net.IP{net.ParseIP(host)}, NotBefore: time.Now().Add(-time.Minute), NotAfter: time.Now().Add(time.Hour), ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}, KeyUsage: x509.KeyUsageDigitalSignature}
-	der, e := x509.CreateCertificate(rand.Reader, template, store.caCert, &key.PublicKey, store.caKey)
+	der, e := x509.CreateCertificate(rand.Reader, template, store.caCert, &key.PublicKey, fixtureCAKey(store))
 	if e != nil {
 		t.Fatal(e)
 	}
 	keyDER, _ := x509.MarshalECPrivateKey(key)
-	certPath, keyPath := filepath.Join(store.dir, "listen.crt"), filepath.Join(store.dir, "listen.key")
+	certPath, keyPath := filepath.Join(store.IssuerConfig.CertsDir, "listen.crt"), filepath.Join(store.IssuerConfig.CertsDir, "listen.key")
 	if e = writePEM(certPath, "CERTIFICATE", der); e != nil {
 		t.Fatal(e)
 	}
@@ -129,7 +129,7 @@ func TestCUPSPollIsIdempotentAndStoresPurposeTokens(t *testing.T) {
 	if parsed.CupsURI == "" || parsed.TcURI == "" || len(parsed.CupsCred) == 0 || len(parsed.TcCred) == 0 {
 		t.Fatal("initial proxy provisioning missing")
 	}
-	before, e := os.Stat(filepath.Join(store.dir, "0102030405060708.crt"))
+	before, e := os.Stat(filepath.Join(store.IssuerConfig.CertsDir, "0102030405060708.gateway.json"))
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -141,7 +141,7 @@ func TestCUPSPollIsIdempotentAndStoresPurposeTokens(t *testing.T) {
 			t.Fatalf("unchanged poll produced %d-byte update", len(body))
 		}
 	}
-	after, _ := os.Stat(filepath.Join(store.dir, "0102030405060708.crt"))
+	after, _ := os.Stat(filepath.Join(store.IssuerConfig.CertsDir, "0102030405060708.gateway.json"))
 	if !before.ModTime().Equal(after.ModTime()) {
 		t.Fatal("unchanged poll rewrote client certificate")
 	}

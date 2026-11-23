@@ -134,7 +134,7 @@ func (p *WSProxy) validateManagedCUPS() error {
 		return nil
 	}
 	store := p.config.CertStore
-	if store == nil || store.caCert == nil || !store.writable {
+	if store == nil || store.caCert == nil || store.Persistence == nil {
 		return fmt.Errorf("managed CUPS requires a writable CA credential store")
 	}
 	pair, err := p.listenCertificate()
@@ -309,41 +309,20 @@ func (p *WSProxy) handleHTTPProxy(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	if store.Persistence != nil {
-		patch := GatewayRecordPatch{}
-		if len(parsed.CupsCred) > 0 {
-			patch.CUPS = &parsed.CupsCred
-		}
-		if len(parsed.TcCred) > 0 {
-			patch.TC = &parsed.TcCred
-		}
-		if parsed.CupsURI != "" || parsed.TcURI != "" {
-			patch.State = &state
-		}
-		if err = patchRecord(r.Context(), store.Persistence, id, patch); err != nil {
-			reject(500, "cannot persist gateway record")
-			return
-		}
-	} else {
-		for _, entry := range []struct {
-			suffix string
-			blob   []byte
-		}{{id, parsed.CupsCred}, {id + "_tc", parsed.TcCred}} {
-			if len(entry.blob) > 0 {
-				if err = store.putUpstreamCredential(entry.suffix, entry.blob); err != nil {
-					reject(502, "invalid upstream credentials")
-					return
-				}
-			}
-		}
-		if parsed.CupsURI != "" || parsed.TcURI != "" {
-			if err = store.putCUPSState(id, state); err != nil {
-				reject(500, "cannot persist CUPS state")
-				return
-			}
-		}
+	patch := GatewayRecordPatch{}
+	if len(parsed.CupsCred) > 0 {
+		patch.CUPS = &parsed.CupsCred
 	}
-
+	if len(parsed.TcCred) > 0 {
+		patch.TC = &parsed.TcCred
+	}
+	if parsed.CupsURI != "" || parsed.TcURI != "" {
+		patch.State = &state
+	}
+	if err = patchRecord(r.Context(), store.Persistence, id, patch); err != nil {
+		reject(500, "cannot persist gateway record")
+		return
+	}
 	issued, err := store.GetOrCreateClientCert(id)
 	if err != nil {
 		reject(500, "cannot load station credentials")

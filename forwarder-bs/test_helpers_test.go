@@ -2,6 +2,7 @@ package forwarderbs
 
 import (
 	"context"
+	"crypto"
 	"crypto/tls"
 	"encoding/pem"
 	"net"
@@ -64,5 +65,24 @@ func fixtureCertStore(dir, cert, key string) (*CertStore, error) {
 			return nil, e
 		}
 	}
-	return NewCertStore(dir, cert, key)
+	if cert == "" && key == "" {
+		cert = filepath.Join(dir, caCertFile)
+		key = filepath.Join(dir, caKeyFile)
+	}
+	if _, _, e := loadCAFromPaths(cert, key); e != nil {
+		return nil, e
+	}
+	c := DefaultForwarderConfig()
+	c.CertsDir = dir
+	c.CertsCACert = cert
+	c.CertsCAKey = key
+	return NewCertStore(&FilesystemPersistence{Dir: dir}, c)
+}
+
+func fixtureCAKey(s *CertStore) crypto.Signer {
+	_, key, e := loadCAFromPaths(s.IssuerConfig.CertsCACert, s.IssuerConfig.CertsCAKey)
+	if e != nil {
+		panic(e)
+	}
+	return key
 }

@@ -83,7 +83,7 @@ func TestCertStore_GetOrCreateClientCert_chainsToCA(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewCertStore: %v", err)
 	}
-	cert, err := store.GetOrCreateClientCert("gw1")
+	cert, err := store.GetOrCreateClientCert("0102030405060708")
 	if err != nil {
 		t.Fatalf("GetOrCreateClientCert: %v", err)
 	}
@@ -107,40 +107,6 @@ func TestCertStore_GetOrCreateClientCert_chainsToCA(t *testing.T) {
 	}
 }
 
-func TestCertStore_GetOrCreateBootstrap(t *testing.T) {
-	dir := t.TempDir()
-	store, err := fixtureCertStore(dir, "", "")
-	if err != nil {
-		t.Fatalf("NewCertStore: %v", err)
-	}
-	boot, err := store.GetOrCreateBootstrap()
-	if err != nil {
-		t.Fatalf("GetOrCreateBootstrap: %v", err)
-	}
-	if boot == nil || len(boot.Certificate) == 0 {
-		t.Fatal("expected non-empty bootstrap certificate")
-	}
-	parsed, err := x509.ParseCertificate(boot.Certificate[0])
-	if err != nil {
-		t.Fatalf("ParseCertificate: %v", err)
-	}
-	if parsed.Subject.CommonName != "kudzu-forwarder-bs-bootstrap" {
-		t.Errorf("CN = %q", parsed.Subject.CommonName)
-	}
-	// Second call returns same cert (from disk)
-	boot2, err := store.GetOrCreateBootstrap()
-	if err != nil {
-		t.Fatalf("GetOrCreateBootstrap (second): %v", err)
-	}
-	parsed2, err := x509.ParseCertificate(boot2.Certificate[0])
-	if err != nil {
-		t.Fatalf("ParseCertificate (bootstrap2): %v", err)
-	}
-	if parsed.SerialNumber.Cmp(parsed2.SerialNumber) != 0 {
-		t.Error("second bootstrap cert should be same as first")
-	}
-}
-
 func TestCARejectsMismatchedAndPartialState(t *testing.T) {
 	a, b := t.TempDir(), t.TempDir()
 	if _, err := fixtureCertStore(a, "", ""); err != nil {
@@ -149,7 +115,10 @@ func TestCARejectsMismatchedAndPartialState(t *testing.T) {
 	if _, err := fixtureCertStore(b, "", ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := loadCAFromPaths(filepath.Join(a, "ca.crt"), filepath.Join(b, "ca.key")); err == nil {
+	c := DefaultForwarderConfig()
+	c.CertsCACert = filepath.Join(a, "ca.crt")
+	c.CertsCAKey = filepath.Join(b, "ca.key")
+	if _, err := IssueGatewayBootstrap(c, "0102030405060708"); err == nil {
 		t.Fatal("mismatched CA key accepted")
 	}
 	before, err := os.ReadFile(filepath.Join(a, "ca.key"))
@@ -159,7 +128,8 @@ func TestCARejectsMismatchedAndPartialState(t *testing.T) {
 	if err := os.Remove(filepath.Join(a, "ca.crt")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := fixtureCertStore(a, "", ""); err == nil {
+	c.CertsCAKey = filepath.Join(a, "ca.key")
+	if _, err := IssueGatewayBootstrap(c, "0102030405060708"); err == nil {
 		t.Fatal("partial CA state silently replaced")
 	}
 	after, _ := os.ReadFile(filepath.Join(a, "ca.key"))

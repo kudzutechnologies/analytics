@@ -4,18 +4,16 @@ import (
 	"bytes"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"hash/crc32"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
 )
 
-// Compare before writing: unchanged polls must not cause flash wear. A complete
-// credential blob is one atomically replaced file, so cert/key cannot diverge.
+// Compare before writing: unchanged polls must not cause flash wear. Gateway
+// records are replaced atomically, keeping credentials and endpoint state together.
 func atomicCredentialWrite(path string, data []byte) error {
 	if st, err := os.Stat(path); err == nil && st.Size() == int64(len(data)) {
 		if old, e := os.ReadFile(path); e == nil && bytes.Equal(old, data) {
@@ -93,58 +91,31 @@ func pemCertificate(der []byte) []byte {
 	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
 }
 func (s *CertStore) upstreamCredential(id string) ([]byte, error) {
-	if s.Persistence != nil {
-		r, e := s.Persistence.Load(s.storageContext(), strings.TrimSuffix(id, "_tc"))
-		if e != nil {
-			return nil, e
-		}
-		b := r.CUPS
-		if strings.HasSuffix(id, "_tc") {
-			b = r.TC
-		}
-		if len(b) == 0 {
-			return nil, ErrNotFound
-		}
-		return b, nil
+	r, e := s.Persistence.Load(s.storageContext(), strings.TrimSuffix(id, "_tc"))
+	if e != nil {
+		return nil, e
 	}
-	base := strings.TrimSuffix(id, "_tc")
-	if _, err := ParseGatewayID(base); err != nil {
-		return nil, err
+	b := r.CUPS
+	if strings.HasSuffix(id, "_tc") {
+		b = r.TC
 	}
-	f, err := os.Open(filepath.Join(s.dir, id+".server.cred"))
-	if err != nil {
-		return nil, err
+	if len(b) == 0 {
+		return nil, ErrNotFound
 	}
-	defer f.Close()
-	b, err := io.ReadAll(io.LimitReader(f, 65536))
-	if err == nil && len(b) > 65535 {
-		err = fmt.Errorf("credential too large")
-	}
-	return b, err
+	return b, nil
 }
+
 func (s *CertStore) putUpstreamCredential(id string, blob []byte) error {
-	if s.Persistence != nil {
-		if _, _, _, _, e := decodeCredential(blob); e != nil {
-			return e
-		}
-		p := GatewayRecordPatch{CUPS: &blob}
-		if strings.HasSuffix(id, "_tc") {
-			p = GatewayRecordPatch{TC: &blob}
-		}
-		return patchRecord(s.storageContext(), s.Persistence, strings.TrimSuffix(id, "_tc"), p)
+	if _, _, _, _, e := decodeCredential(blob); e != nil {
+		return e
 	}
-	if !s.writable {
-		return fmt.Errorf("credential storage is read-only")
+	p := GatewayRecordPatch{CUPS: &blob}
+	if strings.HasSuffix(id, "_tc") {
+		p = GatewayRecordPatch{TC: &blob}
 	}
-	base := strings.TrimSuffix(id, "_tc")
-	if _, err := ParseGatewayID(base); err != nil {
-		return err
-	}
-	if _, _, _, _, err := decodeCredential(blob); err != nil {
-		return err
-	}
-	return atomicCredentialWrite(filepath.Join(s.dir, id+".server.cred"), blob)
+	return patchRecord(s.storageContext(), s.Persistence, strings.TrimSuffix(id, "_tc"), p)
 }
+
 func (s *CertStore) upstreamToken(id string) string {
 	blob, err := s.upstreamCredential(id)
 	if err != nil {
@@ -188,36 +159,13 @@ type upstreamCUPSState struct {
 }
 
 func (s *CertStore) cupsState(id string) upstreamCUPSState {
-	if s.Persistence != nil {
-		r, e := s.Persistence.Load(s.storageContext(), id)
-		if e == nil {
-			return r.State
-		}
+	r, e := s.Persistence.Load(s.storageContext(), id)
+	if e != nil {
 		return upstreamCUPSState{}
 	}
-	var state upstreamCUPSState
-	f, err := os.Open(filepath.Join(s.dir, id+".cups-state.json"))
-	if err != nil {
-		return state
-	}
-	defer f.Close()
-	raw, err := io.ReadAll(io.LimitReader(f, 4097))
-	if err == nil && len(raw) <= 4096 {
-		_ = json.Unmarshal(raw, &state)
-	}
-	return state
+	return r.State
 }
-func (s *CertStore) putCUPSState(id string, state upstreamCUPSState) error {
-	if s.Persistence != nil {
-		return patchRecord(s.storageContext(), s.Persistence, id, GatewayRecordPatch{State: &state})
-	}
 
-	if !s.writable {
-		return fmt.Errorf("credential storage is read-only")
-	}
-	raw, err := json.Marshal(state)
-	if err != nil {
-		return err
-	}
-	return atomicCredentialWrite(filepath.Join(s.dir, id+".cups-state.json"), raw)
+func (s *CertStore) putCUPSState(id string, state upstreamCUPSState) error {
+	return patchRecord(s.storageContext(), s.Persistence, id, GatewayRecordPatch{State: &state})
 }

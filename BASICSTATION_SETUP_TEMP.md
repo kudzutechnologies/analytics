@@ -102,11 +102,14 @@ openssl x509 -req -in server.csr \
   -out server.crt -days 365 -sha256 -extfile server.ext
 ```
 
-Create the gateway's bootstrap client certificate:
+Create the gateway's bootstrap client certificate in a separate export directory.
+The proxy stores runtime credentials in JSON records under `store/`:
 
 ```sh
+mkdir -p "gateway-bootstrap/$GW_EUI"
+chmod 700 "gateway-bootstrap/$GW_EUI"
 openssl req -new -newkey rsa:2048 -nodes \
-  -keyout "store/$GW_EUI.key" -out gateway.csr \
+  -keyout "gateway-bootstrap/$GW_EUI/cups.key" -out gateway.csr \
   -subj "/CN=$GW_EUI"
 
 cat > gateway.ext <<'EOF'
@@ -117,7 +120,7 @@ EOF
 
 openssl x509 -req -in gateway.csr \
   -CA ca.crt -CAkey ca.key -CAcreateserial \
-  -out "store/$GW_EUI.crt" -days 365 -sha256 \
+  -out "gateway-bootstrap/$GW_EUI/cups.crt" -days 365 -sha256 \
   -extfile gateway.ext
 ```
 
@@ -130,7 +133,7 @@ do not rerun them over an existing working CA or credential store.
 Still in the same terminal:
 
 ```sh
-GW_PIN=$(openssl x509 -in "store/$GW_EUI.crt" -outform DER |
+GW_PIN=$(openssl x509 -in "gateway-bootstrap/$GW_EUI/cups.crt" -outform DER |
   openssl dgst -sha256 | awk '{print $NF}')
 
 cat > gateways.json <<EOF
@@ -261,8 +264,8 @@ two filenames:
 mkdir -p "$HOME/basicstation-gateway-bootstrap"
 chmod 700 "$HOME/basicstation-gateway-bootstrap"
 scp YOUR_SSH_USER@wavesoft.gr:basicstation-proxy-test/ca.crt \
-  YOUR_SSH_USER@wavesoft.gr:basicstation-proxy-test/store/0102030405060708.crt \
-  YOUR_SSH_USER@wavesoft.gr:basicstation-proxy-test/store/0102030405060708.key \
+  YOUR_SSH_USER@wavesoft.gr:basicstation-proxy-test/gateway-bootstrap/0102030405060708/cups.crt \
+  YOUR_SSH_USER@wavesoft.gr:basicstation-proxy-test/gateway-bootstrap/0102030405060708/cups.key \
   "$HOME/basicstation-gateway-bootstrap/"
 chmod 600 "$HOME/basicstation-gateway-bootstrap/"*
 ```
@@ -288,8 +291,8 @@ On the gateway's Basic Station configuration page:
 | Server URI | `https://wavesoft.gr:8090` |
 | Authentication | TLS client authentication / mutual TLS |
 | Trust / CA certificate | Upload `ca.crt` |
-| Client certificate | Upload the downloaded `0102030405060708.crt` |
-| Client private key | Upload the downloaded `0102030405060708.key` |
+| Client certificate | Upload the downloaded `cups.crt` |
+| Client private key | Upload the downloaded `cups.key` |
 | Gateway EUI | The same EUI registered above |
 
 Use the actual EUI in the filenames. Leave token/authorization fields empty for
@@ -300,8 +303,8 @@ For a file-based Station installation, those uploads correspond to:
 ```text
 cups.uri    https://wavesoft.gr:8090
 cups.trust  contents of ca.crt
-cups.crt    contents of store/<EUI>.crt
-cups.key    contents of store/<EUI>.key
+cups.crt    contents of gateway-bootstrap/<EUI>/cups.crt
+cups.key    contents of gateway-bootstrap/<EUI>/cups.key
 ```
 
 Retain the manufacturer's `station.conf`. Stop Station before changing its

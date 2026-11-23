@@ -3,8 +3,6 @@ package forwarderbs
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
-	"encoding/pem"
 	"fmt"
 	"github.com/kudzutechnologies/analytics/api"
 	"github.com/kudzutechnologies/analytics/client"
@@ -64,25 +62,14 @@ func New(c ForwarderConfig, d Dependencies) (*Forwarder, error) {
 		d.Persistence = &FilesystemPersistence{Dir: c.CertsDir}
 	}
 	if d.Persistence != nil {
-		trust, e := material(c.CertsCACertPEM, c.CertsCACert)
-		if e != nil {
-			return nil, e
-		}
-		var ca *x509.Certificate
-		if len(trust) > 0 {
-			b, _ := pem.Decode(trust)
-			if b == nil {
-				return nil, fmt.Errorf("invalid CA PEM")
-			}
-			ca, e = x509.ParseCertificate(b.Bytes)
-			if e != nil {
-				return nil, e
-			}
-		}
 		if fs, ok := d.Persistence.(*FilesystemPersistence); ok && fs.ReadOnly && c.CUPSMode == "managed" {
 			return nil, ErrReadOnly
 		}
-		certStore = &CertStore{Persistence: d.Persistence, IssuerConfig: &c, writable: true, caCert: ca, certs: map[string]*tls.Certificate{}, serverCerts: map[string]*tls.Certificate{}, lnsConfigs: map[string]*GatewayLNSConfig{}, dataURIs: map[string]string{}}
+		var e error
+		certStore, e = NewCertStore(d.Persistence, c)
+		if e != nil {
+			return nil, e
+		}
 	}
 	proxyConfig := &WSProxyConfig{
 		CUPSMaxCredentialBytes: c.CUPSMaxCredentialBytes,

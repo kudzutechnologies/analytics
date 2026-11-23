@@ -107,11 +107,10 @@ disable verification and are unsuitable for normal release configurations.
 Listener TLS requires both `listen-tls-cert` and `listen-tls-key`. Normal startup
 does not generate a listener certificate or a CA.
 
-An optional `certs-dir` imports existing upstream credentials. Canonical router
-filenames are `{router}.server.crt` / `.server.key` for CUPS and
-`{router}_tc.server.crt` / `.server.key` for TC. Purpose-specific credentials
-never fall back to the other purpose. Provision the matching trust/key files
-privately. Proxy-issued client certificates are used only with explicit
+`certs-dir` selects the filesystem backend for gateway JSON records. Each record
+contains the gateway client certificate/key, purpose-specific upstream credentials,
+and provisioning/routing state. CUPS and TC credentials remain separate.
+Proxy-issued upstream client certificates are used only with explicit
 `certs-upstream-client-cert=true`, when the upstream trusts that CA.
 
 ## Managed CUPS
@@ -132,8 +131,7 @@ configured. A discovery HTTP 404 falls back only to a known LNS data endpoint.
 
 Unchanged updates return the 14-byte zero response. Credentials are compared
 with Basic Station CRC semantics; unchanged files are not rewritten. Changed credentials and endpoint state are saved atomically in the gateway
-JSON record under `certs-dir`. Existing `.server.cred` files are imported when
-no JSON record exists; see [persistence](../README.md#persistence). `cups-max-credential-bytes` defaults to 16384 (range 1024–65535).
+JSON record under `certs-dir`; see [persistence](../README.md#persistence). `cups-max-credential-bytes` defaults to 16384 (range 1024–65535).
 Malformed DER, lengths, and signatures are rejected. Firmware responses require
 a known Content-Length and stream with a small fixed buffer; there is no
 firmware spool. Owners must manage certificate renewal and provisioning.
